@@ -1,0 +1,16 @@
+{
+  "name": "council-engine",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "engine",
+    "skins/council-nebula"
+  ],
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.1"
+  }
+}

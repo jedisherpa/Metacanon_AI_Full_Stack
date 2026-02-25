@@ -1,0 +1,70 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AI Agent Contact Lens",
+  "description": "Operational boundaries and constitutional constraints for a specific AI agent.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "did": {
+      "description": "Decentralized identifier of the agent this lens applies to.",
+      "type": "string",
+      "pattern": "^did:[a-z0-9]+:.*$"
+    },
+    "scope": {
+      "description": "High-level summary of the agent purpose and domain.",
+      "type": "string",
+      "minLength": 1
+    },
+    "permittedActivities": {
+      "description": "Specific actions the agent is authorized to take.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "prohibitedActions": {
+      "description": "Hard stops for the agent.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "humanInTheLoopRequirements": {
+      "description": "Decisions requiring human approval before execution.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "intent": {
+            "type": "string",
+            "minLength": 1
+          },
+          "approverRole": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "intent",
+          "approverRole"
+        ]
+      }
+    },
+    "interpretiveBoundaries": {
+      "description": "Guidelines for handling ambiguous instructions.",
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": [
+    "did",
+    "scope",
+    "permittedActivities",
+    "prohibitedActions",
+    "humanInTheLoopRequirements",
+    "interpretiveBoundaries"
+  ]
+}

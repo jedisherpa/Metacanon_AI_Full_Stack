@@ -1,0 +1,44 @@
+{
+  "name": "council-engine-engine",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node ../node_modules/tsx/dist/cli.mjs watch src/index.ts",
+    "dev:worker": "node ../node_modules/tsx/dist/cli.mjs watch src/index.worker.ts",
+    "build": "node ../node_modules/typescript/lib/tsc.js -p tsconfig.json",
+    "start": "node dist/index.js",
+    "start:worker": "node dist/index.worker.js",
+    "db:generate": "node ../node_modules/drizzle-kit/bin.cjs generate",
+    "db:migrate": "node ../node_modules/drizzle-kit/bin.cjs migrate",
+    "test": "node ../node_modules/vitest/vitest.mjs run"
+  },
+  "dependencies": {
+    "@sentry/node": "^8.28.0",
+    "@sentry/profiling-node": "^8.28.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "drizzle-orm": "^0.31.2",
+    "express": "^4.19.2",
+    "pg": "^8.11.5",
+    "pg-boss": "^10.3.0",
+    "pino": "^9.4.0",
+    "pino-pretty": "^11.2.0",
+    "ws": "^8.17.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/cookie-parser": "^1.4.8",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.10.2",
+    "@types/supertest": "^2.0.16",
+    "@types/ws": "^8.5.12",
+    "drizzle-kit": "^0.22.8",
+    "supertest": "^6.3.4",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.5"
+  }
+}
