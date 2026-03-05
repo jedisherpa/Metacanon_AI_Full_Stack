@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 180" fill="none">
+  <rect width="220" height="180" rx="16" fill="#F9FAFB" stroke="#D97706" stroke-width="1.5" />
+  <text x="110" y="36" text-anchor="middle" font-family="'Space Grotesk', sans-serif" font-size="13" fill="#6B7280">~4 min</text>
+  <text x="110" y="72" text-anchor="middle" font-family="'Space Grotesk', sans-serif" font-size="18" font-weight="700" fill="#111827">Genesis Setup</text>
+  <text x="110" y="94" text-anchor="middle" font-family="'Space Grotesk', sans-serif" font-size="13" fill="#6B7280">Recommended defaults</text>
+  <rect x="20" y="130" width="180" height="36" rx="18" fill="#D97706"/>
+  <text x="110" y="153" text-anchor="middle" font-family="'Space Grotesk', sans-serif" font-size="14" font-weight="600" fill="#FFFFFF">Initiate Genesis</text>
+</svg>

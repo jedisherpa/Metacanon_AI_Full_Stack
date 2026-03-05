@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <!-- Octahedron — Group Node (6 vertices) — Fractal Void -->
+  <defs>
+    <filter id="glow-c" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glow-p" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <!-- Back faces (dashed, dim) -->
+  <line x1="100" y1="20"  x2="100" y2="85"  stroke="#333355" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="100" y1="85"  x2="30"  y2="100" stroke="#333355" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="100" y1="85"  x2="170" y2="100" stroke="#333355" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="100" y1="85"  x2="100" y2="180" stroke="#333355" stroke-width="1" stroke-dasharray="4,3"/>
+  <!-- Front edges (glowing) -->
+  <line x1="100" y1="20"  x2="30"  y2="100" stroke="#00F0FF" stroke-width="1.5" filter="url(#glow-c)"/>
+  <line x1="100" y1="20"  x2="170" y2="100" stroke="#00F0FF" stroke-width="1.5" filter="url(#glow-c)"/>
+  <line x1="30"  y1="100" x2="100" y2="115" stroke="#BD00FF" stroke-width="1.5" filter="url(#glow-p)"/>
+  <line x1="170" y1="100" x2="100" y2="115" stroke="#BD00FF" stroke-width="1.5" filter="url(#glow-p)"/>
+  <line x1="30"  y1="100" x2="100" y2="180" stroke="#FFD700" stroke-width="1.5"/>
+  <line x1="170" y1="100" x2="100" y2="180" stroke="#FFD700" stroke-width="1.5"/>
+  <line x1="100" y1="115" x2="100" y2="180" stroke="#FFD700" stroke-width="1"/>
+  <!-- Equatorial ring -->
+  <line x1="30"  y1="100" x2="170" y2="100" stroke="#00F0FF" stroke-width="1" stroke-dasharray="6,3" opacity="0.5"/>
+  <!-- Vertices -->
+  <circle cx="100" cy="20"  r="6" fill="#FFD700" filter="url(#glow-c)"/>
+  <circle cx="100" cy="180" r="6" fill="#FFD700" opacity="0.8"/>
+  <circle cx="30"  cy="100" r="5" fill="#00F0FF" filter="url(#glow-c)"/>
+  <circle cx="170" cy="100" r="5" fill="#00F0FF" filter="url(#glow-c)"/>
+  <circle cx="100" cy="115" r="5" fill="#BD00FF" filter="url(#glow-p)"/>
+  <circle cx="100" cy="85"  r="4" fill="#333355"/>
+  <!-- Labels -->
+  <text x="100" y="11"  text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="8" fill="#FFD700">APEX</text>
+  <text x="5"   y="103" text-anchor="start"  font-family="'IBM Plex Mono', monospace" font-size="8" fill="#00F0FF">NODE A</text>
+  <text x="173" y="103" text-anchor="start"  font-family="'IBM Plex Mono', monospace" font-size="8" fill="#00F0FF">NODE B</text>
+  <text x="100" y="130" text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="8" fill="#BD00FF">CORE</text>
+  <text x="100" y="193" text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="8" fill="#FFD700">BASE</text>
+</svg>

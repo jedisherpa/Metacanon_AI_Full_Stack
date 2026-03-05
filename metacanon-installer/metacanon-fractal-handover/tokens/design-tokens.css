@@ -1,0 +1,45 @@
+/**
+ * MetaCanon AI Installer — Fractal Theming System
+ * Defines semantic color tokens for both Fractal Light and Fractal Void themes.
+ */
+
+:root,
+[data-theme="light"] {
+  --bg-base: #FFFFFF;
+  --surface: #F9FAFB;
+  --border: #E5E7EB;
+  --text-primary: #111827;
+  --text-muted: #6B7280;
+
+  /* Jewel-Tone Accents (Light) */
+  --accent-genesis: #D97706; /* Solar Amber */
+  --accent-synthesis: #0891B2; /* Deep Teal */
+  --accent-auditor: #7C3AED; /* Royal Violet */
+
+  --success: #16A34A;
+  --warning: #F59E0B;
+  --error: #DC2626;
+}
+
+[data-theme="void"] {
+  --bg-base: #05050A;
+  --surface: rgba(10, 10, 18, 0.8); /* Glass Black with blur */
+  --border: #1F1F2E;
+  --text-primary: #EAEAEA;
+  --text-muted: #666677;
+
+  /* Neon Accents (Void) */
+  --accent-genesis: #FFD700; /* Gold */
+  --accent-synthesis: #00F0FF; /* Cyan */
+  --accent-auditor: #BD00FF; /* Purple */
+
+  --success: #4ADE80;
+  --warning: #FBBF24;
+  --error: #F87171;
+}
+
+/* Apply backdrop blur for Void theme surfaces */
+[data-theme="void"] .glass-surface {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}

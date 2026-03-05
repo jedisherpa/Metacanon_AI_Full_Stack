@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <!-- Octahedron — Group Node (6 vertices) — Fractal Light -->
+  <!-- Vertices: Top(100,20) Bottom(100,180) Left(30,100) Right(170,100) Front(100,115) Back(100,85) -->
+  <!-- Back faces (dashed) -->
+  <line x1="100" y1="20"  x2="100" y2="85"  stroke="#6B7280" stroke-width="1" stroke-dasharray="4,3" opacity="0.4"/>
+  <line x1="100" y1="85"  x2="30"  y2="100" stroke="#6B7280" stroke-width="1" stroke-dasharray="4,3" opacity="0.4"/>
+  <line x1="100" y1="85"  x2="170" y2="100" stroke="#6B7280" stroke-width="1" stroke-dasharray="4,3" opacity="0.4"/>
+  <line x1="100" y1="85"  x2="100" y2="180" stroke="#6B7280" stroke-width="1" stroke-dasharray="4,3" opacity="0.4"/>
+  <!-- Front edges (solid) -->
+  <line x1="100" y1="20"  x2="30"  y2="100" stroke="#0891B2" stroke-width="2"/>
+  <line x1="100" y1="20"  x2="170" y2="100" stroke="#0891B2" stroke-width="2"/>
+  <line x1="30"  y1="100" x2="100" y2="115" stroke="#7C3AED" stroke-width="2"/>
+  <line x1="170" y1="100" x2="100" y2="115" stroke="#7C3AED" stroke-width="2"/>
+  <line x1="30"  y1="100" x2="100" y2="180" stroke="#D97706" stroke-width="2"/>
+  <line x1="170" y1="100" x2="100" y2="180" stroke="#D97706" stroke-width="2"/>
+  <line x1="100" y1="115" x2="100" y2="180" stroke="#D97706" stroke-width="1.5"/>
+  <!-- Equatorial ring -->
+  <line x1="30"  y1="100" x2="170" y2="100" stroke="#0891B2" stroke-width="1.5" stroke-dasharray="6,3" opacity="0.6"/>
+  <!-- Vertices -->
+  <circle cx="100" cy="20"  r="6" fill="#D97706"/>
+  <circle cx="100" cy="180" r="6" fill="#D97706" opacity="0.8"/>
+  <circle cx="30"  cy="100" r="5" fill="#0891B2"/>
+  <circle cx="170" cy="100" r="5" fill="#0891B2"/>
+  <circle cx="100" cy="115" r="5" fill="#7C3AED"/>
+  <circle cx="100" cy="85"  r="4" fill="#6B7280" opacity="0.5"/>
+  <!-- Labels -->
+  <text x="100" y="11"  text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="8" fill="#D97706">APEX</text>
+  <text x="5"   y="103" text-anchor="start"  font-family="'IBM Plex Mono', monospace" font-size="8" fill="#0891B2">NODE A</text>
+  <text x="173" y="103" text-anchor="start"  font-family="'IBM Plex Mono', monospace" font-size="8" fill="#0891B2">NODE B</text>
+  <text x="100" y="130" text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="8" fill="#7C3AED">CORE</text>
+  <text x="100" y="193" text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="8" fill="#D97706">BASE</text>
+</svg>

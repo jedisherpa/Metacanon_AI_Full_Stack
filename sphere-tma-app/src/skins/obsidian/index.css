@@ -1,0 +1,13 @@
+/* ============================================================
+   OBSIDIAN SKIN — STANDALONE ENTRY POINT
+   
+   Drop this file (and the ../base/ directory) into any project.
+   No other skin files required.
+   
+   Usage:
+     @import './skins/obsidian/index.css';
+     <div data-skin="obsidian" class="lf-skin-root">...</div>
+   ============================================================ */
+
+@import '../base/components.css';
+@import './obsidian.css';

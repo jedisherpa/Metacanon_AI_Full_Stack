@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <!-- Icosahedron — Network Cluster (12 vertices) — Fractal Void -->
+  <defs>
+    <filter id="glow-ico" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <!-- Outer ring -->
+  <polygon points="100,22 170,72 148,155 52,155 30,72" stroke="#00F0FF" stroke-width="1.5" fill="none" opacity="0.5" filter="url(#glow-ico)"/>
+  <!-- Inner ring -->
+  <polygon points="100,55 143,85 128,130 72,130 57,85" stroke="#BD00FF" stroke-width="1.5" fill="none" opacity="0.5"/>
+  <!-- Top apex to outer ring -->
+  <line x1="100" y1="22" x2="170" y2="72" stroke="#FFD700" stroke-width="1.5"/>
+  <line x1="100" y1="22" x2="30"  y2="72" stroke="#FFD700" stroke-width="1.5"/>
+  <!-- Bottom apex to outer ring -->
+  <line x1="100" y1="178" x2="148" y2="155" stroke="#FFD700" stroke-width="1.5"/>
+  <line x1="100" y1="178" x2="52"  y2="155" stroke="#FFD700" stroke-width="1.5"/>
+  <line x1="100" y1="178" x2="170" y2="72"  stroke="#333355" stroke-width="1" stroke-dasharray="4,3"/>
+  <!-- Cross-connections (outer to inner) -->
+  <line x1="100" y1="22"  x2="100" y2="55"  stroke="#00F0FF" stroke-width="1"/>
+  <line x1="170" y1="72"  x2="143" y2="85"  stroke="#00F0FF" stroke-width="1"/>
+  <line x1="148" y1="155" x2="128" y2="130" stroke="#BD00FF" stroke-width="1"/>
+  <line x1="52"  y1="155" x2="72"  y2="130" stroke="#BD00FF" stroke-width="1"/>
+  <line x1="30"  y1="72"  x2="57"  y2="85"  stroke="#00F0FF" stroke-width="1"/>
+  <!-- Inner to center -->
+  <line x1="100" y1="55"  x2="100" y2="100" stroke="#FFD700" stroke-width="1" opacity="0.6"/>
+  <line x1="143" y1="85"  x2="100" y2="100" stroke="#FFD700" stroke-width="1" opacity="0.6"/>
+  <line x1="128" y1="130" x2="100" y2="100" stroke="#FFD700" stroke-width="1" opacity="0.6"/>
+  <line x1="72"  y1="130" x2="100" y2="100" stroke="#FFD700" stroke-width="1" opacity="0.6"/>
+  <line x1="57"  y1="85"  x2="100" y2="100" stroke="#FFD700" stroke-width="1" opacity="0.6"/>
+  <!-- Vertices — outer ring -->
+  <circle cx="100" cy="22"  r="5" fill="#FFD700" filter="url(#glow-ico)"/>
+  <circle cx="170" cy="72"  r="4" fill="#00F0FF" filter="url(#glow-ico)"/>
+  <circle cx="148" cy="155" r="4" fill="#00F0FF"/>
+  <circle cx="52"  cy="155" r="4" fill="#BD00FF"/>
+  <circle cx="30"  cy="72"  r="4" fill="#BD00FF"/>
+  <!-- Vertices — inner ring -->
+  <circle cx="100" cy="55"  r="3.5" fill="#00F0FF" opacity="0.8"/>
+  <circle cx="143" cy="85"  r="3.5" fill="#BD00FF" opacity="0.8"/>
+  <circle cx="128" cy="130" r="3.5" fill="#BD00FF" opacity="0.8"/>
+  <circle cx="72"  cy="130" r="3.5" fill="#00F0FF" opacity="0.8"/>
+  <circle cx="57"  cy="85"  r="3.5" fill="#00F0FF" opacity="0.8"/>
+  <!-- Center + bottom apex -->
+  <circle cx="100" cy="100" r="5" fill="#FFD700" filter="url(#glow-ico)"/>
+  <circle cx="100" cy="178" r="4" fill="#FFD700" opacity="0.7"/>
+  <!-- Label -->
+  <text x="100" y="195" text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="8" fill="#666677">NETWORK · 12 VERTICES</text>
+</svg>

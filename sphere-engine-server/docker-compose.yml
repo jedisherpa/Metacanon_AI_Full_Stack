@@ -1,0 +1,44 @@
+version: "3.8"
+
+services:
+  engine-api:
+    build: .
+    command: ["node", "engine/dist/index.js"]
+    ports:
+      - "8080:8080"
+    environment:
+      - DATABASE_URL=postgresql://council:council@db:5432/council
+      - PORT=8080
+      - CORS_ORIGINS=http://localhost:5173
+      - LENS_PACK=hands-of-the-void
+      - INLINE_WORKER_ENABLED=false
+    env_file:
+      - ./engine/.env
+    depends_on:
+      - db
+
+  engine-worker:
+    build: .
+    command: ["node", "engine/dist/index.worker.js"]
+    environment:
+      - DATABASE_URL=postgresql://council:council@db:5432/council
+      - LENS_PACK=hands-of-the-void
+      - INLINE_WORKER_ENABLED=false
+    env_file:
+      - ./engine/.env
+    depends_on:
+      - db
+
+  db:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: council
+      POSTGRES_PASSWORD: council
+      POSTGRES_DB: council
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

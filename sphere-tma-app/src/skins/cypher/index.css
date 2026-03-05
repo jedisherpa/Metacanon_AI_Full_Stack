@@ -1,0 +1,13 @@
+/* ============================================================
+   CYPHER SKIN — STANDALONE ENTRY POINT
+   
+   Drop this file (and the ../base/ directory) into any project.
+   No other skin files required.
+   
+   Usage:
+     @import './skins/cypher/index.css';
+     <div data-skin="cypher" class="lf-skin-root">...</div>
+   ============================================================ */
+
+@import '../base/components.css';
+@import './cypher.css';

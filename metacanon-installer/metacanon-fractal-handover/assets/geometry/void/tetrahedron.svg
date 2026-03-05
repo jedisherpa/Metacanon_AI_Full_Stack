@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <!-- Tetrahedron — Personal Node (4 vertices) — Fractal Void -->
+  <!-- Glow filters -->
+  <defs>
+    <filter id="glow-gold" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glow-cyan" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <!-- Back edges (dashed) -->
+  <line x1="100" y1="30" x2="165" y2="145" stroke="#FFD700" stroke-width="1" stroke-dasharray="5,4" opacity="0.4"/>
+  <line x1="35" y1="145" x2="165" y2="145" stroke="#FFD700" stroke-width="1" stroke-dasharray="5,4" opacity="0.4"/>
+  <!-- Front edges (solid, glowing) -->
+  <line x1="100" y1="30" x2="35" y2="145" stroke="#FFD700" stroke-width="1.5" filter="url(#glow-gold)"/>
+  <line x1="100" y1="30" x2="100" y2="155" stroke="#00F0FF" stroke-width="1.5" filter="url(#glow-cyan)"/>
+  <line x1="35" y1="145" x2="100" y2="155" stroke="#00F0FF" stroke-width="1.5" filter="url(#glow-cyan)"/>
+  <line x1="165" y1="145" x2="100" y2="155" stroke="#BD00FF" stroke-width="1.5"/>
+  <!-- Vertices -->
+  <circle cx="100" cy="30"  r="5" fill="#FFD700" filter="url(#glow-gold)"/>
+  <circle cx="35"  cy="145" r="5" fill="#00F0FF" filter="url(#glow-cyan)"/>
+  <circle cx="165" cy="145" r="5" fill="#BD00FF"/>
+  <circle cx="100" cy="155" r="5" fill="#FFD700" opacity="0.7"/>
+  <!-- Labels -->
+  <text x="100" y="18"  text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="9" fill="#FFD700">GENESIS</text>
+  <text x="10"  y="152" text-anchor="start"  font-family="'IBM Plex Mono', monospace" font-size="9" fill="#00F0FF">SYNTHESIS</text>
+  <text x="170" y="152" text-anchor="start"  font-family="'IBM Plex Mono', monospace" font-size="9" fill="#BD00FF">AUDITOR</text>
+  <text x="100" y="173" text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="9" fill="#666677">MONITOR</text>
+</svg>

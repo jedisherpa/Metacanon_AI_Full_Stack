@@ -1,0 +1,8 @@
+material_impact_intents:
+  - "FORCE_EVICT"
+  - "AMEND_CONSTITUTION"
+
+quorum_rules:
+  - name: "default_quorum"
+    type: "fixed_count"
+    value: 2

@@ -1,0 +1,18 @@
+{
+  "name": "sphere-engine-server",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "engine"
+  ],
+  "scripts": {
+    "dev": "npm --workspace engine run dev",
+    "dev:worker": "npm --workspace engine run dev:worker",
+    "build": "npm --workspace engine run build",
+    "start": "npm --workspace engine run start",
+    "start:worker": "npm --workspace engine run start:worker",
+    "test": "npm --workspace engine run test",
+    "db:generate": "npm --workspace engine run db:generate",
+    "db:migrate": "npm --workspace engine run db:migrate"
+  }
+}

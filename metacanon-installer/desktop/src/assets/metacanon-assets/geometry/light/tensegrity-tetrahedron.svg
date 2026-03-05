@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 580" fill="none">
+    <!-- Background -->
+    <rect width="900" height="560" fill="#FFFFFF"/>
+
+    <!-- Title block -->
+    <text x="380" y="24" text-anchor="middle" font-family="'Space Grotesk', sans-serif" font-size="13" font-weight="700" letter-spacing="2" fill="#D97706">TENSEGRITY TETRAHEDRON</text>
+    <text x="380" y="42" text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="10" fill="#6B7280">Sovereign Mind Node — Core Topology</text>
+    <text x="380" y="60" text-anchor="middle" font-family="'Space Grotesk', sans-serif" font-size="14" font-weight="700" letter-spacing="3" fill="#111827">SOVEREIGN MIND NODE — TENSEGRITY TETRAHEDRON ARCHITECTURE</text>
+
+    <!-- Main Tetrahedron (large, left side) -->
+    <!-- V0: GENESIS CRYSTAL (top) -->
+    <!-- V1: SYNTHESIS AGENT (left) -->
+    <!-- V2: MONITORING AGENT (bottom-right) -->
+    <!-- V3: AUDITOR AGENT (right, mid) -->
+
+    <!-- Back edges (dashed) -->
+    <line x1="380" y1="110" x2="580" y2="380" stroke="#D97706" stroke-width="1.5" stroke-dasharray="6,4" opacity="0.4"/>
+    <line x1="120" y1="400" x2="580" y2="380" stroke="#D97706" stroke-width="1.5" stroke-dasharray="6,4" opacity="0.4"/>
+
+    <!-- Front edges (solid) -->
+    <line x1="380" y1="110" x2="120" y2="400" stroke="#D97706" stroke-width="2.5" />
+    <line x1="380" y1="110" x2="380" y2="430" stroke="#0891B2" stroke-width="2" />
+    <line x1="120" y1="400" x2="380" y2="430" stroke="#0891B2" stroke-width="2"/>
+    <line x1="580" y1="380" x2="380" y2="430" stroke="#7C3AED" stroke-width="2"/>
+
+    <!-- Vertex nodes -->
+    <circle cx="380" cy="110" r="10" fill="#D97706" />
+    <circle cx="120" cy="400" r="8"  fill="#0891B2" />
+    <circle cx="580" cy="380" r="8"  fill="#7C3AED"/>
+    <circle cx="380" cy="430" r="8"  fill="#16A34A" opacity="0.8"/>
+
+    <!-- Vertex labels -->
+    <text x="380" y="96"  text-anchor="middle" font-family="'Space Grotesk', sans-serif" font-size="12" font-weight="700" fill="#D97706">GENESIS CRYSTAL</text>
+    <text x="380" y="108" text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="9"  fill="#6B7280">V0 · Apex</text>
+    <text x="80"  y="390" text-anchor="end"    font-family="'Space Grotesk', sans-serif" font-size="11" font-weight="600" fill="#0891B2">SYNTHESIS AGENT</text>
+    <text x="80"  y="403" text-anchor="end"    font-family="'IBM Plex Mono', monospace" font-size="9"  fill="#6B7280">V1 · Torus</text>
+    <text x="600" y="370" font-family="'Space Grotesk', sans-serif" font-size="11" font-weight="600" fill="#7C3AED">AUDITOR AGENT</text>
+    <text x="600" y="383" font-family="'IBM Plex Mono', monospace" font-size="9"  fill="#6B7280">V3 · Hatches</text>
+    <text x="380" y="456" text-anchor="middle" font-family="'Space Grotesk', sans-serif" font-size="11" font-weight="600" fill="#16A34A">MONITORING AGENT</text>
+    <text x="380" y="468" text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="9"  fill="#6B7280">V2 · Watcher</text>
+
+    <!-- Edge labels (mid-edge) -->
+    <text x="240" y="248" text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="9" fill="#D97706" opacity="0.8">gRPC Stream</text>
+    <text x="380" y="278" text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="9" fill="#0891B2" opacity="0.8">KV Store</text>
+
+    <!-- Right panel: Component Specification -->
+    <rect x="640" y="80" width="250" height="460" rx="12" fill="#F9FAFB" stroke="#E5E7EB" stroke-width="1"/>
+    <text x="765" y="106" text-anchor="middle" font-family="'Space Grotesk', sans-serif" font-size="12" font-weight="700" letter-spacing="2" fill="#111827">COMPONENT SPECIFICATION</text>
+    <line x1="648" y1="114" x2="882" y2="114" stroke="#E5E7EB" stroke-width="1"/>
+
+    <!-- V0 spec -->
+    <text x="656" y="134" font-family="'IBM Plex Mono', monospace" font-size="10" fill="#D97706">▸ V0 · GENESIS CRYSTAL</text>
+    <text x="664" y="150" font-family="'IBM Plex Mono', monospace" font-size="9"  fill="#6B7280">Role: Immutable hub of user's hashed will</text>
+    <text x="664" y="164" font-family="'IBM Plex Mono', monospace" font-size="9"  fill="#6B7280">Hash: BLAKE3/256 (constitution || version)</text>
+    <text x="664" y="178" font-family="'IBM Plex Mono', monospace" font-size="9"  fill="#6B7280">Sign: Ed25519 (soul-quantum ready)</text>
+    <text x="664" y="192" font-family="'IBM Plex Mono', monospace" font-size="9"  fill="#6B7280">State: ConstitutionFSM</text>
+
+    <!-- V1 spec -->
+    <text x="656" y="218" font-family="'IBM Plex Mono', monospace" font-size="10" fill="#0891B2">▸ V1 · SYNTHESIS AGENT (Torus)</text>
+    <text x="664" y="234" font-family="'IBM Plex Mono', monospace" font-size="9"  fill="#6B7280">Role: Integration refractor of all inputs</text>
+    <text x="664" y="248" font-family="'IBM Plex Mono', monospace" font-size="9"  fill="#6B7280">Runs: Token deliberation loop (≤8 cycles)</text>
+    <text x="664" y="262" font-family="'IBM Plex Mono', monospace" font-size="9"  fill="#6B7280">Emits: Qwen3.5 at runtime</text>
+    <text x="664" y="276" font-family="'IBM Plex Mono', monospace" font-size="9"  fill="#6B7280">Input: All agent streams → KVStore</text>
+    <text x="664" y="290" font-family="'IBM Plex Mono', monospace" font-size="9"  fill="#6B7280">Output: SynthesisReport → GenesisCore</text>
+
+    <!-- V2 spec -->
+    <text x="656" y="316" font-family="'IBM Plex Mono', monospace" font-size="10" fill="#16A34A">▸ V2 · MONITORING AGENT (Watcher)</text>
+    <text x="664" y="332" font-family="'IBM Plex Mono', monospace" font-size="9"  fill="#6B7280">Role: Vigilant witness &amp; event logging</text>
+    <text x="664" y="346" font-family="'IBM Plex Mono', monospace" font-size="9"  fill="#6B7280">Watches: All DAG events + external signals</text>
+    <text x="664" y="360" font-family="'IBM Plex Mono', monospace" font-size="9"  fill="#6B7280">Triggers: AlertSilence if focusScore &lt; 0.3</text>
+    <text x="664" y="374" font-family="'IBM Plex Mono', monospace" font-size="9"  fill="#6B7280">Logs: Merkle DAG (SQLite, BLAKE3 chained)</text>
+
+    <!-- V3 spec -->
+    <text x="656" y="400" font-family="'IBM Plex Mono', monospace" font-size="10" fill="#7C3AED">▸ V3 · AUDITOR AGENT</text>
+    <text x="664" y="416" font-family="'IBM Plex Mono', monospace" font-size="9"  fill="#6B7280">Role: Measured accountability &amp; alignment</text>
+    <text x="664" y="430" font-family="'IBM Plex Mono', monospace" font-size="9"  fill="#6B7280">Runs: Periodic validation of triggers</text>
+    <text x="664" y="444" font-family="'IBM Plex Mono', monospace" font-size="9"  fill="#6B7280">Checks: BLAKE3(SOD) == val_hash</text>
+    <text x="664" y="458" font-family="'IBM Plex Mono', monospace" font-size="9"  fill="#6B7280">On fail: State → VETO → INTERCEPT_BREACH</text>
+    <text x="664" y="472" font-family="'IBM Plex Mono', monospace" font-size="9"  fill="#6B7280">Output: TrustGradient score (0.0–1.0)</text>
+
+    <!-- Fractal scaling note -->
+    <text x="656" y="500" font-family="'IBM Plex Mono', monospace" font-size="10" fill="#D97706">▸ FRACTAL SCALING</text>
+    <text x="664" y="516" font-family="'IBM Plex Mono', monospace" font-size="9"  fill="#6B7280">Personal → Tetrahedron (4 vertices)</text>
+    <text x="664" y="530" font-family="'IBM Plex Mono', monospace" font-size="9"  fill="#6B7280">Group    → Octahedron  (≤6 nodes)</text>
+
+    <!-- Legend bottom -->
+    <line x1="20"  y1="510" x2="60"  y2="510" stroke="#D97706"   stroke-width="2"/>
+    <text x="66"  y="514" font-family="'IBM Plex Mono', monospace" font-size="9" fill="#D97706">Object: GenesisCore → Agent gRPC Stream</text>
+    <line x1="20"  y1="526" x2="60"  y2="526" stroke="#0891B2" stroke-width="2"/>
+    <text x="66"  y="530" font-family="'IBM Plex Mono', monospace" font-size="9" fill="#0891B2">Cable: SynthesisAgent → MonitoringAgent</text>
+    <line x1="20"  y1="542" x2="60"  y2="542" stroke="#7C3AED"   stroke-width="2"/>
+    <text x="66"  y="546" font-family="'IBM Plex Mono', monospace" font-size="9" fill="#7C3AED">Cable: MonitoringAgent → AuditorAgent</text>
+    <line x1="20"  y1="558" x2="60"  y2="558" stroke="#16A34A"   stroke-width="2"/>
+    <text x="66"  y="562" font-family="'IBM Plex Mono', monospace" font-size="9" fill="#16A34A">Cable: SynthesisAgent → AuditorAgent</text>
+    </svg>

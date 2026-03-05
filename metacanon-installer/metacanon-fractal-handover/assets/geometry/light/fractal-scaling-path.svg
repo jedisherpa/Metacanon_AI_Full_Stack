@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 320" fill="none">
+    <!-- Background -->
+    <rect width="900" height="320" fill="#FFFFFF"/>
+    <!-- Title -->
+    <text x="450" y="28" text-anchor="middle" font-family="'Space Grotesk', sans-serif" font-size="14" font-weight="700" letter-spacing="3" fill="#111827">METACANON AI — FRACTAL SCALING PATH</text>
+    <text x="450" y="48" text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="11" fill="#6B7280">Personal Tetrahedron  ·  Group Octahedron  ·  Network Icosahedron</text>
+
+    <!-- Labels -->
+    <text x="100" y="80" text-anchor="middle" font-family="'Space Grotesk', sans-serif" font-size="12" font-weight="600" fill="#D97706">PERSONAL NODE</text>
+    <text x="100" y="96" text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="10" fill="#6B7280">Tetrahedron · 4 Vertices</text>
+
+    <text x="450" y="80" text-anchor="middle" font-family="'Space Grotesk', sans-serif" font-size="12" font-weight="600" fill="#0891B2">GROUP NODE</text>
+    <text x="450" y="96" text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="10" fill="#6B7280">Octahedron · 6 Vertices · ≤5 Personal Nodes</text>
+
+    <text x="800" y="80" text-anchor="middle" font-family="'Space Grotesk', sans-serif" font-size="12" font-weight="600" fill="#7C3AED">NETWORK CLUSTER</text>
+    <text x="800" y="96" text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="10" fill="#6B7280">Icosahedron · 12 Vertices · Decentralized Mesh</text>
+
+    
+      <!-- Tetrahedron @ 50,110 -->
+      <line x1="100" y1="110" x2="140" y2="190" stroke="#D97706" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.5"/>
+      <line x1="60" y1="190" x2="140" y2="190" stroke="#D97706" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.5"/>
+      <line x1="100" y1="110" x2="60" y2="190" stroke="#D97706" stroke-width="2" />
+      <line x1="100" y1="110" x2="100" y2="200" stroke="#0891B2" stroke-width="2" />
+      <line x1="60" y1="190" x2="100" y2="200" stroke="#0891B2" stroke-width="2"/>
+      <line x1="140" y1="190" x2="100" y2="200" stroke="#7C3AED" stroke-width="2"/>
+      <circle cx="100" cy="110"    r="5" fill="#D97706" />
+      <circle cx="60" cy="190" r="4" fill="#0891B2" />
+      <circle cx="140" cy="190" r="4" fill="#7C3AED"/>
+      <circle cx="100" cy="200" r="4" fill="#D97706" opacity="0.7"/>
+    
+    
+      <line x1="155" y1="210" x2="287" y2="210" stroke="#6B7280" stroke-width="2"/>
+      <polygon points="285,205 295,210 285,215" fill="#6B7280"/>
+    
+    
+      <!-- Octahedron @ 300,110 -->
+      <line x1="350" y1="110"    x2="315" y2="160" stroke="#0891B2" stroke-width="1.5" />
+      <line x1="350" y1="110"    x2="385" y2="160" stroke="#0891B2" stroke-width="1.5" />
+      <line x1="315" y1="160" x2="350" y2="170" stroke="#7C3AED" stroke-width="1.5"/>
+      <line x1="385" y1="160" x2="350" y2="170" stroke="#7C3AED" stroke-width="1.5"/>
+      <line x1="315" y1="160" x2="350" y2="210" stroke="#D97706" stroke-width="1.5"/>
+      <line x1="385" y1="160" x2="350" y2="210" stroke="#D97706" stroke-width="1.5"/>
+      <line x1="315" y1="160" x2="385" y2="160" stroke="#0891B2" stroke-width="1" stroke-dasharray="5,3" opacity="0.5"/>
+      <circle cx="350" cy="110"     r="5" fill="#0891B2" />
+      <circle cx="315" cy="160"  r="4" fill="#7C3AED" />
+      <circle cx="385" cy="160"  r="4" fill="#7C3AED"/>
+      <circle cx="350" cy="170"  r="4" fill="#D97706"/>
+      <circle cx="350" cy="210" r="4" fill="#D97706" opacity="0.7"/>
+    
+    
+      <line x1="410" y1="210" x2="542" y2="210" stroke="#6B7280" stroke-width="2"/>
+      <polygon points="540,205 550,210 540,215" fill="#6B7280"/>
+    
+    
+      <!-- Icosahedron @ 555,110 -->
+      <polygon points="605,115 645,145 633,195 577,195 565,145"
+               stroke="#7C3AED" stroke-width="1.5" fill="none" opacity="0.6" />
+      <polygon points="605,130 627,152 619,178 591,178 583,152"
+               stroke="#0891B2" stroke-width="1.5" fill="none" opacity="0.6"/>
+      <line x1="605" y1="115"  x2="605" y2="130" stroke="#7C3AED" stroke-width="1"/>
+      <line x1="645" y1="145" x2="627" y2="152" stroke="#7C3AED" stroke-width="1"/>
+      <line x1="565" y1="145" x2="583" y2="152" stroke="#7C3AED" stroke-width="1"/>
+      <line x1="633" y1="195" x2="619" y2="178" stroke="#0891B2" stroke-width="1"/>
+      <line x1="577" y1="195" x2="591" y2="178" stroke="#0891B2" stroke-width="1"/>
+      <line x1="605" y1="130" x2="605" y2="160" stroke="#D97706" stroke-width="1" opacity="0.7"/>
+      <line x1="627" y1="152" x2="605" y2="160" stroke="#D97706" stroke-width="1" opacity="0.7"/>
+      <line x1="583" y1="152" x2="605" y2="160" stroke="#D97706" stroke-width="1" opacity="0.7"/>
+      <circle cx="605" cy="115"  r="5" fill="#7C3AED" />
+      <circle cx="645" cy="145" r="4" fill="#0891B2" />
+      <circle cx="565" cy="145" r="4" fill="#0891B2"/>
+      <circle cx="633" cy="195" r="4" fill="#D97706"/>
+      <circle cx="577" cy="195" r="4" fill="#D97706"/>
+      <circle cx="605" cy="160" r="5" fill="#7C3AED" />
+    
+
+    <!-- Legend -->
+    <circle cx="20"  cy="300" r="5" fill="#D97706"/>
+    <text x="30"  y="305" font-family="'IBM Plex Mono', monospace" font-size="10" fill="#D97706">Genesis Crystal / Apex Node</text>
+    <circle cx="200" cy="300" r="5" fill="#0891B2"/>
+    <text x="210" y="305" font-family="'IBM Plex Mono', monospace" font-size="10" fill="#0891B2">Synthesis Agent / Checker A</text>
+    <circle cx="400" cy="300" r="5" fill="#7C3AED"/>
+    <text x="410" y="305" font-family="'IBM Plex Mono', monospace" font-size="10" fill="#7C3AED">Auditor Agent / Cluster B</text>
+    <circle cx="600" cy="300" r="5" fill="#6B7280"/>
+    <text x="610" y="305" font-family="'IBM Plex Mono', monospace" font-size="10" fill="#6B7280">EchoMesh Node</text>
+    </svg>

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 24" fill="none"><defs><filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+  <defs><linearGradient id="prc" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#00F0FF"/><stop offset="100%" stop-color="#BD00FF"/></linearGradient></defs>
+  <rect width="400" height="8" rx="4" fill="#1F1F2E" y="8"/>
+  <rect width="400" height="8" rx="4" fill="url(#prc)" y="8" filter="url(#glow)"/>
+  <text x="0" y="24" font-family="'Space Grotesk', sans-serif" font-size="11" fill="#4ADE80">Complete</text>
+  <text x="400" y="24" text-anchor="end" font-family="'IBM Plex Mono', monospace" font-size="11" fill="#4ADE80">100%</text>
+</svg>

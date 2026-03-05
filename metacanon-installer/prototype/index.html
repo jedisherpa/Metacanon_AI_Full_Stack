@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MetaCanon Installer UI Prototype</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../handover/tokens/design-tokens.css" />
+    <link rel="stylesheet" href="./prototype.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <h1>MetaCanon Installer</h1>
+        <p class="muted">Cupertino Sovereign Prototype</p>
+        <ol id="steps" class="steps"></ol>
+      </aside>
+      <main class="content">
+        <section class="panel hero">
+          <div>
+            <p id="stepId" class="mono"></p>
+            <h2 id="stepTitle"></h2>
+            <p id="stepObjective" class="muted"></p>
+          </div>
+          <div class="actions">
+            <button id="prev" class="btn secondary">Back</button>
+            <button id="next" class="btn primary">Continue</button>
+          </div>
+        </section>
+
+        <section class="grid">
+          <article class="panel">
+            <h3>Runtime Command</h3>
+            <pre id="command" class="code"></pre>
+            <h3>Command API</h3>
+            <ul id="apiList"></ul>
+          </article>
+          <article class="panel">
+            <h3>Reference Mockup</h3>
+            <img id="mockup" alt="Step mockup" />
+          </article>
+        </section>
+      </main>
+    </div>
+    <script src="./prototype.js"></script>
+  </body>
+</html>

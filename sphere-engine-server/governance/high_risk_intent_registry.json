@@ -1,0 +1,72 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "version": "1.1",
+  "description": "Registry of intents classified as Material Impact under Metacanon Constitution Article VI.",
+  "prismHolderApprovalRequired": [
+    {
+      "intent": "DISPATCH_MISSION",
+      "rationale": "Initiates agent action with potential real-world consequences.",
+      "approvalTimeoutSeconds": 300,
+      "timeoutBehavior": "REJECT"
+    },
+    {
+      "intent": "APPROVE_MATERIAL_IMPACT",
+      "rationale": "Explicit Material Impact approval always requires Prism Holder sign-off.",
+      "approvalTimeoutSeconds": 300,
+      "timeoutBehavior": "REJECT"
+    },
+    {
+      "intent": "RATCHET",
+      "rationale": "Escalates constitutional threshold for an agent.",
+      "approvalTimeoutSeconds": 600,
+      "timeoutBehavior": "REJECT"
+    },
+    {
+      "intent": "EMERGENCY_SHUTDOWN",
+      "rationale": "Break-glass kill switch. Must remain executable even during degraded consensus.",
+      "approvalTimeoutSeconds": 60,
+      "timeoutBehavior": "ALLOW_WITH_LOG"
+    },
+    {
+      "intent": "DEPLOY_CONSTELLATION",
+      "rationale": "Activates multi-agent constellation with amplified impact.",
+      "approvalTimeoutSeconds": 300,
+      "timeoutBehavior": "REJECT"
+    },
+    {
+      "intent": "MODIFY_CONTACT_LENS",
+      "rationale": "Changes constitutional agent boundaries and requires governance review.",
+      "approvalTimeoutSeconds": 600,
+      "timeoutBehavior": "REJECT"
+    }
+  ],
+  "breakGlassPolicy": {
+    "intent": "EMERGENCY_SHUTDOWN",
+    "allowedInDegradedConsensus": true,
+    "authorizedRoles": [
+      "Prism Holder",
+      "Commander"
+    ],
+    "dualControlRequired": true,
+    "alternateAuthorization": "PRE_APPROVED_EMERGENCY_CREDENTIAL",
+    "auditFieldsRequired": [
+      "reason",
+      "actorDid",
+      "confirmerDid",
+      "timestamp"
+    ]
+  },
+  "degradedConsensusBlockedIntents": [
+    "DISPATCH_MISSION",
+    "APPROVE_MATERIAL_IMPACT",
+    "RATCHET",
+    "DEPLOY_CONSTELLATION",
+    "MODIFY_CONTACT_LENS"
+  ],
+  "auditOnlyIntents": [
+    "STEER_MISSION",
+    "RECALL_MISSION",
+    "RATE_AGENT",
+    "PRIORITY_OVERRIDE"
+  ]
+}

@@ -1,0 +1,102 @@
+/*
+ * MetaCanon Sovereign AI Installer — Design Tokens
+ * Design Language: Cupertino Sovereign
+ * Generated: 2026-03-04
+ *
+ * Usage: Import this file at the root of your application.
+ * All tokens are available as CSS custom properties.
+ */
+
+:root {
+  /* ─── Color: Backgrounds ─────────────────────────────────── */
+  --color-bg-base:          #F5F5F7; /* Main app background */
+  --color-surface:          #FFFFFF; /* Cards, panels, inputs */
+  --color-console-bg:       #1C1C1E; /* Log console background */
+
+  /* ─── Color: Borders ─────────────────────────────────────── */
+  --color-border:           #E5E5EA; /* Default borders, dividers */
+  --color-border-focus:     #0A3628; /* Focused input border */
+  --color-border-error:     #C0392B; /* Error input border */
+
+  /* ─── Color: Text ────────────────────────────────────────── */
+  --color-text-primary:     #1D1D1F; /* Headings, body */
+  --color-text-muted:       #8E8E93; /* Captions, labels, disabled */
+  --color-text-inverse:     #FFFFFF; /* Text on dark backgrounds */
+  --color-console-text:     #4ADE80; /* Log console text */
+
+  /* ─── Color: Accent — Green (Primary) ───────────────────── */
+  --color-accent-green:     #0A3628; /* Primary buttons, active states */
+  --color-accent-green-bg:  #D4EDDF; /* Success chip backgrounds */
+  --color-accent-green-mid: #1C7C54; /* Success icons, healthy states */
+
+  /* ─── Color: Accent — Amber (Warning) ───────────────────── */
+  --color-accent-amber:     #B45309; /* Warning text, icons */
+  --color-accent-amber-bg:  #FEF3C7; /* Warning chip backgrounds */
+
+  /* ─── Color: Accent — Red (Error) ───────────────────────── */
+  --color-accent-red:       #C0392B; /* Error text, destructive */
+  --color-accent-red-bg:    #FADBD8; /* Error chip backgrounds */
+
+  /* ─── Color: Accent — Navy (Info) ───────────────────────── */
+  --color-accent-navy:      #1E4A7A; /* Info banners */
+  --color-accent-navy-bg:   #EBF4FF; /* Info chip backgrounds */
+
+  /* ─── Typography: Font Families ─────────────────────────── */
+  --font-sans:   'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono:   'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+
+  /* ─── Typography: Font Sizes ─────────────────────────────── */
+  --text-display: 64px;
+  --text-h1:      32px;
+  --text-h2:      22px;
+  --text-body:    15px;
+  --text-label:   13px;
+  --text-caption: 12px;
+  --text-mono:    13px;
+
+  /* ─── Typography: Font Weights ───────────────────────────── */
+  --weight-regular:  400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;
+
+  /* ─── Typography: Line Heights ───────────────────────────── */
+  --leading-tight:  1.1;
+  --leading-snug:   1.25;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.6;
+
+  /* ─── Spacing ─────────────────────────────────────────────── */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* ─── Border Radius ──────────────────────────────────────── */
+  --radius-sm:   8px;   /* Chips, small elements */
+  --radius-md:   12px;  /* Inputs, controls */
+  --radius-lg:   16px;  /* Small cards */
+  --radius-xl:   24px;  /* Main cards, windows */
+  --radius-pill: 9999px; /* Buttons, tags */
+
+  /* ─── Shadows ─────────────────────────────────────────────── */
+  --shadow-sm:  0px 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md:  0px 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg:  0px 8px 24px rgba(0, 0, 0, 0.10);
+  --shadow-xl:  0px 16px 48px rgba(0, 0, 0, 0.12);
+
+  /* ─── Transitions ─────────────────────────────────────────── */
+  --transition-fast:   100ms ease-in-out;
+  --transition-normal: 200ms ease-in-out;
+  --transition-slow:   300ms ease-in-out;
+
+  /* ─── Layout ──────────────────────────────────────────────── */
+  --sidebar-width:       240px;
+  --content-max-width:   960px;
+  --grid-columns:        12;
+  --grid-gutter:         24px;
+}

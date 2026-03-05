@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 24" fill="none">
+  <defs><linearGradient id="prg" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#0891B2"/><stop offset="100%" stop-color="#7C3AED"/></linearGradient></defs>
+  <rect width="400" height="8" rx="4" fill="#E5E7EB" y="8"/>
+  <rect width="320" height="8" rx="4" fill="url(#prg)" y="8" />
+  <text x="0" y="24" font-family="'Space Grotesk', sans-serif" font-size="11" fill="#6B7280">Installing…</text>
+  <text x="400" y="24" text-anchor="end" font-family="'IBM Plex Mono', monospace" font-size="11" fill="#0891B2">80%</text>
+</svg>

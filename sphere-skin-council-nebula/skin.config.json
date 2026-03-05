@@ -1,0 +1,23 @@
+{
+  "engineUrl": "https://api.antechamber.art",
+  "engineWsUrl": "wss://api.antechamber.art",
+  "branding": {
+    "name": "Council Nebula",
+    "tagline": "One question. Twelve ways of knowing. Live synthesis.",
+    "logo": "/assets/logo.svg"
+  },
+  "theme": {
+    "background": "#0A0A0F",
+    "foreground": "#E8E4DC",
+    "accent1": "#FFB800",
+    "accent2": "#00E5FF",
+    "fontHeadline": "Space Grotesk",
+    "fontBody": "DM Sans"
+  },
+  "deliberation": {
+    "positionRevealStyle": "theater",
+    "clashStyle": "side-by-side",
+    "synthesisStyle": "four-panel-stream"
+  },
+  "lensCardStyle": "avatar-glow"
+}

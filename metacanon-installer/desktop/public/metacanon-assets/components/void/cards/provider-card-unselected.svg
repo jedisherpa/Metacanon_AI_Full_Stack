@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 120" fill="none">
+  <rect width="200" height="120" rx="14" fill="#0A0A12" stroke="#1F1F2E" stroke-width="1.5"/>
+  <text x="16" y="64" font-family="'Space Grotesk', sans-serif" font-size="16" font-weight="700" fill="#666677">OpenAI</text>
+  <text x="16" y="82" font-family="'IBM Plex Mono', monospace" font-size="11" fill="#666677">GPT-4o · Cloud</text>
+  <rect x="148" y="48" width="38" height="22" rx="11" fill="#1F1F2E"/>
+  <circle cx="161" cy="59" r="8" fill="#05050A"/>
+  <text x="100" y="108" text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="10" fill="#666677">○ OFFLINE</text>
+</svg>

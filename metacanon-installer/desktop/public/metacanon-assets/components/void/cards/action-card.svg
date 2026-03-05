@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 180" fill="none"><defs><filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+  <rect width="220" height="180" rx="16" fill="#0A0A12" stroke="#FFD700" stroke-width="1.5" filter="url(#glow)"/>
+  <text x="110" y="36" text-anchor="middle" font-family="'Space Grotesk', sans-serif" font-size="13" fill="#666677">~4 min</text>
+  <text x="110" y="72" text-anchor="middle" font-family="'Space Grotesk', sans-serif" font-size="18" font-weight="700" fill="#EAEAEA">Genesis Setup</text>
+  <text x="110" y="94" text-anchor="middle" font-family="'Space Grotesk', sans-serif" font-size="13" fill="#666677">Recommended defaults</text>
+  <rect x="20" y="130" width="180" height="36" rx="18" fill="#FFD700"/>
+  <text x="110" y="153" text-anchor="middle" font-family="'Space Grotesk', sans-serif" font-size="14" font-weight="600" fill="#05050A">Initiate Genesis</text>
+</svg>

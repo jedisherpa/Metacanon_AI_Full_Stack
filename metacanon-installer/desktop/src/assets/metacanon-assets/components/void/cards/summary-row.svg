@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 44" fill="none">
+  <rect width="400" height="44" fill="none"/>
+  <line x1="0" y1="43" x2="400" y2="43" stroke="#1F1F2E" stroke-width="1"/>
+  <text x="0" y="27" font-family="'Space Grotesk', sans-serif" font-size="14" fill="#666677">Genesis Core</text>
+  <text x="400" y="27" text-anchor="end" font-family="'IBM Plex Mono', monospace" font-size="14" fill="#FFD700">Qwen 3.5-72B</text>
+</svg>

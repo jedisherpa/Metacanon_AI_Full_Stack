@@ -1,0 +1,244 @@
+/* ============================================================
+   SKIN: CYPHER — Calligraphic Hardware
+   "Military-grade hardware through which a living, self-rewriting ink flows."
+
+   ACCENT DISCIPLINE (enforced — do not deviate):
+   --lf-color-accent-primary (#00E87A) → primary button | focus ring | active indicator (3 roles)
+   --lf-color-accent-subtle            → avatar border | card hover border (structural, not text)
+
+   DO NOT use accent-primary for body text. User's words are neutral (#E8E8E8), not syntax.
+   DO NOT use rounded corners above 8px. Tactical corners only.
+   DO NOT slow transitions below 120ms. The operator must be fast.
+   DO NOT uppercase button labels. Reserve for section headers + badges only.
+   ============================================================ */
+
+/* ── SECTION 1: TOKENS ──────────────────────────────────────
+   All --lf-* custom properties. No component rules here.
+   ─────────────────────────────────────────────────────────── */
+[data-skin="cypher"] {
+  /* Palette — deep military green-black */
+  --lf-color-bg-base:              #0A0F0A;
+  --lf-color-bg-surface:           #0F160F;
+  --lf-color-bg-elevated:          #141E14;
+  --lf-color-bg-overlay:           #192419;
+  --lf-color-text-primary:         #C8D8C8;
+  --lf-color-text-secondary:       #7A9A7A;
+  --lf-color-text-muted:           #3A5A3A;
+  --lf-color-text-inverse:         #0A0F0A;
+  --lf-color-accent-primary:       #00E87A; /* Saturated green — 3 roles max */
+  --lf-color-accent-subtle:        rgba(0,232,122,0.15);
+  --lf-color-accent-secondary:     #00AA5A; /* Mid green — hover states */
+  --lf-color-accent-tertiary:      #007A40; /* Deep green — pressed states */
+  --lf-color-state-success:        #00E87A;
+  --lf-color-state-warning:        #E8C800;
+  --lf-color-state-error:          #E83A3A;
+  --lf-color-state-info:           #3A8AE8;
+  --lf-color-border-default:       #1E2A1E;
+  --lf-color-border-accent:        rgba(0,232,122,0.5);
+  --lf-color-border-accent-subtle: rgba(0,232,122,0.2);
+  --lf-color-border-subtle:        #141A14;
+
+  /* Typography — Roboto Mono: the operator's terminal */
+  --lf-font-family-primary:        'Roboto Mono', 'Courier New', monospace;
+  --lf-font-family-display:        'Roboto Mono', monospace;
+  --lf-font-size-xs:               11px;
+  --lf-font-size-sm:               12px;
+  --lf-font-size-base:             14px;
+  --lf-font-size-lg:               16px;
+  --lf-font-size-xl:               20px;
+  --lf-font-size-2xl:              24px;
+  --lf-font-size-3xl:              32px;
+  --lf-font-weight-light:          300;
+  --lf-font-weight-regular:        400;
+  --lf-font-weight-medium:         500;
+  --lf-font-weight-bold:           700;
+  --lf-line-height-tight:          1.2;
+  --lf-line-height-base:           1.5;
+  --lf-line-height-relaxed:        1.8;
+  --lf-letter-spacing-tight:       0em;
+  --lf-letter-spacing-wide:        0.08em; /* Reserved: section headers + badges */
+
+  /* Shape — tactical. 2–8px. Sharp but not zero. */
+  --lf-radius-none:                2px;
+  --lf-radius-sm:                  2px;
+  --lf-radius-md:                  4px;
+  --lf-radius-lg:                  8px;
+  --lf-radius-full:                2px; /* Even "full" stays tactical */
+
+  /* Spacing */
+  --lf-space-1:  4px;
+  --lf-space-2:  8px;
+  --lf-space-3:  12px;
+  --lf-space-4:  16px;
+  --lf-space-5:  20px;
+  --lf-space-6:  28px;
+  --lf-space-7:  40px;
+  --lf-space-8:  56px;
+
+  /* P1-A: button padding — target ~38px height */
+  --lf-space-button-y: 6px;
+  --lf-space-button-x: 20px;
+
+  /* P1-B: input padding — target ~40px height */
+  --lf-space-input-y:  8px;
+  --lf-space-input-x:  14px;
+
+  /* Motion — operator must be fast. All transitions are decisive. */
+  --lf-duration-response: 120ms;
+  --lf-duration-fast:     150ms;
+  --lf-duration-base:     300ms;
+  --lf-duration-slow:     500ms;
+  --lf-easing-base:       cubic-bezier(0.0, 0.0, 0.2, 1);
+  --lf-easing-in:         cubic-bezier(0.4, 0.0, 1, 1);
+  --lf-easing-out:        cubic-bezier(0.0, 0.0, 0.2, 1);
+
+  /* Elevation — subtle green glow, not drop shadow */
+  --lf-shadow-sm:     0 0 0 1px #1E2A1E;
+  --lf-shadow-md:     0 0 0 1px #1E2A1E, 0 0 16px rgba(0,232,122,0.06);
+  --lf-shadow-lg:     0 0 0 1px rgba(0,232,122,0.5), 0 0 32px rgba(0,232,122,0.12);
+  --lf-shadow-accent: 0 0 0 1px rgba(0,232,122,0.5), 0 0 20px rgba(0,232,122,0.2);
+
+  /* Ambient — living ink glow rising from the bottom */
+  --lf-ambient-bg: radial-gradient(ellipse 80% 30% at 50% 100%, rgba(0,232,122,0.06) 0%, transparent 70%);
+}
+
+/* ── SECTION 2: STRUCTURAL OVERRIDES ───────────────────────
+   ONLY rules that cannot be expressed as tokens.
+   ─────────────────────────────────────────────────────────── */
+
+/* Root: scanline overlay (::before) + breathing ambient glow (::after) */
+[data-skin="cypher"] .lf-skin-root {
+  position: relative;
+}
+[data-skin="cypher"] .lf-skin-root::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 3px,
+    rgba(0,0,0,0.05) 3px,
+    rgba(0,0,0,0.05) 6px
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+[data-skin="cypher"] .lf-skin-root::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--lf-ambient-bg);
+  pointer-events: none;
+  z-index: 0;
+  animation: cypher-breathe 8s ease-in-out infinite;
+}
+@keyframes cypher-breathe {
+  0%, 100% { opacity: 0.5; }
+  50%       { opacity: 1.0; }
+}
+
+/* Top bar: scan-sweep animation on bottom border */
+[data-skin="cypher"] .lf-top-bar {
+  overflow: hidden;
+  position: relative;
+}
+[data-skin="cypher"] .lf-top-bar::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: -100%;
+  width: 60%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--lf-color-accent-primary), transparent);
+  animation: cypher-scan 4s linear infinite;
+}
+@keyframes cypher-scan {
+  0%   { left: -60%; }
+  100% { left: 160%; }
+}
+
+/* Top bar title: cursor blink prefix + uppercase + bold */
+[data-skin="cypher"] .lf-top-bar__title {
+  font-weight: var(--lf-font-weight-bold);
+  color: var(--lf-color-accent-primary);
+  text-transform: uppercase;
+  letter-spacing: var(--lf-letter-spacing-wide);
+}
+[data-skin="cypher"] .lf-top-bar__title::before {
+  content: '> ';
+  animation: cypher-cursor 1.2s step-end infinite;
+}
+@keyframes cypher-cursor {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+/* Card: left-border accent on hover — the most crafted element */
+[data-skin="cypher"] .lf-card {
+  position: relative;
+}
+[data-skin="cypher"] .lf-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 3px;
+  height: 100%;
+  background: var(--lf-color-accent-primary);
+  opacity: 0;
+  transition: opacity var(--lf-duration-response) var(--lf-easing-out);
+  border-radius: var(--lf-radius-sm) 0 0 var(--lf-radius-sm);
+}
+[data-skin="cypher"] .lf-card:hover::before {
+  opacity: 1;
+}
+[data-skin="cypher"] .lf-card:hover {
+  border-color: var(--lf-color-border-accent-subtle);
+}
+
+/* Button primary: filled → outline inversion on hover (the ink reversal) */
+[data-skin="cypher"] .lf-button--primary:hover {
+  background: transparent;
+  color: var(--lf-color-accent-primary);
+  box-shadow: 0 0 12px rgba(0,232,122,0.3);
+}
+
+/* Input: caret is green — the living ink */
+[data-skin="cypher"] .lf-input {
+  color: #E8E8E8; /* User's words are neutral, not syntax */
+  caret-color: var(--lf-color-accent-primary);
+}
+[data-skin="cypher"] .lf-input:focus {
+  box-shadow: 0 0 0 1px var(--lf-color-border-accent-subtle);
+}
+
+/* Status badge: active blinks — the heartbeat of a live system */
+[data-skin="cypher"] .lf-status-badge--active {
+  animation: cypher-blink 2s ease-in-out infinite;
+}
+@keyframes cypher-blink {
+  0%, 90%, 100% { opacity: 1; }
+  95%           { opacity: 0.4; }
+}
+
+/* Empty state: // comment prefix on title */
+[data-skin="cypher"] .lf-empty-state__title::before {
+  content: '// ';
+  opacity: 0.4;
+}
+
+/* Invite panel: top gradient line — the ink horizon */
+[data-skin="cypher"] .lf-invite-panel {
+  position: relative;
+  overflow: hidden;
+}
+[data-skin="cypher"] .lf-invite-panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--lf-color-accent-primary), transparent);
+}

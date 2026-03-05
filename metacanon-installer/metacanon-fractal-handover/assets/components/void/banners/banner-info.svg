@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 64" fill="none">
+  <rect width="480" height="64" rx="12" fill="#00F0FF" fill-opacity="0.12" stroke="#00F0FF" stroke-width="1"/>
+  <text x="16" y="24" font-size="16">ℹ</text>
+  <text x="44" y="24" font-family="'Space Grotesk', sans-serif" font-size="14" font-weight="600" fill="#00F0FF">Info</text>
+  <text x="44" y="46" font-family="'Space Grotesk', sans-serif" font-size="13" fill="#EAEAEA">Qwen 3.5-72B model is downloading (2.3 GB remaining).</text>
+</svg>

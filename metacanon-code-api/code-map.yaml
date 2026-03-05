@@ -1,0 +1,27 @@
+snippets:
+  - id: genesis-step-1-launch
+    title: User Launches App
+    subtitle: Runtime Bootstrap
+    constitutional_basis: Article VII - Adoption and Amendments
+    file: src/main.rs
+    start_line: 1
+    end_line: 80
+    how_it_works: Entrypoint bootstraps CLI command surface and runtime state.
+
+  - id: genesis-step-2-soulfile
+    title: SoulFile Initialization
+    subtitle: Constitutional Layer
+    constitutional_basis: Article I - Sovereignty and Will
+    file: src/genesis.rs
+    start_line: 1
+    end_line: 140
+    how_it_works: SoulFile and SoulFacet fields are initialized for sovereign runtime governance.
+
+  - id: torus-fallback-routing
+    title: Torus Provider Fallback
+    subtitle: Compute Abstraction
+    constitutional_basis: Article IV - Compute Sovereignty
+    file: src/torus.rs
+    start_line: 1
+    end_line: 180
+    how_it_works: DeliberationTorus enforces provider fallback order and validation-before-dispatch contracts.

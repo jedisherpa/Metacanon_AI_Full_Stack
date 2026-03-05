@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 48" fill="none"><defs><filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+  <text x="0" y="14" font-family="'Space Grotesk', sans-serif" font-size="12" fill="#666677">Temperature</text>
+  <rect x="0" y="28" width="320" height="6" rx="3" fill="#1F1F2E"/>
+  <rect x="0" y="28" width="192" height="6" rx="3" fill="#BD00FF" filter="url(#glow)"/>
+  <circle cx="192" cy="31" r="10" fill="#05050A" stroke="#BD00FF" stroke-width="2" filter="url(#glow)"/>
+  <text x="320" y="48" text-anchor="end" font-family="'IBM Plex Mono', monospace" font-size="11" fill="#666677">0.6</text>
+</svg>

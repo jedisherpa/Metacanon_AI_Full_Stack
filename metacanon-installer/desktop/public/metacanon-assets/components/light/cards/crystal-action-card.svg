@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 140" fill="none">
+  <rect width="200" height="140" rx="14" fill="#F9FAFB" stroke="#E5E7EB" stroke-width="1.5"/>
+  <text x="100" y="28" text-anchor="middle" font-family="'Space Grotesk', sans-serif" font-size="14" font-weight="600" fill="#111827">Crystal Actions</text>
+  <rect x="12" y="40" width="176" height="36" rx="10" fill="#0891B2" fill-opacity="0.15" stroke="#0891B2" stroke-width="1"/>
+  <text x="100" y="63" text-anchor="middle" font-family="'Space Grotesk', sans-serif" font-size="13" font-weight="600" fill="#0891B2">Save Genesis Crystal</text>
+  <rect x="12" y="84" width="176" height="36" rx="10" fill="none" stroke="#E5E7EB" stroke-width="1.5"/>
+  <text x="100" y="107" text-anchor="middle" font-family="'Space Grotesk', sans-serif" font-size="13" fill="#6B7280">Load Crystal</text>
+</svg>
