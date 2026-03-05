@@ -86,6 +86,14 @@ export type LocalModelPackInstallResult = {
   bootstrap: LocalBootstrapStatus;
 };
 
+export type ModelDownloadStatus = {
+  status: 'idle' | 'running' | 'completed' | 'failed';
+  model_id?: string | null;
+  progress_percent?: number | null;
+  detail: string;
+  updated_at_epoch_ms: number;
+};
+
 export type GenesisRiteResult = {
   genesis_hash: string;
   signature: string;

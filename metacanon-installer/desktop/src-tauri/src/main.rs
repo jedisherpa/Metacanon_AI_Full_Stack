@@ -13,10 +13,34 @@ use metacanon_ai::ui::{
 };
 use metacanon_ai::task_sub_sphere::TaskSubSphereSummary;
 use metacanon_ai::workflow::{WorkflowDefinition, WorkflowTrainingSession};
+use serde::Serialize;
 use serde_json::Value;
+use std::io::{BufRead, BufReader};
+use std::process::{Command, Stdio};
+use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum ModelDownloadState {
+    Idle,
+    Running,
+    Completed,
+    Failed,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct ModelDownloadStatus {
+    status: ModelDownloadState,
+    model_id: Option<String>,
+    progress_percent: Option<f64>,
+    detail: String,
+    updated_at_epoch_ms: i64,
+}
 
 struct InstallerState {
     runtime: UiCommandRuntime,
+    model_download: Arc<Mutex<ModelDownloadStatus>>,
 }
 
 impl InstallerState {
@@ -33,12 +57,362 @@ impl InstallerState {
             })
             .unwrap_or_else(|_| UiCommandRuntime::new());
 
-        Self { runtime }
+        Self {
+            runtime,
+            model_download: Arc::new(Mutex::new(ModelDownloadStatus {
+                status: ModelDownloadState::Idle,
+                model_id: None,
+                progress_percent: None,
+                detail: "No model download in progress.".to_string(),
+                updated_at_epoch_ms: now_epoch_ms(),
+            })),
+        }
     }
 }
 
 fn map_error(error: ui::UiCommandError) -> String {
     error.to_string()
+}
+
+fn now_epoch_ms() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+fn parse_progress_percent_from_line(line: &str) -> Option<f64> {
+    let percent_index = line.find('%')?;
+    let prefix = &line[..percent_index];
+    let mut digits = String::new();
+    for ch in prefix.chars().rev() {
+        if ch.is_ascii_digit() || ch == '.' {
+            digits.insert(0, ch);
+        } else if !digits.is_empty() {
+            break;
+        }
+    }
+    if digits.is_empty() {
+        return None;
+    }
+    digits.parse::<f64>().ok().map(|value| value.clamp(0.0, 100.0))
+}
+
+fn strip_ansi_sequences(input: &str) -> String {
+    let mut output = String::new();
+    let mut chars = input.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '\u{1b}' {
+            if let Some(next) = chars.peek() {
+                if *next == '[' || *next == '?' {
+                    while let Some(consumed) = chars.next() {
+                        if consumed.is_ascii_alphabetic() {
+                            break;
+                        }
+                    }
+                    continue;
+                }
+            }
+            continue;
+        }
+        if ch.is_control() && ch != '\n' && ch != '\t' {
+            continue;
+        }
+        output.push(ch);
+    }
+    output
+}
+
+fn summarize_stderr(stderr_text: &str) -> String {
+    let cleaned = strip_ansi_sequences(stderr_text);
+    let lines: Vec<String> = cleaned
+        .lines()
+        .map(|line| line.trim().to_string())
+        .filter(|line| !line.is_empty())
+        .collect();
+
+    if lines.is_empty() {
+        return String::new();
+    }
+
+    if let Some(line) = lines
+        .iter()
+        .find(|line| line.contains("Error:") || line.contains("error:"))
+    {
+        return line.clone();
+    }
+    if let Some(line) = lines.iter().find(|line| line.contains("Terminating app")) {
+        return line.clone();
+    }
+    if let Some(line) = lines.iter().find(|line| line.contains("unknown")) {
+        return line.clone();
+    }
+
+    lines.last().cloned().unwrap_or_default()
+}
+
+fn list_ollama_models() -> Result<Vec<String>, String> {
+    let script = "if [ -x /opt/homebrew/bin/ollama ]; then /opt/homebrew/bin/ollama list; else ollama list; fi";
+    let output = Command::new("/bin/zsh")
+        .arg("-lc")
+        .arg(script)
+        .output()
+        .map_err(|error| format!("failed to run ollama list: {error}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(if stderr.is_empty() {
+            format!("ollama list exited with status: {}", output.status)
+        } else {
+            format!("ollama list exited with status: {}. detail: {stderr}", output.status)
+        });
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let models = strip_ansi_sequences(&stdout)
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .filter(|line| !line.to_ascii_lowercase().starts_with("name"))
+        .filter_map(|line| line.split_whitespace().next())
+        .map(|name| name.trim().to_string())
+        .collect::<Vec<_>>();
+
+    Ok(models)
+}
+
+fn has_ollama_model(model_id: &str) -> Result<bool, String> {
+    let normalized_target = model_id.trim().to_ascii_lowercase();
+    if normalized_target.is_empty() {
+        return Ok(false);
+    }
+
+    let model_names = list_ollama_models()?;
+    Ok(model_names
+        .iter()
+        .any(|name| name.trim().to_ascii_lowercase() == normalized_target))
+}
+
+#[tauri::command]
+fn start_model_download(
+    model_id: String,
+    state: tauri::State<'_, InstallerState>,
+) -> Result<ModelDownloadStatus, String> {
+    {
+        let mut current = state
+            .model_download
+            .lock()
+            .map_err(|_| "failed to lock model download state".to_string())?;
+        if matches!(current.status, ModelDownloadState::Running) {
+            return Err("A model download is already running.".to_string());
+        }
+
+        *current = ModelDownloadStatus {
+            status: ModelDownloadState::Running,
+            model_id: Some(model_id.clone()),
+            progress_percent: None,
+            detail: format!("Starting download: {model_id}"),
+            updated_at_epoch_ms: now_epoch_ms(),
+        };
+    }
+
+    let progress_state = Arc::clone(&state.model_download);
+    std::thread::spawn(move || {
+        let escaped_model_id = model_id.replace('\'', "'\\''");
+        let shell_cmd = format!(
+            "export TERM=xterm-256color; \
+             if [ -x /opt/homebrew/bin/ollama ]; then \
+               /opt/homebrew/bin/ollama pull '{escaped_model_id}'; \
+             else \
+               ollama pull '{escaped_model_id}'; \
+             fi"
+        );
+
+        let child = Command::new("/usr/bin/script")
+            .arg("-q")
+            .arg("/dev/null")
+            .arg("/bin/zsh")
+            .arg("-lc")
+            .arg(shell_cmd)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn();
+
+        let mut child = match child {
+            Ok(process) => process,
+            Err(error) => {
+                if let Ok(mut status) = progress_state.lock() {
+                    *status = ModelDownloadStatus {
+                        status: ModelDownloadState::Failed,
+                        model_id: Some(model_id.clone()),
+                        progress_percent: None,
+                        detail: format!("Failed to start ollama pull: {error}"),
+                        updated_at_epoch_ms: now_epoch_ms(),
+                    };
+                }
+                return;
+            }
+        };
+
+        let stderr_handle = child.stderr.take().map(|stderr| {
+            let progress_state = Arc::clone(&progress_state);
+            let model_id_for_stderr = model_id.clone();
+            std::thread::spawn(move || {
+                let mut reader = BufReader::new(stderr);
+                let mut output = String::new();
+                let mut chunk = Vec::new();
+
+                loop {
+                    chunk.clear();
+                    match reader.read_until(b'\r', &mut chunk) {
+                        Ok(0) => break,
+                        Ok(_) => {
+                            let raw = String::from_utf8_lossy(&chunk);
+                            let cleaned =
+                                strip_ansi_sequences(&raw).replace('\r', "\n");
+
+                            for segment in cleaned
+                                .split('\n')
+                                .map(|entry| entry.trim())
+                                .filter(|entry| !entry.is_empty())
+                            {
+                                if !output.is_empty() {
+                                    output.push('\n');
+                                }
+                                output.push_str(segment);
+
+                                let progress =
+                                    parse_progress_percent_from_line(segment);
+                                if let Ok(mut status) = progress_state.lock() {
+                                    status.status = ModelDownloadState::Running;
+                                    status.model_id =
+                                        Some(model_id_for_stderr.clone());
+                                    if let Some(percent) = progress {
+                                        status.progress_percent = Some(percent);
+                                    }
+                                    status.detail = segment.to_string();
+                                    status.updated_at_epoch_ms = now_epoch_ms();
+                                }
+                            }
+                        }
+                        Err(_) => break,
+                    }
+                }
+
+                output
+            })
+        });
+
+        if let Some(stdout) = child.stdout.take() {
+            let mut reader = BufReader::new(stdout);
+            let mut chunk = Vec::new();
+            loop {
+                chunk.clear();
+                match reader.read_until(b'\r', &mut chunk) {
+                    Ok(0) => break,
+                    Ok(_) => {
+                        let raw = String::from_utf8_lossy(&chunk);
+                        let cleaned = strip_ansi_sequences(&raw).replace('\r', "\n");
+                        for segment in cleaned
+                            .split('\n')
+                            .map(|entry| entry.trim())
+                            .filter(|entry| !entry.is_empty())
+                        {
+                            let progress = parse_progress_percent_from_line(segment);
+                            if let Ok(mut status) = progress_state.lock() {
+                                status.status = ModelDownloadState::Running;
+                                status.model_id = Some(model_id.clone());
+                                if let Some(percent) = progress {
+                                    status.progress_percent = Some(percent);
+                                }
+                                status.detail = segment.to_string();
+                                status.updated_at_epoch_ms = now_epoch_ms();
+                            }
+                        }
+                    }
+                    Err(error) => {
+                        if let Ok(mut status) = progress_state.lock() {
+                            *status = ModelDownloadStatus {
+                                status: ModelDownloadState::Failed,
+                                model_id: Some(model_id.clone()),
+                                progress_percent: None,
+                                detail: format!("Failed reading download progress: {error}"),
+                                updated_at_epoch_ms: now_epoch_ms(),
+                            };
+                        }
+                        return;
+                    }
+                }
+            }
+        }
+
+        let stderr_text = stderr_handle
+            .and_then(|handle| handle.join().ok())
+            .unwrap_or_default();
+        let stderr_summary = summarize_stderr(&stderr_text);
+
+        match child.wait() {
+            Ok(exit_status) if exit_status.success() => {
+                if let Ok(mut status) = progress_state.lock() {
+                    *status = ModelDownloadStatus {
+                        status: ModelDownloadState::Completed,
+                        model_id: Some(model_id.clone()),
+                        progress_percent: Some(100.0),
+                        detail: format!("Model ready: {model_id}"),
+                        updated_at_epoch_ms: now_epoch_ms(),
+                    };
+                }
+            }
+            Ok(exit_status) => {
+                if let Ok(mut status) = progress_state.lock() {
+                    *status = ModelDownloadStatus {
+                        status: ModelDownloadState::Failed,
+                        model_id: Some(model_id.clone()),
+                        progress_percent: None,
+                        detail: if stderr_summary.is_empty() {
+                            format!("ollama pull exited with status: {exit_status}")
+                        } else {
+                            format!(
+                                "ollama pull exited with status: {exit_status}. detail: {}",
+                                stderr_summary
+                            )
+                        },
+                        updated_at_epoch_ms: now_epoch_ms(),
+                    };
+                }
+            }
+            Err(error) => {
+                if let Ok(mut status) = progress_state.lock() {
+                    *status = ModelDownloadStatus {
+                        status: ModelDownloadState::Failed,
+                        model_id: Some(model_id.clone()),
+                        progress_percent: None,
+                        detail: format!("Failed waiting for ollama pull: {error}"),
+                        updated_at_epoch_ms: now_epoch_ms(),
+                    };
+                }
+            }
+        }
+    });
+
+    let snapshot = state
+        .model_download
+        .lock()
+        .map_err(|_| "failed to lock model download state".to_string())?
+        .clone();
+    Ok(snapshot)
+}
+
+#[tauri::command]
+fn get_model_download_status(
+    state: tauri::State<'_, InstallerState>,
+) -> Result<ModelDownloadStatus, String> {
+    let status = state
+        .model_download
+        .lock()
+        .map_err(|_| "failed to lock model download state".to_string())?
+        .clone();
+    Ok(status)
 }
 
 #[tauri::command]
@@ -332,7 +706,17 @@ fn run_system_check(
 fn get_local_bootstrap_status(
     state: tauri::State<'_, InstallerState>,
 ) -> Result<LocalBootstrapStatus, String> {
-    ui::get_local_bootstrap_status(&state.runtime).map_err(map_error)
+    let mut status = ui::get_local_bootstrap_status(&state.runtime).map_err(map_error)?;
+
+    if status.ollama_installed && !status.qwen_model_hint_present {
+        if let Ok(found) = has_ollama_model("qwen3.5:35b") {
+            if found {
+                status.qwen_model_hint_present = true;
+            }
+        }
+    }
+
+    Ok(status)
 }
 
 #[tauri::command]
@@ -562,6 +946,8 @@ fn main() {
             get_local_bootstrap_status,
             install_local_model_pack,
             prepare_local_runtime,
+            start_model_download,
+            get_model_download_status,
             invoke_guided_genesis_rite,
             bootstrap_three_agents,
             get_security_persistence_settings,

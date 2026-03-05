@@ -17,6 +17,7 @@ import type {
   InstallReviewSummary,
   LocalBootstrapStatus,
   LocalModelPackInstallResult,
+  ModelDownloadStatus,
   ObservabilityStatus,
   ProviderHealthStatus,
   SecurityPersistenceSettings,
@@ -37,41 +38,97 @@ function notTauriError(): Error {
   return new Error('Tauri runtime not detected. Start with `npm run tauri:dev`.');
 }
 
+function snakeToCamel(key: string): string {
+  return key.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
+}
+
+function camelToSnake(key: string): string {
+  return key.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
+}
+
+function withCaseAliases(payload: Record<string, unknown>): Record<string, unknown> {
+  const normalized: Record<string, unknown> = { ...payload };
+
+  for (const [key, value] of Object.entries(payload)) {
+    const camel = snakeToCamel(key);
+    const snake = camelToSnake(key);
+
+    if (!(camel in normalized)) {
+      normalized[camel] = value;
+    }
+    if (!(snake in normalized)) {
+      normalized[snake] = value;
+    }
+  }
+
+  return normalized;
+}
+
 async function call<T>(command: string, payload: Record<string, unknown> = {}): Promise<T> {
   if (!(window as unknown as { __TAURI_IPC__?: unknown }).__TAURI_IPC__) {
     throw notTauriError();
   }
-  return invoke<T>(command, payload);
+  return invoke<T>(command, withCaseAliases(payload));
 }
 
 export const installerApi = {
   getComputeOptions: () => call<ComputeOption[]>('get_compute_options'),
   finalizeSetupComputeSelection: (providerId?: string) =>
-    call('finalize_setup_compute_selection', { provider_id: providerId ?? null }),
+    call('finalize_setup_compute_selection', {
+      providerId: providerId ?? null,
+      provider_id: providerId ?? null,
+    }),
   setGlobalComputeProvider: (providerId: string) =>
-    call('set_global_compute_provider', { provider_id: providerId }),
+    call('set_global_compute_provider', {
+      providerId,
+      provider_id: providerId,
+    }),
   setProviderPriority: (cloudProviderPriority: string[]) =>
-    call('set_provider_priority', { cloud_provider_priority: cloudProviderPriority }),
+    call('set_provider_priority', {
+      cloudProviderPriority,
+      cloud_provider_priority: cloudProviderPriority,
+    }),
   getProviderHealth: () => call<ProviderHealthStatus[]>('get_provider_health'),
   updateProviderConfig: (providerId: string, config: Record<string, unknown>) =>
-    call('update_provider_config', { provider_id: providerId, config }),
+    call('update_provider_config', {
+      providerId,
+      provider_id: providerId,
+      config,
+    }),
   runSystemCheck: () => call<SystemCheckReport>('run_system_check'),
   getLocalBootstrapStatus: () => call<LocalBootstrapStatus>('get_local_bootstrap_status'),
   installLocalModelPack: (sourcePath: string) =>
     call<LocalModelPackInstallResult>('install_local_model_pack', {
+      sourcePath,
       source_path: sourcePath,
     }),
   prepareLocalRuntime: (pullOllamaDefaultModel: boolean) =>
     call<LocalBootstrapStatus>('prepare_local_runtime', {
+      pullOllamaDefaultModel,
       pull_ollama_default_model: pullOllamaDefaultModel,
     }),
+  startModelDownload: (modelId: string) =>
+    call<ModelDownloadStatus>('start_model_download', {
+      modelId,
+      model_id: modelId,
+    }),
+  getModelDownloadStatus: () =>
+    call<ModelDownloadStatus>('get_model_download_status'),
   invokeGuidedGenesisRite: (payload: {
     vision_core: string;
     core_values: string[];
     will_directives: string[];
     signing_secret: string;
     facet_vision?: string | null;
-  }) => call<GenesisRiteResult>('invoke_guided_genesis_rite', payload),
+  }) =>
+    call<GenesisRiteResult>('invoke_guided_genesis_rite', {
+      ...payload,
+      visionCore: payload.vision_core,
+      coreValues: payload.core_values,
+      willDirectives: payload.will_directives,
+      signingSecret: payload.signing_secret,
+      facetVision: payload.facet_vision ?? null,
+    }),
   bootstrapThreeAgents: (payload: {
     orchestrator_agent_id: string;
     prism_agent_id: string;
@@ -115,7 +172,15 @@ export const installerApi = {
     default_chat_id?: string | null;
     orchestrator_chat_id?: string | null;
     live_api: boolean;
-  }) => call<CommunicationStatus>('update_telegram_integration', payload),
+  }) =>
+    call<CommunicationStatus>('update_telegram_integration', {
+      ...payload,
+      routingMode: payload.routing_mode,
+      botToken: payload.bot_token ?? null,
+      defaultChatId: payload.default_chat_id ?? null,
+      orchestratorChatId: payload.orchestrator_chat_id ?? null,
+      liveApi: payload.live_api,
+    }),
   updateDiscordIntegration: (payload: {
     enabled: boolean;
     routing_mode: AgentRoutingMode;
@@ -125,7 +190,17 @@ export const installerApi = {
     orchestrator_thread_id?: string | null;
     auto_spawn_sub_sphere_threads: boolean;
     live_api: boolean;
-  }) => call<CommunicationStatus>('update_discord_integration', payload),
+  }) =>
+    call<CommunicationStatus>('update_discord_integration', {
+      ...payload,
+      routingMode: payload.routing_mode,
+      botToken: payload.bot_token ?? null,
+      guildId: payload.guild_id ?? null,
+      defaultChannelId: payload.default_channel_id ?? null,
+      orchestratorThreadId: payload.orchestrator_thread_id ?? null,
+      autoSpawnSubSphereThreads: payload.auto_spawn_sub_sphere_threads,
+      liveApi: payload.live_api,
+    }),
   bindAgentCommunicationRoute: (payload: {
     agent_id: string;
     telegram_chat_id?: string | null;

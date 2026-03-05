@@ -1,129 +1,150 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { installerApi } from './lib/api';
 import type {
   AgentRoutingMode,
   CommunicationStatus,
   ComputeOption,
+  DeliberationCommandResult,
   GenesisRiteResult,
-  InAppThreadMessage,
   InstallReviewSummary,
   LocalBootstrapStatus,
-  LocalModelPackInstallResult,
-  ObservabilityStatus,
+  ModelDownloadStatus,
   ProviderHealthStatus,
-  SecurityPersistenceSettings,
   SystemCheckReport,
-  TaskSubSphereSummary,
-  TelegramInboundRecord,
   ThreeAgentBootstrapResult,
-  WorkflowDefinition,
 } from './lib/types';
 
 type ThemeName = 'light' | 'void';
 type ProviderConfigFieldType = 'text' | 'password' | 'checkbox';
+type GenesisMode = 'default' | 'personalized';
+type SourceMode = 'bundled' | 'path' | 'url';
+type SetupPath = 'quick' | 'custom';
+type InitPhaseId = 'crystal' | 'tetrahedron' | 'agents' | 'taurus' | 'sphere';
+type InitPhaseState = 'pending' | 'active' | 'done' | 'error';
+type InitLogPhase = InitPhaseId | 'system';
+type CommunicationSubStepId =
+  | 'select'
+  | 'telegram_token'
+  | 'telegram_pair'
+  | 'discord_token'
+  | 'discord_target'
+  | 'interfaces'
+  | 'review';
+type PairingState = 'idle' | 'listening' | 'paired' | 'timed_out' | 'error';
+
+type InitLogEntry = {
+  id: number;
+  text: string;
+  phase: InitLogPhase;
+};
 
 type ProviderConfigField = {
   key: string;
   label: string;
   placeholder?: string;
   type?: ProviderConfigFieldType;
+  required?: boolean;
 };
 
 const STEPS = [
+  'Theme',
   'Welcome',
-  'System Check',
-  'Compute Selection',
-  'Provider Config',
-  'Security & Persistence',
-  'Observability',
-  'Review & Install',
+  'Compute',
+  'Provider Setup',
+  'Communication',
+  'Genesis Rite',
+  'Constitution',
+  'Initialization',
+  'Meet Prism',
+  'First Tasks',
   'Done',
 ];
 
-const DEFAULT_CLOUD_PRIORITY = 'openai,anthropic,moonshot_kimi,grok';
-const DEFAULT_SNAPSHOT_PATH = '~/.metacanon_ai/runtime_snapshot.json';
+const CORE_AGENT_IDS = {
+  monitor: 'agent-genesis',
+  synthesis: 'agent-synthesis',
+  auditor: 'agent-auditor',
+};
+
+const DEFAULT_GENESIS = {
+  vision_core: 'Build a sovereign MetaCanon runtime aligned to my values.',
+  core_values: ['Sovereignty', 'Clarity', 'Truthfulness', 'Human Dignity'],
+  will_directives: ['Do not bypass constitutional controls.', 'Escalate uncertain high-risk actions.'],
+};
+
 const SMOKE_QUERY = 'Return a one-line installer verification status.';
-const CORE_AGENT_IDS = ['agent-genesis', 'agent-synthesis', 'agent-auditor'];
+const INIT_PHASES: Array<{ id: InitPhaseId; label: string; detail: string }> = [
+  { id: 'crystal', label: 'Genesis Crystal', detail: 'Hashing values + constitution anchor.' },
+  { id: 'tetrahedron', label: 'Tensegrity Tetrahedron', detail: 'Primary deliberation path online.' },
+  { id: 'agents', label: 'Core Agents', detail: 'Synthesis, Monitor, Auditor are activated.' },
+  { id: 'taurus', label: 'Taurus Protocol', detail: 'Cross-agent routing and persistence flush.' },
+  { id: 'sphere', label: 'Sphere Established', detail: 'System is coherent and ready for Prism.' },
+];
+
+function emptyInitPhaseState(): Record<InitPhaseId, InitPhaseState> {
+  return {
+    crystal: 'pending',
+    tetrahedron: 'pending',
+    agents: 'pending',
+    taurus: 'pending',
+    sphere: 'pending',
+  };
+}
 
 function configFieldsForProvider(providerId: string): ProviderConfigField[] {
   switch (providerId) {
     case 'qwen_local':
       return [
-        { key: 'primary_target', label: 'Primary Target', placeholder: 'Qwen 3.5 32B Instruct GGUF Q8_0' },
-        { key: 'downgrade_profile', label: 'Downgrade Profile', placeholder: 'Q5_K_M' },
-        { key: 'downgrade_target', label: 'Downgrade Target', placeholder: 'Qwen 3.5 32B Instruct GGUF Q5_K_M' },
-        { key: 'runtime_backend', label: 'Runtime Backend', placeholder: 'ollama or llama.cpp' },
+        { key: 'runtime_backend', label: 'Runtime Backend', placeholder: 'ollama', required: true },
         { key: 'base_url', label: 'Local Base URL', placeholder: 'http://127.0.0.1:11434' },
-        { key: 'primary_model_id', label: 'Primary Runtime Model ID', placeholder: 'qwen3.5:32b-instruct-q8_0' },
-        { key: 'downgrade_model_id', label: 'Downgrade Runtime Model ID', placeholder: 'qwen3.5:32b-instruct-q5_k_m' },
-        { key: 'llama_cpp_binary', label: 'llama.cpp Binary', placeholder: 'llama-cli' },
-        { key: 'llama_cpp_model_path', label: 'llama.cpp Model Path', placeholder: '/path/to/model.gguf' },
-        { key: 'live_api', label: 'Enable Live Local Transport', type: 'checkbox' },
+        {
+          key: 'primary_model_id',
+          label: 'Primary Model',
+          placeholder: 'qwen3.5:35b',
+          required: true,
+        },
       ];
     case 'ollama':
       return [
         { key: 'base_url', label: 'Ollama Base URL', placeholder: 'http://127.0.0.1:11434' },
-        { key: 'default_model', label: 'Default Model', placeholder: 'qwen3.5:32b-instruct-q8_0' },
-        { key: 'live_api', label: 'Enable Live Local Transport', type: 'checkbox' },
+        { key: 'default_model', label: 'Default Model', placeholder: 'qwen3.5:35b' },
       ];
     case 'morpheus':
       return [
         { key: 'endpoint', label: 'Morpheus Endpoint', placeholder: 'https://morpheus.local/compute' },
-        { key: 'model', label: 'Morpheus Model', placeholder: 'helios-default' },
-        { key: 'router_id', label: 'Router ID', placeholder: 'helios-router-default' },
-        { key: 'key_id', label: 'Key ID', placeholder: 'helios-local-key' },
+        { key: 'key_id', label: 'Morpheus Key', placeholder: 'morpheus-key', type: 'password', required: true },
       ];
     case 'openai':
       return [
-        { key: 'api_key', label: 'OpenAI API Key', type: 'password', placeholder: 'sk-...' },
-        { key: 'base_url', label: 'OpenAI Base URL', placeholder: 'https://api.openai.com/v1' },
+        { key: 'api_key', label: 'OpenAI API Key', type: 'password', placeholder: 'sk-...', required: true },
         { key: 'chat_model', label: 'Chat Model', placeholder: 'gpt-4.1' },
-        { key: 'embedding_model', label: 'Embedding Model', placeholder: 'text-embedding-3-large' },
-        { key: 'live_api', label: 'Enable Live API Transport', type: 'checkbox' },
       ];
     case 'anthropic':
       return [
-        { key: 'api_key', label: 'Anthropic API Key', type: 'password', placeholder: 'sk-ant-...' },
-        { key: 'base_url', label: 'Anthropic Base URL', placeholder: 'https://api.anthropic.com' },
+        {
+          key: 'api_key',
+          label: 'Anthropic API Key',
+          type: 'password',
+          placeholder: 'sk-ant-...',
+          required: true,
+        },
         { key: 'model', label: 'Model', placeholder: 'claude-sonnet-4-5' },
-        { key: 'live_api', label: 'Enable Live API Transport', type: 'checkbox' },
-      ];
-    case 'moonshot_kimi':
-      return [
-        { key: 'api_key', label: 'Moonshot Kimi API Key', type: 'password', placeholder: 'sk-...' },
-        { key: 'base_url', label: 'Moonshot Base URL', placeholder: 'https://api.moonshot.cn/v1' },
-        { key: 'model', label: 'Model', placeholder: 'moonshot-v1-128k' },
-        { key: 'live_api', label: 'Enable Live API Transport', type: 'checkbox' },
       ];
     case 'grok':
       return [
-        { key: 'api_key', label: 'Grok API Key', type: 'password', placeholder: 'xai-...' },
-        { key: 'base_url', label: 'Grok Base URL', placeholder: 'https://api.x.ai/v1' },
+        { key: 'api_key', label: 'Grok API Key', type: 'password', placeholder: 'xai-...', required: true },
         { key: 'model', label: 'Model', placeholder: 'grok-4-0709' },
-        { key: 'live_api', label: 'Enable Live API Transport', type: 'checkbox' },
+      ];
+    case 'gemini':
+      return [
+        { key: 'api_key', label: 'Gemini API Key', type: 'password', placeholder: 'AIza...' },
+        { key: 'model', label: 'Model', placeholder: 'gemini-2.0-flash' },
       ];
     default:
       return [
-        { key: 'api_key', label: 'API Key', type: 'password', placeholder: 'Paste key' },
-        { key: 'base_url', label: 'Base URL', placeholder: 'https://api.example.com' },
+        { key: 'api_key', label: 'API Key', type: 'password', placeholder: 'Paste key', required: true },
         { key: 'model', label: 'Model', placeholder: 'provider-model-id' },
       ];
-  }
-}
-
-function providerTone(providerId: string): 'genesis' | 'synthesis' | 'auditor' {
-  switch (providerId) {
-    case 'qwen_local':
-    case 'moonshot_kimi':
-      return 'genesis';
-    case 'morpheus':
-    case 'anthropic':
-      return 'auditor';
-    case 'ollama':
-    case 'openai':
-    case 'grok':
-    default:
-      return 'synthesis';
   }
 }
 
@@ -148,33 +169,12 @@ function emptyLocalBootstrap(): LocalBootstrapStatus {
   };
 }
 
-function emptySecuritySettings(): SecurityPersistenceSettings {
-  return {
-    snapshot_path: DEFAULT_SNAPSHOT_PATH,
-    encryption_enabled: false,
-    passphrase_configured: false,
-    auto_save_enabled: true,
-    secret_backend_mode: 'dual_write',
-  };
-}
-
-function emptyObservability(): ObservabilityStatus {
-  return {
-    retention_days: 90,
-    log_level: 'info',
-    full_tier_encrypted: true,
-    redacted_graph_feed_enabled: true,
-    full_event_log_path: '',
-    redacted_graph_feed_path: '',
-  };
-}
-
-function emptyCommunicationStatus(): CommunicationStatus {
+function emptyCommunication(): CommunicationStatus {
   return {
     telegram: {
       enabled: false,
       live_api: false,
-      routing_mode: 'per_agent',
+      routing_mode: 'orchestrator',
       use_webhook: false,
       configured: false,
       has_bot_token: false,
@@ -186,7 +186,7 @@ function emptyCommunicationStatus(): CommunicationStatus {
     discord: {
       enabled: false,
       live_api: false,
-      routing_mode: 'per_agent',
+      routing_mode: 'orchestrator',
       configured: false,
       has_bot_token: false,
       guild_id: '',
@@ -242,11 +242,6 @@ const ICON_ASSET_MAP = import.meta.glob('./assets/metacanon-assets/icons/*/*.svg
   import: 'default',
 }) as Record<string, string>;
 
-const COMPONENT_ASSET_MAP = import.meta.glob('./assets/metacanon-assets/components/*/**/*.svg', {
-  eager: true,
-  import: 'default',
-}) as Record<string, string>;
-
 function baseAssetPath(relativePath: string): string {
   const base = import.meta.env.BASE_URL || '/';
   const normalizedBase = base.endsWith('/') ? base : `${base}/`;
@@ -277,157 +272,220 @@ function iconAsset(theme: ThemeName, name: string): string {
   );
 }
 
-function componentAsset(theme: ThemeName, path: string): string {
-  return resolveAsset(
-    COMPONENT_ASSET_MAP,
-    `./assets/metacanon-assets/components/${theme}/${path}.svg`,
-    `metacanon-assets/components/${theme}/${path}.svg`,
-  );
+function securityTier(providerId: string): 'Maximum' | 'High' | 'Balanced' {
+  if (providerId === 'qwen_local' || providerId === 'ollama') {
+    return 'Maximum';
+  }
+  if (providerId === 'morpheus') {
+    return 'High';
+  }
+  return 'Balanced';
 }
 
-function providerIcon(providerId: string): string {
+function providerDescription(providerId: string): string {
   switch (providerId) {
     case 'qwen_local':
-      return 'icon-lightning';
-    case 'morpheus':
-      return 'icon-lock';
-    case 'openai':
-    case 'anthropic':
-    case 'moonshot_kimi':
-    case 'grok':
-      return 'icon-terminal';
+      return 'Qwen 3.5 35B local runtime via Ollama (recommended when machine supports it).';
     case 'ollama':
+      return 'Local Ollama runtime for offline-first operation.';
+    case 'morpheus':
+      return 'Remote Morpheus provider. Encrypted loop can be configured in advanced settings.';
+    case 'openai':
+      return 'OpenAI cloud fallback.';
+    case 'anthropic':
+      return 'Anthropic cloud fallback.';
+    case 'grok':
+      return 'Grok cloud fallback.';
+    case 'gemini':
+      return 'Gemini cloud fallback.';
     default:
-      return 'icon-node';
+      return 'Provider fallback option.';
   }
 }
 
-function configFieldIcon(field: ProviderConfigField): string {
-  if (field.type === 'password' || field.key.includes('key')) {
-    return 'icon-lock';
+function toQuestionList(raw: string): string[] {
+  return raw
+    .split(/[,\n]/g)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function emptyModelDownloadStatus(): ModelDownloadStatus {
+  return {
+    status: 'idle',
+    model_id: null,
+    progress_percent: null,
+    detail: 'No model download in progress.',
+    updated_at_epoch_ms: Date.now(),
+  };
+}
+
+function normalizeTelegramBotToken(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.toLowerCase().startsWith('bot')) {
+    return trimmed.slice(3).trim();
   }
-  if (field.key.includes('base_url') || field.key.includes('endpoint')) {
-    return 'icon-terminal';
+  return trimmed;
+}
+
+function isLikelyTelegramToken(value: string): boolean {
+  return /^\d{6,}:[A-Za-z0-9_-]{20,}$/.test(value);
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timeoutId = 0;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = window.setTimeout(() => {
+      reject(new Error(`${label} timed out after ${Math.round(timeoutMs / 1000)}s.`));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    window.clearTimeout(timeoutId);
   }
-  if (field.key.includes('profile') || field.key.includes('backend')) {
-    return 'icon-sliders';
-  }
-  return 'icon-node';
 }
 
 export default function App() {
   const [theme, setTheme] = useState<ThemeName>(resolveInitialTheme);
   const [stepIndex, setStepIndex] = useState(0);
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState('Ready. Start quick setup or run the system check.');
+  const [status, setStatus] = useState('Preparing installer...');
 
   const [computeOptions, setComputeOptions] = useState<ComputeOption[]>([]);
   const [providerHealth, setProviderHealth] = useState<ProviderHealthStatus[]>([]);
   const [systemReport, setSystemReport] = useState<SystemCheckReport>(emptySystemReport());
   const [localBootstrap, setLocalBootstrap] = useState<LocalBootstrapStatus>(emptyLocalBootstrap());
-  const [localModelPackPath, setLocalModelPackPath] = useState('');
-  const [localModelPackResult, setLocalModelPackResult] =
-    useState<LocalModelPackInstallResult | null>(null);
-  const [security, setSecurity] = useState<SecurityPersistenceSettings>(emptySecuritySettings());
-  const [observability, setObservability] = useState<ObservabilityStatus>(emptyObservability());
-  const [communication, setCommunication] = useState<CommunicationStatus>(emptyCommunicationStatus());
-  const [review, setReview] = useState<InstallReviewSummary | null>(null);
-  const [telegramInbox, setTelegramInbox] = useState<TelegramInboundRecord[]>([]);
-  const [inAppThreadId, setInAppThreadId] = useState('');
-  const [inAppMessages, setInAppMessages] = useState<InAppThreadMessage[]>([]);
-  const [autoCommsServiceEnabled, setAutoCommsServiceEnabled] = useState(true);
+  const [communication, setCommunication] = useState<CommunicationStatus>(emptyCommunication());
 
-  const [cloudPriorityInput, setCloudPriorityInput] = useState(DEFAULT_CLOUD_PRIORITY);
-  const [providerConfigTarget, setProviderConfigTarget] = useState('openai');
-  const [providerConfigDrafts, setProviderConfigDrafts] = useState<
-    Record<string, Record<string, string | boolean>>
-  >({});
-  const [snapshotPath, setSnapshotPath] = useState(DEFAULT_SNAPSHOT_PATH);
-  const [snapshotPassphrase, setSnapshotPassphrase] = useState('');
-  const [smokeResult, setSmokeResult] = useState('');
+  const [selectedProviders, setSelectedProviders] = useState<string[]>([]);
+  const [fallbackOrder, setFallbackOrder] = useState<string[]>([]);
+  const [setupPath, setSetupPath] = useState<SetupPath | null>(null);
+  const [dragProviderId, setDragProviderId] = useState<string | null>(null);
+  const [dragTargetProviderId, setDragTargetProviderId] = useState<string | null>(null);
+  const [suppressCardClick, setSuppressCardClick] = useState(false);
+
+  const [providerConfigDrafts, setProviderConfigDrafts] = useState<Record<string, Record<string, string>>>({});
+  const [showProviderAdvanced, setShowProviderAdvanced] = useState(false);
+
+  const [localSourceMode, setLocalSourceMode] = useState<SourceMode>('bundled');
+  const [localSourceInput, setLocalSourceInput] = useState('');
+  const [localSetupResult, setLocalSetupResult] = useState('');
+  const [modelDownloadStatus, setModelDownloadStatus] = useState<ModelDownloadStatus>(
+    emptyModelDownloadStatus(),
+  );
+  const [providerSaveMessages, setProviderSaveMessages] = useState<Record<string, string>>({});
+
   const [telegramEnabled, setTelegramEnabled] = useState(false);
-  const [telegramLiveApi, setTelegramLiveApi] = useState(false);
-  const [telegramRoutingMode, setTelegramRoutingMode] = useState<AgentRoutingMode>('per_agent');
+  const [telegramLiveApi, setTelegramLiveApi] = useState(true);
+  const [telegramRoutingMode, setTelegramRoutingMode] = useState<AgentRoutingMode>('orchestrator');
   const [telegramBotToken, setTelegramBotToken] = useState('');
   const [telegramDefaultChatId, setTelegramDefaultChatId] = useState('');
-  const [telegramOrchestratorChatId, setTelegramOrchestratorChatId] = useState('');
 
   const [discordEnabled, setDiscordEnabled] = useState(false);
-  const [discordLiveApi, setDiscordLiveApi] = useState(false);
-  const [discordRoutingMode, setDiscordRoutingMode] = useState<AgentRoutingMode>('per_agent');
+  const [discordLiveApi, setDiscordLiveApi] = useState(true);
+  const [discordRoutingMode, setDiscordRoutingMode] = useState<AgentRoutingMode>('orchestrator');
   const [discordBotToken, setDiscordBotToken] = useState('');
   const [discordGuildId, setDiscordGuildId] = useState('');
   const [discordDefaultChannelId, setDiscordDefaultChannelId] = useState('');
-  const [discordOrchestratorThreadId, setDiscordOrchestratorThreadId] = useState('');
-  const [discordAutoSpawnThreads, setDiscordAutoSpawnThreads] = useState(true);
 
-  const [agentBindingId, setAgentBindingId] = useState('agent-0');
-  const [agentBindingTelegramChatId, setAgentBindingTelegramChatId] = useState('');
-  const [agentBindingDiscordThreadId, setAgentBindingDiscordThreadId] = useState('');
-  const [agentBindingInAppThreadId, setAgentBindingInAppThreadId] = useState('');
-  const [agentBindingOrchestrator, setAgentBindingOrchestrator] = useState(false);
+  const [dashboardEnabled, setDashboardEnabled] = useState(true);
+  const [miniAppEnabled, setMiniAppEnabled] = useState(true);
+  const [communicationTestResult, setCommunicationTestResult] = useState('');
+  const [communicationSubStepIndex, setCommunicationSubStepIndex] = useState(0);
+  const [telegramPairCode, setTelegramPairCode] = useState('');
+  const [telegramPairState, setTelegramPairState] = useState<PairingState>('idle');
+  const [telegramPairStatusText, setTelegramPairStatusText] = useState('');
 
-  const [dispatchPlatform, setDispatchPlatform] = useState<'telegram' | 'discord' | 'in_app'>(
-    'in_app',
-  );
-  const [dispatchAgentId, setDispatchAgentId] = useState('agent-0');
-  const [dispatchSubSphereId, setDispatchSubSphereId] = useState('');
-  const [dispatchMessage, setDispatchMessage] = useState('Status update request');
-  const [dispatchResult, setDispatchResult] = useState('');
-  const [transportOpsResult, setTransportOpsResult] = useState('');
-  const [trainingSubSphereName, setTrainingSubSphereName] = useState('Research Ops');
-  const [trainingSubSphereObjective, setTrainingSubSphereObjective] = useState(
-    'Train a synthesis workflow over my notes',
-  );
-  const [trainingHitlRequired, setTrainingHitlRequired] = useState(false);
-  const [trainingSubSpheres, setTrainingSubSpheres] = useState<TaskSubSphereSummary[]>([]);
-  const [trainingSubSphereId, setTrainingSubSphereId] = useState('');
-  const [trainingSessionId, setTrainingSessionId] = useState('');
-  const [trainingMessage, setTrainingMessage] = useState('Step 1: gather source documents.');
-  const [trainingWorkflowName, setTrainingWorkflowName] = useState('Workflow v1');
-  const [trainingWorkflows, setTrainingWorkflows] = useState<WorkflowDefinition[]>([]);
-  const [trainingResult, setTrainingResult] = useState('');
-  const [guidedVisionCore, setGuidedVisionCore] = useState(
-    'Build a sovereign MetaCanon runtime aligned to my values.',
-  );
-  const [guidedCoreValues, setGuidedCoreValues] = useState(
-    'Sovereignty, Clarity, Truthfulness, Human Dignity',
-  );
-  const [guidedWillDirectives, setGuidedWillDirectives] = useState(
-    'Do not bypass constitutional controls.\nEscalate uncertain high-risk actions.',
-  );
-  const [guidedFacetVision, setGuidedFacetVision] = useState(
-    'Constitutional synthesis and values stewardship.',
-  );
-  const [guidedSigningSecret, setGuidedSigningSecret] = useState('');
+  const [genesisMode, setGenesisMode] = useState<GenesisMode>('default');
+  const [visionCore, setVisionCore] = useState(DEFAULT_GENESIS.vision_core);
+  const [coreValues, setCoreValues] = useState(DEFAULT_GENESIS.core_values.join(', '));
+  const [willDirectives, setWillDirectives] = useState(DEFAULT_GENESIS.will_directives.join('\n'));
+  const [genesisSigningSecret, setGenesisSigningSecret] = useState('');
   const [genesisResult, setGenesisResult] = useState<GenesisRiteResult | null>(null);
+  const [genesisStatusMessage, setGenesisStatusMessage] = useState('');
 
-  const [bootstrapOrchestratorAgentId, setBootstrapOrchestratorAgentId] =
-    useState('agent-genesis');
-  const [bootstrapPrismAgentId, setBootstrapPrismAgentId] = useState('agent-genesis');
-  const [bootstrapPrismSubSphereId, setBootstrapPrismSubSphereId] = useState('meta-prism');
-  const [agentGenesisTelegramId, setAgentGenesisTelegramId] = useState('');
-  const [agentSynthesisTelegramId, setAgentSynthesisTelegramId] = useState('');
-  const [agentAuditorTelegramId, setAgentAuditorTelegramId] = useState('');
-  const [agentGenesisDiscordThreadId, setAgentGenesisDiscordThreadId] = useState('');
-  const [agentSynthesisDiscordThreadId, setAgentSynthesisDiscordThreadId] = useState('');
-  const [agentAuditorDiscordThreadId, setAgentAuditorDiscordThreadId] = useState('');
+  const [constitutionSource, setConstitutionSource] = useState<'latest' | 'upload'>('latest');
+  const [constitutionVersion, setConstitutionVersion] = useState('Constitution vCurrent');
+  const [constitutionUploadPath, setConstitutionUploadPath] = useState('');
+
+  const [initializationLog, setInitializationLog] = useState<InitLogEntry[]>([]);
+  const [initializationComplete, setInitializationComplete] = useState(false);
+  const [initializationPhaseState, setInitializationPhaseState] =
+    useState<Record<InitPhaseId, InitPhaseState>>(emptyInitPhaseState());
+  const [activeInitializationPhase, setActiveInitializationPhase] = useState<InitPhaseId | null>(
+    null,
+  );
+  const [cinematicSoundEnabled, setCinematicSoundEnabled] = useState(false);
+  const [review, setReview] = useState<InstallReviewSummary | null>(null);
   const [bootstrapResult, setBootstrapResult] = useState<ThreeAgentBootstrapResult | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
-  const cloudPriority = useMemo(
-    () =>
-      cloudPriorityInput
-        .split(',')
-        .map((entry) => entry.trim())
-        .filter(Boolean),
-    [cloudPriorityInput],
+  const [prismName, setPrismName] = useState('Prism');
+  const [prismTestResult, setPrismTestResult] = useState('');
+
+  const [starterTask, setStarterTask] = useState('Create a short system health summary.');
+  const [starterTaskResult, setStarterTaskResult] = useState('');
+
+  const selectedProviderObjects = useMemo(
+    () => fallbackOrder.map((id) => computeOptions.find((option) => option.provider_id === id)).filter(Boolean) as ComputeOption[],
+    [computeOptions, fallbackOrder],
   );
 
-  function parseListInput(raw: string): string[] {
-    return raw
-      .split(/[,\\n]/g)
-      .map((entry) => entry.trim())
-      .filter(Boolean);
+  function appendLog(text: string, phase: InitLogPhase = 'system') {
+    setInitializationLog((previous) => [...previous, { id: Date.now() + Math.random(), text, phase }]);
+  }
+
+  function playPhaseChime(phase: InitPhaseId) {
+    if (!cinematicSoundEnabled || typeof window === 'undefined') {
+      return;
+    }
+
+    const Ctx = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) {
+      return;
+    }
+
+    if (!audioContextRef.current) {
+      audioContextRef.current = new Ctx();
+    }
+
+    const context = audioContextRef.current;
+    const now = context.currentTime;
+    const freqMap: Record<InitPhaseId, number> = {
+      crystal: 440,
+      tetrahedron: 523.25,
+      agents: 659.25,
+      taurus: 783.99,
+      sphere: 880,
+    };
+
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(freqMap[phase], now);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.045, now + 0.04);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.38);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start(now);
+    oscillator.stop(now + 0.4);
+  }
+
+  function activateInitPhase(phase: InitPhaseId) {
+    playPhaseChime(phase);
+    setActiveInitializationPhase(phase);
+    setInitializationPhaseState((previous) => ({ ...previous, [phase]: 'active' }));
+  }
+
+  function completeInitPhase(phase: InitPhaseId) {
+    setInitializationPhaseState((previous) => ({ ...previous, [phase]: 'done' }));
+  }
+
+  function failInitPhase(phase: InitPhaseId) {
+    setInitializationPhaseState((previous) => ({ ...previous, [phase]: 'error' }));
   }
 
   async function runTask(label: string, task: () => Promise<void>) {
@@ -437,120 +495,46 @@ export default function App() {
       await task();
       setStatus(`${label} complete.`);
     } catch (error) {
-      setStatus(`Error: ${error instanceof Error ? error.message : String(error)}`);
+      const message = error instanceof Error ? error.message : String(error);
+      setStatus(`Error: ${message}`);
+      appendLog(`error: ${message}`);
     } finally {
       setBusy(false);
     }
   }
 
-  function setProviderDraftValue(key: string, value: string | boolean) {
-    setProviderConfigDrafts((previous) => ({
-      ...previous,
-      [providerConfigTarget]: {
-        ...(previous[providerConfigTarget] ?? {}),
-        [key]: value,
-      },
-    }));
-  }
-
-  function buildProviderPatch(): Record<string, unknown> {
-    const patch: Record<string, unknown> = {};
-    for (const field of providerFields) {
-      const rawValue = providerDraft[field.key];
-      if (field.type === 'checkbox') {
-        if (typeof rawValue === 'boolean') {
-          patch[field.key] = rawValue;
-        }
-        continue;
-      }
-
-      if (typeof rawValue !== 'string') {
-        continue;
-      }
-
-      const trimmed = rawValue.trim();
-      if (trimmed.length > 0) {
-        patch[field.key] = trimmed;
-      }
-    }
-    return patch;
-  }
-
-  async function refreshComputeAndHealth() {
-    const [options, health] = await Promise.all([
+  async function refreshCoreState() {
+    const [options, health, checks, bootstrap, comms] = await Promise.all([
       installerApi.getComputeOptions(),
       installerApi.getProviderHealth(),
+      installerApi.runSystemCheck(),
+      installerApi.getLocalBootstrapStatus(),
+      installerApi.getCommunicationStatus(),
     ]);
+
     setComputeOptions(options);
     setProviderHealth(health);
-  }
+    setSystemReport(checks);
+    setLocalBootstrap(bootstrap);
+    setCommunication(comms);
 
-  async function refreshCommunicationInbox(knownStatus?: CommunicationStatus) {
-    const statusState = knownStatus ?? (await installerApi.getCommunicationStatus());
-    setCommunication(statusState);
+    setTelegramEnabled(comms.telegram.enabled);
+    setTelegramLiveApi(comms.telegram.live_api);
+    setTelegramRoutingMode(comms.telegram.routing_mode);
+    setTelegramDefaultChatId(comms.telegram.default_chat_id ?? '');
 
-    const inbox = await installerApi.getTelegramInbox(50, 0);
-    setTelegramInbox(inbox);
+    setDiscordEnabled(comms.discord.enabled);
+    setDiscordLiveApi(comms.discord.live_api);
+    setDiscordRoutingMode(comms.discord.routing_mode);
+    setDiscordGuildId(comms.discord.guild_id ?? '');
+    setDiscordDefaultChannelId(comms.discord.default_channel_id ?? '');
 
-    const candidateThreadIds = statusState.agent_bindings
-      .map((binding) => binding.in_app_thread_id ?? '')
-      .filter((value) => value.trim().length > 0);
-    const resolvedThreadId =
-      inAppThreadId.trim() || candidateThreadIds[0] || `inapp-${dispatchAgentId.trim() || 'agent-0'}`;
-    setInAppThreadId(resolvedThreadId);
-
-    if (resolvedThreadId.trim()) {
-      const messages = await installerApi.getInAppThreadMessages(resolvedThreadId, 80, 0);
-      setInAppMessages(messages);
-    } else {
-      setInAppMessages([]);
+    const currentGlobal = options.find((option) => option.selected_global)?.provider_id;
+    const suggested = currentGlobal ? [currentGlobal] : options.some((opt) => opt.provider_id === 'qwen_local') ? ['qwen_local'] : [];
+    if (selectedProviders.length === 0 && suggested.length > 0) {
+      setSelectedProviders(suggested);
+      setFallbackOrder(suggested);
     }
-  }
-
-  async function refreshConfigState() {
-    const [securityState, observabilityState, communicationState, reviewState] = await Promise.all([
-      installerApi.getSecuritySettings(),
-      installerApi.getObservabilityStatus(),
-      installerApi.getCommunicationStatus(),
-      installerApi.getInstallReviewSummary(),
-    ]);
-    setSecurity(securityState);
-    setSnapshotPath(securityState.snapshot_path);
-    setObservability(observabilityState);
-    setTelegramEnabled(communicationState.telegram.enabled);
-    setTelegramLiveApi(communicationState.telegram.live_api);
-    setTelegramRoutingMode(communicationState.telegram.routing_mode);
-    setTelegramDefaultChatId(communicationState.telegram.default_chat_id ?? '');
-    setTelegramOrchestratorChatId(communicationState.telegram.orchestrator_chat_id ?? '');
-
-    setDiscordEnabled(communicationState.discord.enabled);
-    setDiscordLiveApi(communicationState.discord.live_api);
-    setDiscordRoutingMode(communicationState.discord.routing_mode);
-    setDiscordGuildId(communicationState.discord.guild_id ?? '');
-    setDiscordDefaultChannelId(communicationState.discord.default_channel_id ?? '');
-    setDiscordOrchestratorThreadId(communicationState.discord.orchestrator_thread_id ?? '');
-    setDiscordAutoSpawnThreads(communicationState.discord.auto_spawn_sub_sphere_threads);
-
-    setReview(reviewState);
-    await refreshCommunicationInbox(communicationState);
-  }
-
-  async function refreshTrainingState() {
-    const subSpheres = await installerApi.getSubSphereList();
-    setTrainingSubSpheres(subSpheres);
-    if (!trainingSubSphereId && subSpheres.length > 0) {
-      setTrainingSubSphereId(subSpheres[0].sub_sphere_id);
-    }
-  }
-
-  async function initialLoad() {
-    await Promise.all([
-      refreshComputeAndHealth(),
-      refreshConfigState(),
-      refreshTrainingState(),
-      installerApi.getLocalBootstrapStatus().then(setLocalBootstrap),
-      installerApi.runSystemCheck().then(setSystemReport),
-    ]);
   }
 
   useEffect(() => {
@@ -558,1783 +542,1701 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => {
-    void runTask('Loading installer state', initialLoad);
+    void runTask('Loading installer state', async () => {
+      await refreshCoreState();
+      await syncLocalComputeConfigFromUi(true);
+      await refreshCoreState();
+      await installerApi.flushRuntimeAutoSnapshot();
+    });
   }, []);
 
   useEffect(() => {
-    const shouldPoll =
-      autoCommsServiceEnabled &&
-      ((telegramEnabled && telegramLiveApi) || (discordEnabled && discordLiveApi));
-    if (!shouldPoll) {
+    if (modelDownloadStatus.status !== 'running') {
       return;
     }
 
     const intervalId = window.setInterval(() => {
       void (async () => {
-        if (telegramEnabled && telegramLiveApi) {
-          await installerApi.pollTelegramUpdatesOnce(20).catch(() => undefined);
+        const latest = await installerApi.getModelDownloadStatus();
+        setModelDownloadStatus(latest);
+        if (latest.status === 'completed' || latest.status === 'failed') {
+          setLocalBootstrap(await installerApi.getLocalBootstrapStatus());
+          if (latest.status === 'completed') {
+            setLocalSetupResult(`${latest.detail}`);
+          }
         }
-        if (discordEnabled && discordLiveApi) {
-          await installerApi.probeDiscordGateway().catch(() => undefined);
-        }
-        await refreshCommunicationInbox().catch(() => undefined);
       })();
-    }, 15000);
+    }, 1200);
 
     return () => window.clearInterval(intervalId);
-  }, [autoCommsServiceEnabled, telegramEnabled, telegramLiveApi, discordEnabled, discordLiveApi]);
+  }, [modelDownloadStatus.status]);
 
-  useEffect(() => {
-    if (computeOptions.length === 0) {
+  function toggleProvider(providerId: string) {
+    const exists = selectedProviders.includes(providerId);
+    if (exists) {
+      const nextProviders = selectedProviders.filter((id) => id !== providerId);
+      setSelectedProviders(nextProviders);
+      setFallbackOrder((previous) => previous.filter((id) => id !== providerId));
       return;
     }
 
-    const exists = computeOptions.some(
-      (option) => option.provider_id === providerConfigTarget,
-    );
-    if (!exists) {
-      setProviderConfigTarget(computeOptions[0].provider_id);
-    }
-  }, [computeOptions, providerConfigTarget]);
-
-  const selectedGlobal =
-    computeOptions.find((option) => option.selected_global)?.provider_id ?? 'qwen_local';
-  const providerFields = useMemo(
-    () => configFieldsForProvider(providerConfigTarget),
-    [providerConfigTarget],
-  );
-  const providerDraft = providerConfigDrafts[providerConfigTarget] ?? {};
-
-  function renderStepNav() {
-    return (
-      <aside className="sidebar glass-surface">
-        <div className="brand-row">
-          <div>
-            <h1>MetaCanon Installer</h1>
-            <p className="muted">Fractal System</p>
-          </div>
-          <button
-            className="theme-toggle"
-            onClick={() => setTheme((value) => (value === 'void' ? 'light' : 'void'))}
-            aria-label="Toggle theme"
-          >
-            <img
-              className="icon-light icon-asset"
-              src={iconAsset(theme, 'icon-sun')}
-              alt=""
-              aria-hidden="true"
-            />
-            <img
-              className="icon-void icon-asset"
-              src={iconAsset(theme, 'icon-star')}
-              alt=""
-              aria-hidden="true"
-            />
-          </button>
-        </div>
-
-        <ol className="step-list">
-          {STEPS.map((label, index) => {
-            const stepState =
-              index < stepIndex ? 'complete' : index === stepIndex ? 'active' : 'future';
-            return (
-              <li className="step-entry" key={label}>
-                <button
-                  type="button"
-                  className={`step-item ${index === stepIndex ? 'active' : ''}`}
-                  onClick={() => setStepIndex(index)}
-                >
-                  <img
-                    className="step-index-asset"
-                    src={componentAsset(theme, `nav/stepper-step-${stepState}`)}
-                    alt=""
-                    aria-hidden="true"
-                  />
-                  <div>
-                    <strong>{label}</strong>
-                  </div>
-                </button>
-                {index < STEPS.length - 1 ? (
-                  <img
-                    className="step-connector"
-                    src={componentAsset(theme, 'nav/stepper-connector')}
-                    alt=""
-                    aria-hidden="true"
-                  />
-                ) : null}
-              </li>
-            );
-          })}
-        </ol>
-      </aside>
-    );
+    setSelectedProviders((previous) => [...previous, providerId]);
+    setFallbackOrder((previous) => [...previous, providerId]);
   }
 
-  function renderWelcome() {
+  function reorderFallbackByDrop(draggedProviderId: string, targetProviderId: string) {
+    if (draggedProviderId === targetProviderId) {
+      return;
+    }
+
+    setFallbackOrder((previous) => {
+      if (!previous.includes(draggedProviderId) || !previous.includes(targetProviderId)) {
+        return previous;
+      }
+
+      const filtered = previous.filter((id) => id !== draggedProviderId);
+      const targetIndex = filtered.indexOf(targetProviderId);
+      filtered.splice(targetIndex, 0, draggedProviderId);
+      return filtered;
+    });
+  }
+
+  function setProviderDraftValue(providerId: string, key: string, value: string) {
+    setProviderConfigDrafts((previous) => ({
+      ...previous,
+      [providerId]: {
+        ...(previous[providerId] ?? {}),
+        [key]: value,
+      },
+    }));
+  }
+
+  async function persistComputeSelection() {
+    if (fallbackOrder.length === 0) {
+      throw new Error('Select at least one compute provider.');
+    }
+
+    await installerApi.setGlobalComputeProvider(fallbackOrder[0]);
+    const cloudOrder = fallbackOrder.filter((id) => !['qwen_local', 'ollama'].includes(id));
+    if (cloudOrder.length > 0) {
+      await installerApi.setProviderPriority(cloudOrder);
+    }
+
+    await refreshCoreState();
+  }
+
+  async function saveProviderConfig(providerId: string) {
+    const fields = configFieldsForProvider(providerId);
+    const draft = providerConfigDrafts[providerId] ?? {};
+    const patch: Record<string, string> = {};
+
+    for (const field of fields) {
+      const value = (draft[field.key] ?? '').trim();
+      if (!value) {
+        continue;
+      }
+      patch[field.key] = value;
+    }
+
+    const missingRequired = fields.some((field) => field.required && !(draft[field.key] ?? '').trim());
+    if (missingRequired) {
+      throw new Error('Fill all required fields before saving.');
+    }
+
+    if (Object.keys(patch).length === 0) {
+      throw new Error('Enter at least one value before saving provider settings.');
+    }
+
+    await installerApi.updateProviderConfig(providerId, patch);
+    await refreshCoreState();
+  }
+
+  async function saveProviderConfigWithFeedback(providerId: string) {
+    setBusy(true);
+    setProviderSaveMessages((previous) => ({
+      ...previous,
+      [providerId]: 'Saving...',
+    }));
+    try {
+      await saveProviderConfig(providerId);
+      setProviderSaveMessages((previous) => ({
+        ...previous,
+        [providerId]: 'Saved successfully.',
+      }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setProviderSaveMessages((previous) => ({
+        ...previous,
+        [providerId]: `Save failed: ${message}`,
+      }));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function syncLocalComputeConfigFromUi(forceLiveApi = true) {
+    const qwenDraft = providerConfigDrafts.qwen_local ?? {};
+    const ollamaDraft = providerConfigDrafts.ollama ?? {};
+
+    const runtimeBackend = (qwenDraft.runtime_backend ?? 'ollama').trim() || 'ollama';
+    const baseUrl =
+      (qwenDraft.base_url ?? ollamaDraft.base_url ?? 'http://127.0.0.1:11434').trim() ||
+      'http://127.0.0.1:11434';
+    const primaryModelId = (qwenDraft.primary_model_id ?? 'qwen3.5:35b').trim() || 'qwen3.5:35b';
+    const defaultModel = (ollamaDraft.default_model ?? primaryModelId).trim() || primaryModelId;
+
+    await installerApi.updateProviderConfig('qwen_local', {
+      runtime_backend: runtimeBackend,
+      base_url: baseUrl,
+      primary_model_id: primaryModelId,
+      live_api: forceLiveApi,
+    });
+    await installerApi.updateProviderConfig('ollama', {
+      base_url: baseUrl,
+      default_model: defaultModel,
+      live_api: forceLiveApi,
+    });
+  }
+
+  async function prepareLocalQwenStack() {
+    const baseline = await installerApi.prepareLocalRuntime(false);
+    setLocalBootstrap(baseline);
+
+    if (localSourceMode !== 'bundled') {
+      if (!localSourceInput.trim()) {
+        throw new Error('Enter a source path or URL before installing model assets.');
+      }
+      const result = await installerApi.installLocalModelPack(localSourceInput.trim());
+      setLocalSetupResult(
+        `model pack installed from ${result.source_kind}; files=${result.installed_files}; root=${result.model_root}`,
+      );
+      setLocalBootstrap(result.bootstrap);
+    }
+
+    await syncLocalComputeConfigFromUi(true);
+    const latestBootstrap = await installerApi.getLocalBootstrapStatus();
+    setLocalBootstrap(latestBootstrap);
+    if (!latestBootstrap.qwen_model_hint_present) {
+      const status = await installerApi.startModelDownload('qwen3.5:35b');
+      setModelDownloadStatus(status);
+      setLocalSetupResult('');
+    } else {
+      await refreshCoreState();
+    }
+  }
+
+  async function downloadQwenModelOnly() {
+    const status = await installerApi.startModelDownload('qwen3.5:35b');
+    setModelDownloadStatus(status);
+    setLocalSetupResult('');
+  }
+
+  async function runLocalActionWithFeedback(label: string, task: () => Promise<void>) {
+    setBusy(true);
+    setLocalSetupResult(`${label}...`);
+    try {
+      await task();
+      setLocalSetupResult((previous) =>
+        previous.startsWith('Error:') ? previous : `${label} started.`,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setLocalSetupResult(`Error: ${message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveCommunicationChannels() {
+    const normalizedTelegramToken = normalizeTelegramBotToken(telegramBotToken);
+    if (telegramEnabled && telegramLiveApi && normalizedTelegramToken && !isLikelyTelegramToken(normalizedTelegramToken)) {
+      throw new Error('Telegram bot token format looks invalid. Use the exact token from BotFather (no leading "bot").');
+    }
+
+    await installerApi.updateTelegramIntegration({
+      enabled: telegramEnabled,
+      routing_mode: telegramRoutingMode,
+      bot_token: normalizedTelegramToken || null,
+      default_chat_id: telegramDefaultChatId || null,
+      orchestrator_chat_id: telegramDefaultChatId || null,
+      live_api: telegramLiveApi,
+    });
+
+    await installerApi.updateDiscordIntegration({
+      enabled: discordEnabled,
+      routing_mode: discordRoutingMode,
+      bot_token: discordBotToken || null,
+      guild_id: discordGuildId || null,
+      default_channel_id: discordDefaultChannelId || null,
+      orchestrator_thread_id: null,
+      auto_spawn_sub_sphere_threads: true,
+      live_api: discordLiveApi,
+    });
+
+    setCommunication(await installerApi.getCommunicationStatus());
+  }
+
+  async function runGenesis() {
+    if (!genesisSigningSecret.trim()) {
+      throw new Error('Genesis signing secret is required.');
+    }
+
+    const payload =
+      genesisMode === 'default'
+        ? {
+            vision_core: DEFAULT_GENESIS.vision_core,
+            core_values: DEFAULT_GENESIS.core_values,
+            will_directives: DEFAULT_GENESIS.will_directives,
+            signing_secret: genesisSigningSecret,
+            facet_vision: 'Constitutional synthesis and values stewardship.',
+          }
+        : {
+            vision_core: visionCore,
+            core_values: toQuestionList(coreValues),
+            will_directives: toQuestionList(willDirectives),
+            signing_secret: genesisSigningSecret,
+            facet_vision: 'Constitutional synthesis and values stewardship.',
+          };
+
+    const result = await installerApi.invokeGuidedGenesisRite(payload);
+    setGenesisResult(result);
+  }
+
+  async function runGenesisWithFeedback() {
+    setBusy(true);
+    setGenesisStatusMessage('Running genesis rite...');
+    try {
+      await runGenesis();
+      setGenesisStatusMessage('Genesis rite complete.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setGenesisStatusMessage(`Genesis rite failed: ${message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runInitializationSequence() {
+    if (!genesisResult) {
+      throw new Error('Run Genesis Rite before initialization.');
+    }
+
+    setInitializationLog([]);
+    setInitializationComplete(false);
+    setInitializationPhaseState(emptyInitPhaseState());
+    setActiveInitializationPhase(null);
+
+    let activePhase: InitPhaseId | null = null;
+
+    try {
+      activePhase = 'crystal';
+      activateInitPhase('crystal');
+      appendLog('Genesis crystal initiated.', 'crystal');
+      const reviewState = await installerApi.getInstallReviewSummary();
+      setReview(reviewState);
+      appendLog(`System review: can_install=${String(reviewState.can_install)}.`, 'crystal');
+      completeInitPhase('crystal');
+
+      activePhase = 'tetrahedron';
+      activateInitPhase('tetrahedron');
+      appendLog('Building tensegrity tetrahedron...', 'tetrahedron');
+      const smoke = await installerApi.submitDeliberation(SMOKE_QUERY, fallbackOrder[0]);
+      appendLog(`Primary compute response: ${smoke.provider_id} (${smoke.model}).`, 'tetrahedron');
+      completeInitPhase('tetrahedron');
+
+      activePhase = 'agents';
+      activateInitPhase('agents');
+      appendLog('Spinning up core agents: synthesis, monitor, auditor...', 'agents');
+      const bootstrap = await installerApi.bootstrapThreeAgents({
+        orchestrator_agent_id: CORE_AGENT_IDS.synthesis,
+        prism_agent_id: CORE_AGENT_IDS.synthesis,
+        prism_sub_sphere_id: 'meta-prism',
+        telegram_chat_id_genesis: telegramDefaultChatId || null,
+        telegram_chat_id_synthesis: telegramDefaultChatId || null,
+        telegram_chat_id_auditor: telegramDefaultChatId || null,
+      });
+      setBootstrapResult(bootstrap);
+      completeInitPhase('agents');
+
+      activePhase = 'taurus';
+      activateInitPhase('taurus');
+      appendLog('Initiating Taurus protocol...', 'taurus');
+      await installerApi.flushRuntimeAutoSnapshot();
+      appendLog('Persistence and routing loop synchronized.', 'taurus');
+      completeInitPhase('taurus');
+
+      activePhase = 'sphere';
+      activateInitPhase('sphere');
+      appendLog('Values synthesis complete.', 'sphere');
+      appendLog('Sphere established.', 'sphere');
+      completeInitPhase('sphere');
+      setInitializationComplete(true);
+      setActiveInitializationPhase(null);
+    } catch (error) {
+      if (activePhase) {
+        failInitPhase(activePhase);
+      }
+      throw error;
+    }
+  }
+
+  async function sendPrismTestMessage() {
+    if (!bootstrapResult) {
+      throw new Error('Initialization must complete before sending a prism test.');
+    }
+
+    const platforms: Array<'telegram' | 'discord' | 'in_app'> = [];
+    if (communication.telegram.enabled && communication.telegram.configured) {
+      platforms.push('telegram');
+    }
+    if (communication.discord.enabled && communication.discord.configured) {
+      platforms.push('discord');
+    }
+    if (platforms.length === 0) {
+      platforms.push('in_app');
+    }
+
+    const message = `Hello from ${prismName}. Confirm communication channels are active.`;
+    const lines: string[] = [];
+
+    for (const platform of platforms) {
+      const dispatch = await installerApi.sendAgentMessage({
+        platform,
+        agent_id: bootstrapResult.orchestrator_agent_id,
+        message,
+      });
+      lines.push(
+        `sent via ${dispatch.platform}; thread=${dispatch.thread_id}; delivered_live=${String(dispatch.delivered_live)}; simulated=${String(dispatch.simulated)}`,
+      );
+    }
+
+    setPrismTestResult(lines.join('\n'));
+  }
+
+  async function runStarterTask() {
+    if (!bootstrapResult) {
+      throw new Error('Initialization must complete before running starter tasks.');
+    }
+
+    const platforms: Array<'telegram' | 'discord' | 'in_app'> = [];
+    if (communication.telegram.enabled && communication.telegram.configured) {
+      platforms.push('telegram');
+    }
+    if (communication.discord.enabled && communication.discord.configured) {
+      platforms.push('discord');
+    }
+    if (platforms.length === 0) {
+      platforms.push('in_app');
+    }
+
+    const lines: string[] = [];
+    const runningMessage = `Running Task: ${starterTask}...`;
+    for (const platform of platforms) {
+      const dispatch = await installerApi.sendAgentMessage({
+        platform,
+        agent_id: bootstrapResult.orchestrator_agent_id,
+        message: runningMessage,
+      });
+      lines.push(
+        `started via ${dispatch.platform}; thread=${dispatch.thread_id}; message_id=${dispatch.message_id}; delivered_live=${String(dispatch.delivered_live)}; simulated=${String(dispatch.simulated)}`,
+      );
+    }
+
+    let completionMessage = '';
+    const normalizedTask = starterTask.trim().toLowerCase();
+    const isSystemHealthTask =
+      normalizedTask.includes('system health') ||
+      normalizedTask.includes('runtime health');
+
+    if (isSystemHealthTask) {
+      const [checks, health, bootstrap] = await Promise.all([
+        installerApi.runSystemCheck(),
+        installerApi.getProviderHealth(),
+        installerApi.getLocalBootstrapStatus(),
+      ]);
+
+      const topIssues = checks.checks
+        .filter((item) => item.status !== 'pass')
+        .slice(0, 5)
+        .map((item) => `- ${item.label}: ${item.status} (${item.detail})`);
+      const unhealthyProviders = health
+        .filter((provider) => !provider.is_healthy)
+        .map((provider) => `- ${provider.provider_id}: ${provider.detail ?? 'unhealthy'}`);
+
+      completionMessage =
+        `Task Complete\n` +
+        `System Health Summary\n` +
+        `fails=${checks.fail_count}, warns=${checks.warn_count}, blocking=${String(checks.has_blocking_failures)}\n` +
+        `local_ollama_installed=${String(bootstrap.ollama_installed)}, local_ollama_running=${String(bootstrap.ollama_reachable)}, qwen_ready=${String(bootstrap.qwen_model_hint_present)}\n\n` +
+        `Top Issues:\n${topIssues.length > 0 ? topIssues.join('\n') : '- none'}\n\n` +
+        `Unhealthy Providers:\n${unhealthyProviders.length > 0 ? unhealthyProviders.join('\n') : '- none'}`;
+    } else {
+      const candidateProviders = Array.from(
+        new Set(
+          fallbackOrder.length > 0 ? fallbackOrder : ['qwen_local', 'ollama'],
+        ),
+      );
+      const attemptNotes: string[] = [];
+      let deliberation: DeliberationCommandResult | null = null;
+      let routing = 'unknown';
+
+      for (const requestedProvider of candidateProviders) {
+        if (requestedProvider === 'qwen_local' || requestedProvider === 'ollama') {
+          await syncLocalComputeConfigFromUi(true);
+        }
+
+        try {
+          const candidate = await installerApi.submitDeliberation(
+            starterTask,
+            requestedProvider,
+          );
+          const candidateRouting = candidate.metadata?.routing ?? 'unknown';
+          if (!candidateRouting.includes('simulated')) {
+            deliberation = candidate;
+            routing = candidateRouting;
+            break;
+          }
+          attemptNotes.push(
+            `${requestedProvider}: simulated (${candidateRouting})`,
+          );
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          attemptNotes.push(`${requestedProvider}: error (${message})`);
+        }
+      }
+
+      if (!deliberation) {
+        throw new Error(
+          `No live provider response available. Attempts: ${attemptNotes.join('; ')}`,
+        );
+      }
+
+      const output =
+        deliberation.output_text.length > 3000
+          ? `${deliberation.output_text.slice(0, 3000)}\n\n[truncated]`
+          : deliberation.output_text;
+      completionMessage =
+        `Task Complete\n` +
+        `Provider: ${deliberation.provider_id}\n` +
+        `Model: ${deliberation.model}\n` +
+        `Fallback used: ${String(deliberation.used_fallback)}\n` +
+        `Routing: ${routing}\n\n` +
+        `${output}`;
+    }
+
+    for (const platform of platforms) {
+      const dispatch = await installerApi.sendAgentMessage({
+        platform,
+        agent_id: bootstrapResult.orchestrator_agent_id,
+        message: completionMessage,
+      });
+      lines.push(
+        `result via ${dispatch.platform}; thread=${dispatch.thread_id}; message_id=${dispatch.message_id}; delivered_live=${String(dispatch.delivered_live)}; simulated=${String(dispatch.simulated)}`,
+      );
+    }
+
+    setStarterTaskResult(lines.join('\n'));
+  }
+
+  function communicationSubSteps(): CommunicationSubStepId[] {
+    const steps: CommunicationSubStepId[] = ['select'];
+    if (telegramEnabled) {
+      steps.push('telegram_token', 'telegram_pair');
+    }
+    if (discordEnabled) {
+      steps.push('discord_token', 'discord_target');
+    }
+    steps.push('interfaces', 'review');
+    return steps;
+  }
+
+  const communicationSteps = communicationSubSteps();
+  const communicationSubStep = communicationSteps[Math.min(communicationSubStepIndex, communicationSteps.length - 1)];
+
+  useEffect(() => {
+    const maxIndex = Math.max(0, communicationSteps.length - 1);
+    if (communicationSubStepIndex > maxIndex) {
+      setCommunicationSubStepIndex(maxIndex);
+    }
+  }, [communicationSubStepIndex, communicationSteps.length]);
+
+  function communicationStepLabel(step: CommunicationSubStepId): string {
+    switch (step) {
+      case 'select':
+        return 'Select Channels';
+      case 'telegram_token':
+        return 'Telegram Bot';
+      case 'telegram_pair':
+        return 'Telegram Pairing';
+      case 'discord_token':
+        return 'Discord Bot';
+      case 'discord_target':
+        return 'Discord Target';
+      case 'interfaces':
+        return 'Interfaces';
+      case 'review':
+        return 'Review';
+      default:
+        return 'Communication';
+    }
+  }
+
+  function isTelegramSetupComplete(): boolean {
+    if (!telegramEnabled) {
+      return true;
+    }
+    return Boolean(telegramBotToken.trim()) && Boolean(telegramDefaultChatId.trim());
+  }
+
+  function isDiscordSetupComplete(): boolean {
+    if (!discordEnabled) {
+      return true;
+    }
+    return Boolean(discordBotToken.trim()) && Boolean(discordGuildId.trim()) && Boolean(discordDefaultChannelId.trim());
+  }
+
+  function isCommunicationFlowComplete(): boolean {
+    const onReviewStep = communicationSubStepIndex >= communicationSteps.length - 1;
+    return onReviewStep && isTelegramSetupComplete() && isDiscordSetupComplete();
+  }
+
+  function canAdvanceCommunicationSubStep(): boolean {
+    switch (communicationSubStep) {
+      case 'select':
+        return telegramEnabled || discordEnabled;
+      case 'telegram_token':
+        return Boolean(telegramBotToken.trim());
+      case 'telegram_pair':
+        return Boolean(telegramDefaultChatId.trim());
+      case 'discord_token':
+        return Boolean(discordBotToken.trim());
+      case 'discord_target':
+        return Boolean(discordGuildId.trim()) && Boolean(discordDefaultChannelId.trim());
+      default:
+        return true;
+    }
+  }
+
+  function nextCommunicationSubStep() {
+    if (!canAdvanceCommunicationSubStep()) {
+      return;
+    }
+    setCommunicationSubStepIndex((index) => Math.min(communicationSteps.length - 1, index + 1));
+  }
+
+  function previousCommunicationSubStep() {
+    setCommunicationSubStepIndex((index) => Math.max(0, index - 1));
+  }
+
+  async function startTelegramPairingMode() {
+    const normalizedTelegramToken = normalizeTelegramBotToken(telegramBotToken);
+    if (!normalizedTelegramToken) {
+      throw new Error('Enter Telegram bot token first.');
+    }
+    if (!isLikelyTelegramToken(normalizedTelegramToken)) {
+      throw new Error('Telegram bot token format looks invalid. Use the exact token from BotFather (no leading "bot").');
+    }
+
+    const code = `MC-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+    setTelegramEnabled(true);
+    setTelegramPairState('idle');
+    setTelegramPairStatusText('Preparing Telegram integration...');
+    setTelegramPairCode(code);
+
+    try {
+      await withTimeout(
+        installerApi.updateTelegramIntegration({
+          enabled: true,
+          routing_mode: telegramRoutingMode,
+          bot_token: normalizedTelegramToken,
+          default_chat_id: telegramDefaultChatId.trim() || null,
+          orchestrator_chat_id: telegramDefaultChatId.trim() || null,
+          live_api: true,
+        }),
+        12000,
+        'Telegram integration setup',
+      );
+      setTelegramPairState('listening');
+      setTelegramPairStatusText(`Pair code ${code} generated. Send "/pair ${code}" to your bot.`);
+    } catch (error) {
+      setTelegramPairState('error');
+      const message = error instanceof Error ? error.message : String(error);
+      setTelegramPairStatusText(`Pairing failed: ${message}`);
+      throw error;
+    }
+  }
+
+  useEffect(() => {
+    if (telegramPairState !== 'listening' || !telegramPairCode.trim()) {
+      return;
+    }
+
+    let stopped = false;
+    const codeLower = telegramPairCode.trim().toLowerCase();
+
+    const intervalId = window.setInterval(() => {
+      void (async () => {
+        if (stopped) {
+          return;
+        }
+
+        try {
+          await installerApi.pollTelegramUpdatesOnce(50);
+          const inbox = await installerApi.getTelegramInbox(50, 0);
+          const match = inbox.find((entry) => entry.text.toLowerCase().includes(codeLower));
+
+          if (!match) {
+            return;
+          }
+
+          stopped = true;
+          window.clearInterval(intervalId);
+          window.clearTimeout(timeoutId);
+
+          setTelegramDefaultChatId(match.chat_id);
+          setTelegramPairState('paired');
+          setTelegramPairStatusText(`Paired with chat ${match.chat_id}.`);
+
+          await installerApi.updateTelegramIntegration({
+            enabled: true,
+            routing_mode: telegramRoutingMode,
+            bot_token: normalizeTelegramBotToken(telegramBotToken),
+            default_chat_id: match.chat_id,
+            orchestrator_chat_id: match.chat_id,
+            live_api: telegramLiveApi,
+          });
+          setCommunication(await installerApi.getCommunicationStatus());
+        } catch (error) {
+          stopped = true;
+          window.clearInterval(intervalId);
+          window.clearTimeout(timeoutId);
+          setTelegramPairState('error');
+          setTelegramPairStatusText(
+            error instanceof Error ? `Pairing failed: ${error.message}` : `Pairing failed: ${String(error)}`,
+          );
+        }
+      })();
+    }, 2500);
+
+    const timeoutId = window.setTimeout(() => {
+      if (stopped) {
+        return;
+      }
+      stopped = true;
+      window.clearInterval(intervalId);
+      setTelegramPairState('timed_out');
+      setTelegramPairStatusText('Pairing timed out. Start again and send the pair code within 90 seconds.');
+    }, 90_000);
+
+    return () => {
+      stopped = true;
+      window.clearInterval(intervalId);
+      window.clearTimeout(timeoutId);
+    };
+  }, [telegramPairCode, telegramPairState, telegramBotToken, telegramLiveApi, telegramRoutingMode]);
+
+  function canContinue(): boolean {
+    const selectedHealth = selectedProviderObjects
+      .map((provider) => providerHealth.find((entry) => entry.provider_id === provider.provider_id))
+      .filter((entry): entry is ProviderHealthStatus => Boolean(entry));
+    const allSelectedProvidersHealthy =
+      selectedProviderObjects.length > 0 &&
+      selectedHealth.length === selectedProviderObjects.length &&
+      selectedHealth.every((entry) => entry.is_healthy);
+    const localSelected =
+      selectedProviders.includes('qwen_local') || selectedProviders.includes('ollama');
+    const localReady =
+      localBootstrap.ollama_installed &&
+      localBootstrap.ollama_reachable &&
+      localBootstrap.qwen_model_hint_present;
+
+    switch (stepIndex) {
+      case 1:
+        return setupPath !== null;
+      case 2:
+        return fallbackOrder.length > 0;
+      case 3:
+        return localSelected ? allSelectedProvidersHealthy && localReady : allSelectedProvidersHealthy;
+      case 4:
+        return isCommunicationFlowComplete();
+      case 5:
+        return Boolean(genesisResult);
+      case 7:
+        return initializationComplete;
+      default:
+        return true;
+    }
+  }
+
+  async function onContinue() {
+    if (stepIndex === 2) {
+      await runTask('Saving compute selection', persistComputeSelection);
+    }
+
+    if (stepIndex === 4) {
+      await runTask('Saving communication channels', saveCommunicationChannels);
+    }
+
+    if (stepIndex === 3) {
+      setBusy(true);
+      try {
+        await syncLocalComputeConfigFromUi(true);
+        await refreshCoreState();
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    setStepIndex((previous) => Math.min(STEPS.length - 1, previous + 1));
+  }
+
+  function renderThemeStep() {
     return (
-      <section className="panel glass-surface">
-        <div className="section-header">
-          <div>
-            <h2>Welcome</h2>
-            <p>
-              Configure compute, security, observability, and fallback behavior. Theme toggle is
-              always available in the sidebar.
-            </p>
-          </div>
-          <img
-            className="shape-asset shape-welcome"
-            src={geometryAsset(theme, 'tetrahedron')}
-            alt=""
-            aria-hidden="true"
-          />
-        </div>
-
-        <div className="chip-asset-row">
-          <img src={componentAsset(theme, 'chips/chip-badge-genesis')} alt="Genesis Core badge" />
-          <img src={componentAsset(theme, 'chips/chip-badge-synthesis')} alt="Local Runtime badge" />
-          <img src={componentAsset(theme, 'chips/chip-badge-auditor')} alt="Fractal Mesh badge" />
-        </div>
-
-        <div className="welcome-grid">
-          <button
-            className="action-card tone-synthesis"
-            onClick={() =>
-              runTask('Quick setup', async () => {
-                await installerApi.finalizeSetupComputeSelection();
-                await refreshComputeAndHealth();
-                await refreshConfigState();
-                setStepIndex(6);
-              })
-            }
-            disabled={busy}
-          >
-            <div className="row gap">
-              <img
-                className="inline-icon"
-                src={iconAsset(theme, 'icon-lightning')}
-                alt=""
-                aria-hidden="true"
-              />
-              <h3>Quick Setup</h3>
-            </div>
-            <p>Auto-select Qwen local defaults and jump to review.</p>
+      <section className="wizard-panel hero-step">
+        <img className="hero-geometry" src={geometryAsset(theme, 'genesis-crystal')} alt="" aria-hidden="true" />
+        <h1>MetaCanon Installer</h1>
+        <p className="muted">Initializing the genesis of your sovereign mind.</p>
+        <div className="theme-choice-row">
+          <button className={`theme-choice ${theme === 'light' ? 'active' : ''}`} onClick={() => setTheme('light')}>
+            <img className="inline-icon" src={iconAsset(theme, 'icon-sun')} alt="" aria-hidden="true" />
+            Light
           </button>
-          <button
-            className="action-card tone-auditor"
-            onClick={() => setStepIndex(1)}
-            disabled={busy}
-          >
-            <div className="row gap">
-              <img
-                className="inline-icon"
-                src={iconAsset(theme, 'icon-sliders')}
-                alt=""
-                aria-hidden="true"
-              />
-              <h3>Advanced Setup</h3>
-            </div>
-            <p>Walk all installer stages with full control.</p>
+          <button className={`theme-choice ${theme === 'void' ? 'active' : ''}`} onClick={() => setTheme('void')}>
+            <img className="inline-icon" src={iconAsset(theme, 'icon-star')} alt="" aria-hidden="true" />
+            Dark
           </button>
         </div>
       </section>
     );
   }
 
-  function renderSystemCheck() {
-    const bannerPath =
-      systemReport.fail_count > 0
-        ? componentAsset(theme, 'banners/banner-error')
-        : systemReport.warn_count > 0
-          ? componentAsset(theme, 'banners/banner-warning')
-          : componentAsset(theme, 'banners/banner-success');
-
+  function renderWelcomeStep() {
     return (
-      <section className="panel glass-surface">
-        <div className="row between section-header-inline">
-          <div className="row gap">
-            <img
-              className="shape-asset shape-system"
-              src={geometryAsset(theme, 'tensegrity-tetrahedron')}
-              alt=""
-              aria-hidden="true"
-            />
-            <h2>System Check</h2>
-          </div>
+      <section className="wizard-panel">
+        <h2>Welcome to MetaCanon</h2>
+        <p className="muted">This setup will guide you one decision at a time. Most settings are prefilled with safe defaults.</p>
+        <div className="card-grid two-up">
           <button
-            className="btn secondary"
-            onClick={() =>
-              runTask('Running system checks', async () => {
-                const report = await installerApi.runSystemCheck();
-                setSystemReport(report);
-              })
-            }
-            disabled={busy}
+            className={`setup-card path-card ${setupPath === 'quick' ? 'selected' : ''}`}
+            onClick={() => setSetupPath('quick')}
           >
-            Run Checks
+            <h3>Quick Path</h3>
+            <p>Recommended settings, local-first compute, and secure defaults.</p>
+          </button>
+          <button
+            className={`setup-card path-card ${setupPath === 'custom' ? 'selected' : ''}`}
+            onClick={() => setSetupPath('custom')}
+          >
+            <h3>Custom Path</h3>
+            <p>You can still tune providers, fallback ordering, and communication channels in the next screens.</p>
           </button>
         </div>
-        <p className="mono muted">
-          readiness: blocking={String(systemReport.has_blocking_failures)} warn={systemReport.warn_count}{' '}
-          fail={systemReport.fail_count}
-        </p>
-        <img className="banner-asset" src={bannerPath} alt="System readiness banner" />
-        <div className="table">
-          {systemReport.checks.map((check) => (
-            <div className="table-row" key={check.check_id}>
-              <span className="table-title-with-icon">
-                <img
-                  className="inline-icon tiny"
-                  src={iconAsset(theme, check.status === 'fail' ? 'icon-error' : check.status === 'warn' ? 'icon-warning' : 'icon-check-circle')}
-                  alt=""
-                  aria-hidden="true"
-                />
-                {check.label}
-              </span>
-              <span className={`chip ${check.status === 'pass' ? 'pass' : check.status === 'warn' ? 'warn' : 'fail'}`}>
-                {check.status}
-              </span>
-              <span className="muted">{check.detail}</span>
-            </div>
-          ))}
+      </section>
+    );
+  }
+
+  function renderComputeStep() {
+    return (
+      <section className="wizard-panel">
+        <h2>Choose Compute + Fallback Order</h2>
+        <p className="muted">Select one or more providers. Their order becomes fallback priority.</p>
+
+        <div className="card-grid compute-grid">
+          {computeOptions.map((option) => {
+            const selected = selectedProviders.includes(option.provider_id);
+            const priorityIndex = selected ? fallbackOrder.indexOf(option.provider_id) + 1 : 0;
+            return (
+              <button
+                key={option.provider_id}
+                className={`provider-choice ${selected ? 'selected' : ''} ${
+                  dragTargetProviderId === option.provider_id ? 'drag-target' : ''
+                }`}
+                onClick={() => {
+                  if (suppressCardClick) {
+                    return;
+                  }
+                  toggleProvider(option.provider_id);
+                }}
+                draggable={selected}
+                onDragStart={(event) => {
+                  event.dataTransfer.effectAllowed = 'move';
+                  event.dataTransfer.setData('text/plain', option.provider_id);
+                  setDragProviderId(option.provider_id);
+                  setSuppressCardClick(true);
+                }}
+                onDragEnd={() => {
+                  setDragProviderId(null);
+                  setDragTargetProviderId(null);
+                  window.setTimeout(() => setSuppressCardClick(false), 120);
+                }}
+                onDragOver={(event) => {
+                  if (!selected || !dragProviderId || dragProviderId === option.provider_id) {
+                    return;
+                  }
+                  event.preventDefault();
+                  setDragTargetProviderId(option.provider_id);
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const fromTransfer = event.dataTransfer.getData('text/plain');
+                  const draggedId = dragProviderId ?? fromTransfer;
+                  if (!draggedId || !selected) {
+                    return;
+                  }
+                  reorderFallbackByDrop(draggedId, option.provider_id);
+                  setDragProviderId(null);
+                  setDragTargetProviderId(null);
+                  setSuppressCardClick(true);
+                  window.setTimeout(() => setSuppressCardClick(false), 120);
+                }}
+              >
+                <div className="row between">
+                  <strong>{option.display_name}</strong>
+                  {selected ? <span className="chip">#{priorityIndex}</span> : null}
+                </div>
+                <p className="muted mono">{option.provider_id}</p>
+                <p className="muted">
+                  Security Rating: <strong>{securityTier(option.provider_id)}</strong>
+                </p>
+                <p className="muted">{providerDescription(option.provider_id)}</p>
+              </button>
+            );
+          })}
         </div>
 
-        <div className="panel compact glass-surface" style={{ marginTop: 16 }}>
-          <div className="row between">
-            <h3>Local Runtime Bootstrap</h3>
-            <div className="row gap">
+        <p className="muted">Drag selected cards to reorder fallback priority. Card number = priority.</p>
+      </section>
+    );
+  }
+
+  function renderProviderSetupStep() {
+    return (
+      <section className="wizard-panel">
+        <h2>Provider Setup</h2>
+        <p className="muted">For local compute, we prepare Ollama + Qwen 3.5 35B if your machine supports it.</p>
+
+        {selectedProviders.includes('qwen_local') || selectedProviders.includes('ollama') ? (
+          <article className="setup-card">
+            <h3>Local Qwen/Ollama Setup</h3>
+            <p className="muted">Choose how to source local runtime assets.</p>
+            <div className="radio-stack">
+              <label className="radio-pill">
+                <input
+                  type="radio"
+                  checked={localSourceMode === 'bundled'}
+                  onChange={() => setLocalSourceMode('bundled')}
+                />
+                <span className="radio-copy">Bundled installer assets (offline-friendly)</span>
+              </label>
+              <label className="radio-pill">
+                <input type="radio" checked={localSourceMode === 'path'} onChange={() => setLocalSourceMode('path')} />
+                <span className="radio-copy">Local file or folder path</span>
+              </label>
+              <label className="radio-pill">
+                <input type="radio" checked={localSourceMode === 'url'} onChange={() => setLocalSourceMode('url')} />
+                <span className="radio-copy">Online download URL</span>
+              </label>
+            </div>
+
+            {localSourceMode !== 'bundled' ? (
+              <div className="field" style={{ marginTop: 12 }}>
+                <label>{localSourceMode === 'path' ? 'Local Source Path' : 'Download URL'}</label>
+                <input
+                  value={localSourceInput}
+                  onChange={(event) => setLocalSourceInput(event.target.value)}
+                  placeholder={
+                    localSourceMode === 'path'
+                      ? '/Volumes/ExternalDrive/qwen-model-pack.tar.gz'
+                      : 'https://example.com/qwen-model-pack.tar.gz'
+                  }
+                />
+              </div>
+            ) : null}
+
+            <div className="row gap wrap" style={{ marginTop: 12 }}>
+              {!localBootstrap.ollama_installed ? (
+                <button
+                  className="btn primary"
+                  onClick={() =>
+                    void runLocalActionWithFeedback(
+                      'Preparing local runtime',
+                      prepareLocalQwenStack,
+                    )
+                  }
+                  disabled={busy || modelDownloadStatus.status === 'running'}
+                >
+                  Prepare Local Runtime
+                </button>
+              ) : null}
+              {!localBootstrap.qwen_model_hint_present && localBootstrap.ollama_installed ? (
+                <button
+                  className="btn primary"
+                  onClick={() =>
+                    void runLocalActionWithFeedback(
+                      'Starting Qwen 3.5 35B download',
+                      downloadQwenModelOnly,
+                    )
+                  }
+                  disabled={busy || modelDownloadStatus.status === 'running'}
+                >
+                  Download Qwen 3.5 35B
+                </button>
+              ) : null}
               <button
                 className="btn secondary"
                 onClick={() =>
-                  runTask('Refreshing local bootstrap status', async () => {
+                  runTask('Refreshing local machine capability', async () => {
                     setLocalBootstrap(await installerApi.getLocalBootstrapStatus());
                   })
                 }
                 disabled={busy}
               >
-                Refresh
-              </button>
-              <button
-                className="btn primary"
-                onClick={() =>
-                  runTask('Preparing local runtime', async () => {
-                    setLocalBootstrap(await installerApi.prepareLocalRuntime(true));
-                  })
-                }
-                disabled={busy}
-              >
-                One-Click Prepare
+                Refresh Capability
               </button>
             </div>
-          </div>
-          <p className="mono muted">model_root={localBootstrap.model_root || '(not detected)'}</p>
-          <div className="dynamic-field-grid">
-            <div className="field grow">
-              <label>Offline Model Pack Path (.zip/.tar.gz/.tgz/folder/.gguf)</label>
-              <input
-                value={localModelPackPath}
-                onChange={(event) => setLocalModelPackPath(event.target.value)}
-                placeholder="/Volumes/ExternalDrive/metacanon-model-pack.tar.gz"
-              />
-            </div>
-            <div className="row gap">
-              <button
-                className="btn secondary"
-                onClick={() =>
-                  runTask('Installing offline model pack', async () => {
-                    if (!localModelPackPath.trim()) {
-                      throw new Error('Enter a local model pack path first.');
-                    }
-                    const result = await installerApi.installLocalModelPack(localModelPackPath);
-                    setLocalModelPackResult(result);
-                    setLocalBootstrap(result.bootstrap);
-                  })
-                }
-                disabled={busy}
-              >
-                Install Model Pack
-              </button>
-            </div>
-          </div>
-          {localModelPackResult ? (
-            <pre className="console">
-              {`model_pack kind=${localModelPackResult.source_kind} installed_files=${localModelPackResult.installed_files} root=${localModelPackResult.model_root}`}
-            </pre>
-          ) : null}
-          <div className="table">
-            <div className="table-row">
-              <span>Model root directory</span>
-              <span className={`chip ${localBootstrap.model_root_exists ? 'pass' : 'warn'}`}>
-                {localBootstrap.model_root_exists ? 'ready' : 'missing'}
-              </span>
-            </div>
-            <div className="table-row">
-              <span>Qwen local model hint</span>
-              <span className={`chip ${localBootstrap.qwen_model_hint_present ? 'pass' : 'warn'}`}>
-                {localBootstrap.qwen_model_hint_present ? 'detected' : 'not detected'}
-              </span>
-            </div>
-            <div className="table-row">
-              <span>Ollama installed</span>
+            {!localBootstrap.ollama_installed ? (
+              <p className="muted">
+                Ollama is not installed yet. Install Ollama first, then download Qwen 3.5 35B.
+              </p>
+            ) : null}
+            <div className="row gap wrap">
               <span className={`chip ${localBootstrap.ollama_installed ? 'pass' : 'warn'}`}>
-                {localBootstrap.ollama_installed ? 'yes' : 'no'}
+                Ollama Installed: {localBootstrap.ollama_installed ? 'Yes' : 'No'}
               </span>
-            </div>
-            <div className="table-row">
-              <span>Ollama reachable</span>
               <span className={`chip ${localBootstrap.ollama_reachable ? 'pass' : 'warn'}`}>
-                {localBootstrap.ollama_reachable ? 'yes' : 'no'}
+                Ollama Running: {localBootstrap.ollama_reachable ? 'Yes' : 'No'}
+              </span>
+              <span className={`chip ${localBootstrap.qwen_model_hint_present ? 'pass' : 'warn'}`}>
+                Qwen 3.5 35B Ready: {localBootstrap.qwen_model_hint_present ? 'Yes' : 'No'}
               </span>
             </div>
-            <div className="table-row">
-              <span>Default Ollama model</span>
-              <span
-                className={`chip ${localBootstrap.ollama_default_model_installed ? 'pass' : 'warn'}`}
-              >
-                {localBootstrap.ollama_default_model_installed ? 'installed' : 'missing'}
-              </span>
-            </div>
-          </div>
-          {localBootstrap.recommended_actions.length > 0 ? (
-            <div style={{ marginTop: 8 }}>
-              {localBootstrap.recommended_actions.map((action, index) => (
-                <p key={`${action}-${index}`} className="muted">
-                  - {action}
+            {modelDownloadStatus.status !== 'idle' ? (
+              <div className="download-status-card">
+                <div className="row between">
+                  <strong>
+                    {modelDownloadStatus.status === 'running'
+                      ? 'Downloading model...'
+                      : modelDownloadStatus.status === 'completed'
+                        ? 'Download complete'
+                        : 'Download failed'}
+                  </strong>
+                  <span className="mono">
+                    {modelDownloadStatus.progress_percent != null
+                      ? `${Math.round(modelDownloadStatus.progress_percent)}%`
+                      : '--'}
+                  </span>
+                </div>
+                <div className="download-progress-track">
+                  <div
+                    className={`download-progress-fill ${
+                      modelDownloadStatus.status === 'failed' ? 'failed' : ''
+                    } ${
+                      modelDownloadStatus.status === 'running' &&
+                      (modelDownloadStatus.progress_percent == null ||
+                        modelDownloadStatus.progress_percent <= 0)
+                        ? 'indeterminate'
+                        : ''
+                    }`}
+                    style={{ width: `${Math.max(0, Math.min(100, modelDownloadStatus.progress_percent ?? 0))}%` }}
+                  />
+                </div>
+                <p className="muted">{modelDownloadStatus.detail}</p>
+                {modelDownloadStatus.status === 'running' &&
+                (modelDownloadStatus.progress_percent == null ||
+                  modelDownloadStatus.progress_percent <= 0) ? (
+                  <p className="muted">Downloading... progress is not reported by this Ollama build.</p>
+                ) : null}
+              </div>
+            ) : null}
+            {localSetupResult ? <pre className="console">{localSetupResult}</pre> : null}
+          </article>
+        ) : null}
+
+        {selectedProviderObjects.map((provider) => {
+          const isLocalProvider =
+            provider.provider_id === 'qwen_local' || provider.provider_id === 'ollama';
+          const fields = configFieldsForProvider(provider.provider_id);
+          const requiredFields = isLocalProvider
+            ? []
+            : fields.filter((field) => field.required);
+          const advancedFields = isLocalProvider
+            ? []
+            : fields.filter((field) => !field.required);
+          const providerDraft = providerConfigDrafts[provider.provider_id] ?? {};
+          const health = providerHealth.find((entry) => entry.provider_id === provider.provider_id);
+          const localStackReady = localBootstrap.ollama_installed && localBootstrap.ollama_reachable;
+          const qwenRuntimeReady = localStackReady && localBootstrap.qwen_model_hint_present;
+          const effectiveHealthy =
+            provider.provider_id === 'qwen_local'
+              ? Boolean(health?.is_healthy) && qwenRuntimeReady
+              : provider.provider_id === 'ollama'
+                ? Boolean(health?.is_healthy) && localStackReady
+                : Boolean(health?.is_healthy);
+          const statusLabel = effectiveHealthy ? 'Ready' : 'Needs Setup';
+
+          return (
+            <article className="setup-card" key={provider.provider_id}>
+              <div className="row between wrap">
+                <h3>{provider.display_name}</h3>
+                <span className={`chip ${effectiveHealthy ? 'pass' : 'warn'}`}>
+                  {statusLabel}
+                </span>
+              </div>
+              <p className="muted mono">{provider.provider_id}</p>
+              {isLocalProvider ? (
+                <p className="muted">
+                  This provider is auto-managed by the installer based on local runtime readiness.
                 </p>
-              ))}
-            </div>
-          ) : (
-            <p className="muted">Local runtime baseline is ready.</p>
-          )}
+              ) : null}
+              {provider.provider_id === 'qwen_local' ? (
+                <p className="muted">
+                  Config validation and local runtime readiness are both required for Qwen Local.
+                </p>
+              ) : null}
+              {provider.provider_id === 'ollama' ? (
+                <p className="muted">
+                  Ollama must be installed and running to be marked ready.
+                </p>
+              ) : null}
+
+              {requiredFields.length > 0 ? (
+                <div className="field-stack">
+                  {requiredFields.map((field) => (
+                    <div className="field" key={`${provider.provider_id}-${field.key}`}>
+                      <label>{field.label}</label>
+                      <input
+                        type={field.type === 'password' ? 'password' : 'text'}
+                        value={providerDraft[field.key] ?? ''}
+                        onChange={(event) =>
+                          setProviderDraftValue(provider.provider_id, field.key, event.target.value)
+                        }
+                        placeholder={field.placeholder ?? ''}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="muted">No required credentials for this provider.</p>
+              )}
+
+              {showProviderAdvanced && advancedFields.length > 0 ? (
+                <div className="field-stack" style={{ marginTop: 12 }}>
+                  {advancedFields.map((field) => (
+                    <div className="field" key={`${provider.provider_id}-${field.key}`}>
+                      <label>{field.label}</label>
+                      <input
+                        type={field.type === 'password' ? 'password' : 'text'}
+                        value={providerDraft[field.key] ?? ''}
+                        onChange={(event) =>
+                          setProviderDraftValue(provider.provider_id, field.key, event.target.value)
+                        }
+                        placeholder={field.placeholder ?? ''}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              {!isLocalProvider ? (
+                <div className="row gap wrap" style={{ marginTop: 12 }}>
+                  <button
+                    className="btn primary"
+                    onClick={() => void saveProviderConfigWithFeedback(provider.provider_id)}
+                    disabled={busy}
+                  >
+                    Save {provider.display_name}
+                  </button>
+                </div>
+              ) : null}
+              {!isLocalProvider && providerSaveMessages[provider.provider_id] ? (
+                <p className="muted">{providerSaveMessages[provider.provider_id]}</p>
+              ) : null}
+            </article>
+          );
+        })}
+
+        <button className="btn ghost" onClick={() => setShowProviderAdvanced((value) => !value)}>
+          {showProviderAdvanced ? 'Hide' : 'Show'} advanced provider fields
+        </button>
+
+        <button className="btn secondary" onClick={() => runTask('Refreshing provider health', refreshCoreState)} disabled={busy}>
+          Refresh Health
+        </button>
+
+        {stepIndex === 3 && !canContinue() ? (
+          <p className="muted">
+            Complete provider setup before continuing. Local setup requires Ollama installed/running and Qwen 3.5 35B ready.
+          </p>
+        ) : null}
+      </section>
+    );
+  }
+
+  function renderCommunicationStep() {
+    const atFirstSubStep = communicationSubStepIndex === 0;
+    const atLastSubStep = communicationSubStepIndex >= communicationSteps.length - 1;
+
+    const stepBody = (() => {
+      switch (communicationSubStep) {
+        case 'select':
+          return (
+            <article className="setup-card">
+              <h3>Select Channels</h3>
+              <p className="muted">Choose one or both channels. You can add more later.</p>
+              <div className="card-grid two-up">
+                <button
+                  className={`setup-card path-card ${telegramEnabled ? 'selected' : ''}`}
+                  onClick={() => setTelegramEnabled((value) => !value)}
+                  type="button"
+                >
+                  <h4>Telegram</h4>
+                  <p>Fast setup with direct bot pairing.</p>
+                </button>
+                <button
+                  className={`setup-card path-card ${discordEnabled ? 'selected' : ''}`}
+                  onClick={() => setDiscordEnabled((value) => !value)}
+                  type="button"
+                >
+                  <h4>Discord</h4>
+                  <p>Bot + server channel workflow.</p>
+                </button>
+              </div>
+              {!telegramEnabled && !discordEnabled ? (
+                <p className="muted">Select at least one channel to continue.</p>
+              ) : null}
+            </article>
+          );
+        case 'telegram_token':
+          return (
+            <article className="setup-card">
+              <h3>Telegram Bot Setup</h3>
+              <p className="muted">
+                Create a bot with BotFather, then paste the token. We will pair chat automatically in the next step.
+              </p>
+              <div className="field-stack">
+                <div className="field">
+                  <label>Bot Token</label>
+                  <input
+                    type="password"
+                    value={telegramBotToken}
+                    onChange={(event) => setTelegramBotToken(event.target.value)}
+                    placeholder="123456:bot-token"
+                  />
+                </div>
+                <label className="toggle">
+                  <input
+                    type="checkbox"
+                    checked={telegramLiveApi}
+                    onChange={(event) => setTelegramLiveApi(event.target.checked)}
+                  />
+                  Use live Telegram API
+                </label>
+              </div>
+            </article>
+          );
+        case 'telegram_pair':
+          return (
+            <article className="setup-card">
+              <h3>Pair Telegram Chat</h3>
+              <p className="muted">
+                Click start pairing, then send the pair command to your bot from the chat you want to authorize.
+              </p>
+              <div className="row gap wrap">
+                <button
+                  className="btn primary"
+                  onClick={() => runTask('Starting Telegram pairing', startTelegramPairingMode)}
+                  disabled={busy || !telegramBotToken.trim() || telegramPairState === 'listening'}
+                >
+                  {telegramPairState === 'listening' ? 'Pairing...' : 'Start Pairing'}
+                </button>
+                {telegramPairCode ? <span className="mono">Pair Code: {telegramPairCode}</span> : null}
+              </div>
+              <p className="muted">
+                Command to send: <code>/pair {telegramPairCode || 'MC-XXXXXX'}</code>
+              </p>
+              {telegramPairStatusText ? <p className="muted">{telegramPairStatusText}</p> : null}
+              <div className="field">
+                <label>Linked Chat ID</label>
+                <input
+                  value={telegramDefaultChatId}
+                  onChange={(event) => setTelegramDefaultChatId(event.target.value)}
+                  placeholder="-100123456789"
+                />
+              </div>
+            </article>
+          );
+        case 'discord_token':
+          return (
+            <article className="setup-card">
+              <h3>Discord Bot Setup</h3>
+              <p className="muted">Create a Discord bot in Developer Portal and paste its token.</p>
+              <div className="field-stack">
+                <div className="field">
+                  <label>Bot Token</label>
+                  <input
+                    type="password"
+                    value={discordBotToken}
+                    onChange={(event) => setDiscordBotToken(event.target.value)}
+                    placeholder="discord-bot-token"
+                  />
+                </div>
+                <label className="toggle">
+                  <input
+                    type="checkbox"
+                    checked={discordLiveApi}
+                    onChange={(event) => setDiscordLiveApi(event.target.checked)}
+                  />
+                  Use live Discord API
+                </label>
+              </div>
+            </article>
+          );
+        case 'discord_target':
+          return (
+            <article className="setup-card">
+              <h3>Discord Channel Target</h3>
+              <p className="muted">Choose where your Prism/orchestrator messages should be delivered.</p>
+              <div className="field-stack">
+                <div className="field">
+                  <label>Guild ID</label>
+                  <input
+                    value={discordGuildId}
+                    onChange={(event) => setDiscordGuildId(event.target.value)}
+                    placeholder="guild-id"
+                  />
+                </div>
+                <div className="field">
+                  <label>Default Channel ID</label>
+                  <input
+                    value={discordDefaultChannelId}
+                    onChange={(event) => setDiscordDefaultChannelId(event.target.value)}
+                    placeholder="channel-id"
+                  />
+                </div>
+              </div>
+            </article>
+          );
+        case 'interfaces':
+          return (
+            <article className="setup-card">
+              <h3>Additional Interfaces</h3>
+              <p className="muted">Enable secondary communication surfaces.</p>
+              <label className="toggle">
+                <input
+                  type="checkbox"
+                  checked={miniAppEnabled}
+                  onChange={(event) => setMiniAppEnabled(event.target.checked)}
+                />
+                Telegram Mini App
+              </label>
+              <label className="toggle">
+                <input
+                  type="checkbox"
+                  checked={dashboardEnabled}
+                  onChange={(event) => setDashboardEnabled(event.target.checked)}
+                />
+                Local Dashboard (Sphere Thread Engine)
+              </label>
+            </article>
+          );
+        case 'review':
+        default:
+          return (
+            <>
+              <article className="setup-card">
+                <h3>Routing Mode</h3>
+                <p className="muted">
+                  <strong>orchestrator</strong>: all inbound messages go to Prism/orchestrator first, then route internally.
+                </p>
+                <p className="muted">
+                  <strong>per_agent</strong>: messages route directly to agent-specific threads/chats you map later.
+                </p>
+                {telegramEnabled ? (
+                  <div className="field">
+                    <label>Telegram Routing</label>
+                    <select
+                      value={telegramRoutingMode}
+                      onChange={(event) => setTelegramRoutingMode(event.target.value as AgentRoutingMode)}
+                    >
+                      <option value="orchestrator">orchestrator (recommended)</option>
+                      <option value="per_agent">per_agent</option>
+                    </select>
+                  </div>
+                ) : null}
+                {discordEnabled ? (
+                  <div className="field">
+                    <label>Discord Routing</label>
+                    <select
+                      value={discordRoutingMode}
+                      onChange={(event) => setDiscordRoutingMode(event.target.value as AgentRoutingMode)}
+                    >
+                      <option value="orchestrator">orchestrator (recommended)</option>
+                      <option value="per_agent">per_agent</option>
+                    </select>
+                  </div>
+                ) : null}
+              </article>
+
+              <article className="setup-card">
+                <h3>Channel Summary</h3>
+                <p className="muted mono">
+                  telegram_enabled={String(telegramEnabled)} chat_id={telegramDefaultChatId || 'not linked'}
+                </p>
+                <p className="muted mono">
+                  discord_enabled={String(discordEnabled)} channel_id={discordDefaultChannelId || 'not set'}
+                </p>
+                <p className="muted mono">
+                  telegram_configured={String(communication.telegram.configured)} discord_configured={String(communication.discord.configured)}
+                </p>
+              </article>
+
+              <div className="row gap wrap">
+                <button className="btn primary" onClick={() => runTask('Saving communication channels', saveCommunicationChannels)} disabled={busy}>
+                  Save Channels
+                </button>
+                <button
+                  className="btn secondary"
+                  onClick={() =>
+                    runTask('Testing channels', async () => {
+                      const lines: string[] = [];
+                      if (telegramEnabled && telegramLiveApi) {
+                        const pull = await installerApi.pollTelegramUpdatesOnce(1);
+                        lines.push(
+                          `Telegram: ok (fetched=${pull.fetched_updates}, processed=${pull.processed_updates}, dispatched=${pull.dispatched_messages})`,
+                        );
+                      } else if (telegramEnabled) {
+                        lines.push('Telegram: enabled but live API is off');
+                      }
+                      if (discordEnabled && discordLiveApi) {
+                        const probe = await installerApi.probeDiscordGateway();
+                        lines.push(
+                          `Discord: ${probe.lifecycle} (live_probe=${String(probe.live_probe)})`,
+                        );
+                      } else if (discordEnabled) {
+                        lines.push('Discord: enabled but live API is off');
+                      }
+                      if (!telegramEnabled && !discordEnabled) {
+                        lines.push('No channel selected.');
+                      }
+                      setCommunicationTestResult(lines.join('\n'));
+                      setCommunication(await installerApi.getCommunicationStatus());
+                    })
+                  }
+                  disabled={busy}
+                >
+                  Test Channels
+                </button>
+              </div>
+              {communicationTestResult ? <pre className="console">{communicationTestResult}</pre> : null}
+            </>
+          );
+      }
+    })();
+
+    return (
+      <section className="wizard-panel">
+        <h2>Communication Channels</h2>
+        <p className="muted">Guided setup in small steps. Configure channels now, then continue.</p>
+        <p className="mono muted">
+          Sub-step {communicationSubStepIndex + 1}/{communicationSteps.length}: {communicationStepLabel(communicationSubStep)}
+        </p>
+
+        {stepBody}
+
+        <div className="row gap wrap" style={{ marginTop: 16 }}>
+          <button className="btn secondary" onClick={previousCommunicationSubStep} disabled={busy || atFirstSubStep}>
+            Back
+          </button>
+          <button
+            className="btn primary"
+            onClick={nextCommunicationSubStep}
+            disabled={busy || atLastSubStep || !canAdvanceCommunicationSubStep()}
+          >
+            Next
+          </button>
         </div>
       </section>
     );
   }
 
-  function renderComputeSelection() {
+  function renderGenesisStep() {
     return (
-      <section className="panel glass-surface">
-        <div className="section-header">
-          <div>
-            <h2>Compute Selection</h2>
-            <p className="muted">Choose global routing and verify fallback topology.</p>
+      <section className="wizard-panel">
+        <h2>Begin Genesis Rite</h2>
+        <p className="muted">Choose default values or personalize your values profile.</p>
+
+        <div className="row gap wrap">
+          <label className="radio-pill">
+            <input type="radio" checked={genesisMode === 'default'} onChange={() => setGenesisMode('default')} />
+            Run Default
+          </label>
+          <label className="radio-pill">
+            <input
+              type="radio"
+              checked={genesisMode === 'personalized'}
+              onChange={() => setGenesisMode('personalized')}
+            />
+            Personalize
+          </label>
+        </div>
+
+        {genesisMode === 'personalized' ? (
+          <div className="field-stack" style={{ marginTop: 12 }}>
+            <div className="field">
+              <label>Vision Core</label>
+              <input value={visionCore} onChange={(event) => setVisionCore(event.target.value)} />
+            </div>
+            <div className="field">
+              <label>Core Values (comma or newline separated)</label>
+              <textarea value={coreValues} onChange={(event) => setCoreValues(event.target.value)} rows={3} />
+            </div>
+            <div className="field">
+              <label>Will Directives (comma or newline separated)</label>
+              <textarea value={willDirectives} onChange={(event) => setWillDirectives(event.target.value)} rows={3} />
+            </div>
           </div>
-          <img
-            className="shape-asset shape-compute"
-            src={geometryAsset(theme, 'genesis-crystal')}
-            alt=""
-            aria-hidden="true"
+        ) : (
+          <p className="muted" style={{ marginTop: 12 }}>
+            Default values will be applied. You can revise them later.
+          </p>
+        )}
+
+        <div className="field" style={{ marginTop: 12 }}>
+          <label>Genesis Signing Secret</label>
+          <input
+            type="password"
+            value={genesisSigningSecret}
+            onChange={(event) => setGenesisSigningSecret(event.target.value)}
+            placeholder="Required"
           />
         </div>
-        <div className="cards">
-          {computeOptions.map((option) => {
-            const tone = providerTone(option.provider_id);
+
+        <button className="btn primary" onClick={() => void runGenesisWithFeedback()} disabled={busy}>
+          {busy ? 'Running...' : 'Run Genesis Rite'}
+        </button>
+        {genesisStatusMessage ? <p className="muted">{genesisStatusMessage}</p> : null}
+
+        {genesisResult ? (
+          <pre className="console">{`genesis_hash=${genesisResult.genesis_hash}\nsignature=${genesisResult.signature}`}</pre>
+        ) : null}
+      </section>
+    );
+  }
+
+  function renderConstitutionStep() {
+    return (
+      <section className="wizard-panel">
+        <h2>Constitution</h2>
+        <p className="muted">Confirm the constitution version before initialization.</p>
+
+        <div className="row gap wrap">
+          <label className="radio-pill">
+            <input type="radio" checked={constitutionSource === 'latest'} onChange={() => setConstitutionSource('latest')} />
+            Use Latest
+          </label>
+          <label className="radio-pill">
+            <input type="radio" checked={constitutionSource === 'upload'} onChange={() => setConstitutionSource('upload')} />
+            Upload Custom
+          </label>
+        </div>
+
+        <div className="field" style={{ marginTop: 12 }}>
+          <label>Constitution Version</label>
+          <input value={constitutionVersion} onChange={(event) => setConstitutionVersion(event.target.value)} />
+        </div>
+
+        {constitutionSource === 'upload' ? (
+          <div className="field">
+            <label>Custom Constitution Path</label>
+            <input
+              value={constitutionUploadPath}
+              onChange={(event) => setConstitutionUploadPath(event.target.value)}
+              placeholder="/path/to/constitution.json"
+            />
+          </div>
+        ) : null}
+      </section>
+    );
+  }
+
+  function renderInitializationStep() {
+    const activePhaseClass = activeInitializationPhase ? `phase-${activeInitializationPhase}` : 'phase-idle';
+    const captionPhase =
+      activeInitializationPhase ??
+      (initializationComplete ? 'sphere' : null);
+    const captionMeta = captionPhase
+      ? INIT_PHASES.find((phase) => phase.id === captionPhase)
+      : {
+          label: 'Awaiting Initialization',
+          detail: 'Start the sequence to initiate crystal, agents, and sphere synthesis.',
+        };
+
+    return (
+      <section className="wizard-panel">
+        <h2>Initialization Sequence</h2>
+        <p className="muted">Crystal initiation, core-agent spinup, and first synthesis pass.</p>
+
+        <div className={`initialization-visual ${activePhaseClass} ${initializationComplete ? 'complete' : ''}`}>
+          <div className="sphere-shell" />
+          <div className="orbital-ring ring-one" />
+          <div className="orbital-ring ring-two" />
+          <div className="orbital-ring ring-three" />
+          <div className="taurus-particles">
+            <span className="particle p1" />
+            <span className="particle p2" />
+            <span className="particle p3" />
+            <span className="particle p4" />
+            <span className="particle p5" />
+            <span className="particle p6" />
+          </div>
+          <div className="tetra-line line-one" />
+          <div className="tetra-line line-two" />
+          <div className="tetra-line line-three" />
+          <div className="tetra-line line-four" />
+          <div className="agent-dot dot-synthesis">S</div>
+          <div className="agent-dot dot-monitor">M</div>
+          <div className="agent-dot dot-auditor">A</div>
+          <div className="core-crystal-node" />
+          <div className="pulse-halo" />
+          <div className="init-caption">
+            <h3>{captionMeta?.label}</h3>
+            <p>{captionMeta?.detail}</p>
+          </div>
+        </div>
+
+        <div className="phase-list">
+          {INIT_PHASES.map((phase, index) => {
+            const state = initializationPhaseState[phase.id];
             return (
-              <button
-                key={option.provider_id}
-                className={`provider-card tone-${tone} ${option.selected_global ? 'selected' : ''}`}
-                onClick={() =>
-                  runTask(`Setting ${option.provider_id} as global provider`, async () => {
-                    await installerApi.setGlobalComputeProvider(option.provider_id);
-                    await refreshComputeAndHealth();
-                  })
-                }
-                disabled={busy}
-              >
-                <div className="row between">
-                  <span className="row gap">
-                    <img
-                      className="inline-icon"
-                      src={iconAsset(theme, providerIcon(option.provider_id))}
-                      alt=""
-                      aria-hidden="true"
-                    />
-                    <strong>{option.display_name}</strong>
-                  </span>
-                  <span className={`chip ${option.available ? 'pass' : 'fail'}`}>
-                    {option.available ? 'up' : 'down'}
-                  </span>
+              <div className={`phase-row state-${state}`} key={phase.id}>
+                <span className="phase-index">{index + 1}</span>
+                <div className="grow">
+                  <strong>{phase.label}</strong>
+                  <p className="muted">{phase.detail}</p>
                 </div>
-                <p className="muted mono">{option.provider_id}</p>
-                <p className="muted">kind={option.kind} configured={String(option.configured)}</p>
-              </button>
+                <span className={`phase-chip state-${state}`}>{state}</span>
+              </div>
             );
           })}
         </div>
 
-        <div className="topology-panel">
-          <p className="mono muted">fallback_chain: active → qwen_local → ollama → cloud_priority</p>
-          <img
-            className="topology-asset"
-            src={componentAsset(theme, 'topology/fallback-chain')}
-            alt="Fallback chain topology"
-          />
-        </div>
-
-        <div className="field">
-          <label>Cloud Priority (comma-separated)</label>
+        <label className="toggle">
           <input
-            value={cloudPriorityInput}
-            onChange={(event) => setCloudPriorityInput(event.target.value)}
+            type="checkbox"
+            checked={cinematicSoundEnabled}
+            onChange={(event) => setCinematicSoundEnabled(event.target.checked)}
           />
-          <button
-            className="btn secondary"
-            onClick={() =>
-              runTask('Updating cloud priority', async () => {
-                await installerApi.setProviderPriority(cloudPriority);
-                await refreshComputeAndHealth();
-              })
-            }
-            disabled={busy || cloudPriority.length === 0}
-          >
-            Save Priority
-          </button>
-        </div>
-      </section>
-    );
-  }
+          Enable cinematic sound cues (muted chime per phase)
+        </label>
 
-  function renderProviderConfig() {
-    const targetOption = computeOptions.find(
-      (option) => option.provider_id === providerConfigTarget,
-    );
-    const textFields = providerFields.filter((field) => field.type !== 'checkbox');
-    const checkboxFields = providerFields.filter((field) => field.type === 'checkbox');
+        <button className="btn primary" onClick={() => runTask('Running initialization sequence', runInitializationSequence)} disabled={busy}>
+          Start Initialization
+        </button>
 
-    return (
-      <section className="panel glass-surface">
-        <div className="section-header-inline row between">
-          <h2>Provider Config</h2>
-          <img
-            className="shape-asset shape-provider"
-            src={geometryAsset(theme, 'fractal-scaling-path')}
-            alt=""
-            aria-hidden="true"
-          />
-        </div>
-
-        <div className="row gap wrap">
-          <div className="field grow">
-            <label>Provider</label>
-            <div className="input-with-icon">
-              <img
-                className="field-icon"
-                src={iconAsset(theme, providerIcon(providerConfigTarget))}
-                alt=""
-                aria-hidden="true"
-              />
-              <select
-                className="with-icon"
-                value={providerConfigTarget}
-                onChange={(event) => setProviderConfigTarget(event.target.value)}
+        {initializationLog.length > 0 ? (
+          <div className="init-log-feed">
+            {initializationLog.map((entry, index) => (
+              <p
+                key={entry.id}
+                className={`init-log-line phase-${entry.phase}`}
+                style={{ animationDelay: `${index * 90}ms` }}
               >
-                {computeOptions.map((option) => (
-                  <option key={option.provider_id} value={option.provider_id}>
-                    {option.display_name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <p className="mono muted provider-target-meta">
-            {targetOption
-              ? `${targetOption.provider_id} · ${targetOption.kind}`
-              : providerConfigTarget}
-          </p>
-        </div>
-
-        <div className="dynamic-field-grid">
-          {textFields.map((field) => (
-            <div className="field grow" key={field.key}>
-              <label>{field.label}</label>
-              <div className="input-with-icon">
-                <img
-                  className="field-icon"
-                  src={iconAsset(theme, configFieldIcon(field))}
-                  alt=""
-                  aria-hidden="true"
-                />
-                <input
-                  className="with-icon"
-                  type={field.type === 'password' ? 'password' : 'text'}
-                  value={typeof providerDraft[field.key] === 'string' ? (providerDraft[field.key] as string) : ''}
-                  onChange={(event) => setProviderDraftValue(field.key, event.target.value)}
-                  placeholder={field.placeholder ?? ''}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {checkboxFields.length > 0 ? (
-          <div className="row gap wrap">
-            {checkboxFields.map((field) => (
-              <label className="toggle" key={field.key}>
-                <input
-                  type="checkbox"
-                  checked={providerDraft[field.key] === true}
-                  onChange={(event) => setProviderDraftValue(field.key, event.target.checked)}
-                />
-                {field.label}
-              </label>
+                <span className="mono log-phase">{entry.phase}</span>
+                <span>{entry.text}</span>
+              </p>
             ))}
           </div>
         ) : null}
-
-        <div className="row gap wrap">
-          <button
-            className="btn primary"
-            onClick={() =>
-              runTask(`Updating ${providerConfigTarget} config`, async () => {
-                const patch = buildProviderPatch();
-                if (Object.keys(patch).length === 0) {
-                  throw new Error('Enter at least one provider field value before saving.');
-                }
-                await installerApi.updateProviderConfig(providerConfigTarget, patch);
-                await refreshComputeAndHealth();
-              })
-            }
-            disabled={busy}
-          >
-            Save Provider Config
-          </button>
-          <button
-            className="btn secondary"
-            onClick={() => runTask('Refreshing provider health', refreshComputeAndHealth)}
-            disabled={busy}
-          >
-            Refresh Health
-          </button>
-        </div>
-
-        <div className="table">
-          {providerHealth.map((provider) => (
-            <div className="table-row" key={provider.provider_id}>
-              <span>{provider.provider_id}</span>
-              <span className={`chip ${provider.is_healthy ? 'pass' : 'fail'}`}>
-                {provider.is_healthy ? 'healthy' : 'unhealthy'}
-              </span>
-              <span className="muted">{provider.detail ?? 'no detail'}</span>
-            </div>
-          ))}
-        </div>
-
-        {renderCommunicationPanel()}
+        {initializationComplete ? <p className="success-line">Initialization complete.</p> : null}
       </section>
     );
   }
 
-  function renderCommunicationPanel() {
+  function renderMeetPrismStep() {
     return (
-      <section className="panel compact glass-surface comms-panel">
-        <h3>Agent Communications</h3>
-        <p className="muted">
-          Configure Telegram/Discord routing and communicate with agents directly or through an
-          orchestrator thread.
-        </p>
-        <div className="row gap wrap">
-          <label className="toggle">
-            <input
-              type="checkbox"
-              checked={autoCommsServiceEnabled}
-              onChange={(event) => setAutoCommsServiceEnabled(event.target.checked)}
-            />
-            Auto-Run Communication Service Loop
-          </label>
-          <button
-            className="btn secondary"
-            onClick={() =>
-              runTask('Refreshing communication inbox', async () => {
-                await refreshCommunicationInbox();
-              })
-            }
-            disabled={busy}
-          >
-            Refresh Inbox
-          </button>
-        </div>
+      <section className="wizard-panel">
+        <h2>Meet Your Prism Agent</h2>
+        <p className="muted">Prism is your user-facing guide for communication with the sphere.</p>
 
-        <div className="dynamic-field-grid">
-          <div className="field grow">
-            <label>Telegram Bot Token</label>
-            <input
-              type="password"
-              value={telegramBotToken}
-              onChange={(event) => setTelegramBotToken(event.target.value)}
-              placeholder="123456:telegram-bot-token"
-            />
-          </div>
-          <div className="field grow">
-            <label>Telegram Default Chat ID</label>
-            <input
-              value={telegramDefaultChatId}
-              onChange={(event) => setTelegramDefaultChatId(event.target.value)}
-              placeholder="-100123456789"
-            />
-          </div>
-          <div className="field grow">
-            <label>Telegram Orchestrator Chat ID</label>
-            <input
-              value={telegramOrchestratorChatId}
-              onChange={(event) => setTelegramOrchestratorChatId(event.target.value)}
-              placeholder="-100987654321"
-            />
-          </div>
-          <div className="field grow">
-            <label>Telegram Routing Mode</label>
-            <select
-              value={telegramRoutingMode}
-              onChange={(event) => setTelegramRoutingMode(event.target.value as AgentRoutingMode)}
-            >
-              <option value="per_agent">per_agent</option>
-              <option value="orchestrator">orchestrator</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="row gap wrap">
-          <label className="toggle">
-            <input
-              type="checkbox"
-              checked={telegramEnabled}
-              onChange={(event) => setTelegramEnabled(event.target.checked)}
-            />
-            Enable Telegram
-          </label>
-          <label className="toggle">
-            <input
-              type="checkbox"
-              checked={telegramLiveApi}
-              onChange={(event) => setTelegramLiveApi(event.target.checked)}
-            />
-            Live Telegram API
-          </label>
-          <button
-            className="btn secondary"
-            onClick={() =>
-              runTask('Updating Telegram integration', async () => {
-                const status = await installerApi.updateTelegramIntegration({
-                  enabled: telegramEnabled,
-                  routing_mode: telegramRoutingMode,
-                  bot_token: telegramBotToken || null,
-                  default_chat_id: telegramDefaultChatId || null,
-                  orchestrator_chat_id: telegramOrchestratorChatId || null,
-                  live_api: telegramLiveApi,
-                });
-                await refreshCommunicationInbox(status);
-              })
-            }
-            disabled={busy}
-          >
-            Save Telegram
-          </button>
-        </div>
-
-        <div className="dynamic-field-grid">
-          <div className="field grow">
-            <label>Discord Bot Token</label>
-            <input
-              type="password"
-              value={discordBotToken}
-              onChange={(event) => setDiscordBotToken(event.target.value)}
-              placeholder="discord-bot-token"
-            />
-          </div>
-          <div className="field grow">
-            <label>Discord Guild ID</label>
-            <input
-              value={discordGuildId}
-              onChange={(event) => setDiscordGuildId(event.target.value)}
-              placeholder="guild-id"
-            />
-          </div>
-          <div className="field grow">
-            <label>Discord Default Channel ID</label>
-            <input
-              value={discordDefaultChannelId}
-              onChange={(event) => setDiscordDefaultChannelId(event.target.value)}
-              placeholder="channel-id"
-            />
-          </div>
-          <div className="field grow">
-            <label>Discord Orchestrator Thread ID</label>
-            <input
-              value={discordOrchestratorThreadId}
-              onChange={(event) => setDiscordOrchestratorThreadId(event.target.value)}
-              placeholder="thread-id"
-            />
-          </div>
-          <div className="field grow">
-            <label>Discord Routing Mode</label>
-            <select
-              value={discordRoutingMode}
-              onChange={(event) => setDiscordRoutingMode(event.target.value as AgentRoutingMode)}
-            >
-              <option value="per_agent">per_agent</option>
-              <option value="orchestrator">orchestrator</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="row gap wrap">
-          <label className="toggle">
-            <input
-              type="checkbox"
-              checked={discordEnabled}
-              onChange={(event) => setDiscordEnabled(event.target.checked)}
-            />
-            Enable Discord
-          </label>
-          <label className="toggle">
-            <input
-              type="checkbox"
-              checked={discordLiveApi}
-              onChange={(event) => setDiscordLiveApi(event.target.checked)}
-            />
-            Live Discord API
-          </label>
-          <label className="toggle">
-            <input
-              type="checkbox"
-              checked={discordAutoSpawnThreads}
-              onChange={(event) => setDiscordAutoSpawnThreads(event.target.checked)}
-            />
-            Auto-Spawn Sub-Sphere Threads
-          </label>
-          <button
-            className="btn secondary"
-            onClick={() =>
-              runTask('Updating Discord integration', async () => {
-                const status = await installerApi.updateDiscordIntegration({
-                  enabled: discordEnabled,
-                  routing_mode: discordRoutingMode,
-                  bot_token: discordBotToken || null,
-                  guild_id: discordGuildId || null,
-                  default_channel_id: discordDefaultChannelId || null,
-                  orchestrator_thread_id: discordOrchestratorThreadId || null,
-                  auto_spawn_sub_sphere_threads: discordAutoSpawnThreads,
-                  live_api: discordLiveApi,
-                });
-                await refreshCommunicationInbox(status);
-              })
-            }
-            disabled={busy}
-          >
-            Save Discord
-          </button>
-        </div>
-
-        <div className="dynamic-field-grid">
-          <div className="field grow">
-            <label>Agent ID</label>
-            <input
-              value={agentBindingId}
-              onChange={(event) => setAgentBindingId(event.target.value)}
-              placeholder="agent-0"
-            />
-          </div>
-          <div className="field grow">
-            <label>Agent Telegram Chat ID</label>
-            <input
-              value={agentBindingTelegramChatId}
-              onChange={(event) => setAgentBindingTelegramChatId(event.target.value)}
-              placeholder="-100..."
-            />
-          </div>
-          <div className="field grow">
-            <label>Agent Discord Thread ID</label>
-            <input
-              value={agentBindingDiscordThreadId}
-              onChange={(event) => setAgentBindingDiscordThreadId(event.target.value)}
-              placeholder="thread-id"
-            />
-          </div>
-          <div className="field grow">
-            <label>Agent In-App Thread ID</label>
-            <input
-              value={agentBindingInAppThreadId}
-              onChange={(event) => setAgentBindingInAppThreadId(event.target.value)}
-              placeholder="inapp-agent-0"
-            />
-          </div>
-        </div>
-
-        <div className="row gap wrap">
-          <label className="toggle">
-            <input
-              type="checkbox"
-              checked={agentBindingOrchestrator}
-              onChange={(event) => setAgentBindingOrchestrator(event.target.checked)}
-            />
-            Mark as Orchestrator Agent
-          </label>
-          <button
-            className="btn secondary"
-            onClick={() =>
-              runTask('Saving agent route binding', async () => {
-                await installerApi.bindAgentCommunicationRoute({
-                  agent_id: agentBindingId,
-                  telegram_chat_id: agentBindingTelegramChatId || null,
-                  discord_thread_id: agentBindingDiscordThreadId || null,
-                  in_app_thread_id: agentBindingInAppThreadId || null,
-                  is_orchestrator: agentBindingOrchestrator,
-                });
-                await refreshCommunicationInbox();
-              })
-            }
-            disabled={busy}
-          >
-            Save Agent Route
-          </button>
-        </div>
-
-        <div className="dynamic-field-grid">
-          <div className="field grow">
-            <label>Dispatch Platform</label>
-            <select
-              value={dispatchPlatform}
-              onChange={(event) =>
-                setDispatchPlatform(event.target.value as 'telegram' | 'discord' | 'in_app')
-              }
-            >
-              <option value="in_app">in_app</option>
-              <option value="telegram">telegram</option>
-              <option value="discord">discord</option>
-            </select>
-          </div>
-          <div className="field grow">
-            <label>Dispatch Agent ID</label>
-            <input
-              value={dispatchAgentId}
-              onChange={(event) => setDispatchAgentId(event.target.value)}
-              placeholder="agent-0"
-            />
-          </div>
-          <div className="field grow">
-            <label>Sub-Sphere ID (optional for prism dispatch)</label>
-            <input
-              value={dispatchSubSphereId}
-              onChange={(event) => setDispatchSubSphereId(event.target.value)}
-              placeholder="ss-..."
-            />
-          </div>
-          <div className="field grow">
-            <label>Message</label>
-            <input
-              value={dispatchMessage}
-              onChange={(event) => setDispatchMessage(event.target.value)}
-              placeholder="Type a message to the agent"
-            />
-          </div>
-        </div>
-
-        <div className="row gap wrap">
-          <button
-            className="btn primary"
-            onClick={() =>
-              runTask('Sending agent message', async () => {
-                const result = await installerApi.sendAgentMessage({
-                  platform: dispatchPlatform,
-                  agent_id: dispatchAgentId,
-                  message: dispatchMessage,
-                });
-                setDispatchResult(
-                  `agent dispatch: platform=${result.platform} thread=${result.thread_id} live=${String(result.delivered_live)} simulated=${String(result.simulated)} id=${result.message_id}`,
-                );
-                await refreshCommunicationInbox();
-              })
-            }
-            disabled={busy}
-          >
-            Send Agent Message
-          </button>
-          <button
-            className="btn secondary"
-            onClick={() =>
-              runTask('Sending sub-sphere prism message', async () => {
-                if (!dispatchSubSphereId.trim()) {
-                  throw new Error('Enter sub-sphere id to send prism message.');
-                }
-                const result = await installerApi.sendSubSpherePrismMessage({
-                  platform: dispatchPlatform,
-                  sub_sphere_id: dispatchSubSphereId,
-                  message: dispatchMessage,
-                });
-                setDispatchResult(
-                  `sub-sphere dispatch: sphere=${result.sub_sphere_id ?? ''} platform=${result.platform} thread=${result.thread_id} live=${String(result.delivered_live)} simulated=${String(result.simulated)} id=${result.message_id}`,
-                );
-                await refreshCommunicationInbox();
-              })
-            }
-            disabled={busy}
-          >
-            Send Prism Message
-          </button>
-        </div>
-
-        <div className="row gap wrap">
-          <button
-            className="btn secondary"
-            onClick={() =>
-              runTask('Polling Telegram updates', async () => {
-                const result = await installerApi.pollTelegramUpdatesOnce(25);
-                setTransportOpsResult(
-                  `telegram poll: fetched=${result.fetched_updates} processed=${result.processed_updates} dispatched=${result.dispatched_messages} simulated=${String(result.simulated)} next_offset=${String(result.next_offset ?? '')}`,
-                );
-                await refreshCommunicationInbox();
-              })
-            }
-            disabled={busy}
-          >
-            Poll Telegram
-          </button>
-          <button
-            className="btn secondary"
-            onClick={() =>
-              runTask('Probing Discord gateway', async () => {
-                const probe = await installerApi.probeDiscordGateway();
-                setTransportOpsResult(
-                  `discord gateway: lifecycle=${probe.lifecycle} url=${probe.gateway_url} live_probe=${String(probe.live_probe)}`,
-                );
-                await refreshCommunicationInbox();
-              })
-            }
-            disabled={busy}
-          >
-            Probe Discord Gateway
-          </button>
-        </div>
-
-        {dispatchResult ? <pre className="console">{dispatchResult}</pre> : null}
-        {transportOpsResult ? <pre className="console">{transportOpsResult}</pre> : null}
-
-        <div className="table">
-          <div className="table-row">
-            <span>telegram</span>
-            <span className={`chip ${communication.telegram.configured ? 'pass' : 'warn'}`}>
-              {communication.telegram.configured ? 'configured' : 'pending'}
-            </span>
-            <span className="muted">
-              mode={communication.telegram.routing_mode} live_api=
-              {String(communication.telegram.live_api)} webhook=
-              {String(communication.telegram.use_webhook)}
-            </span>
-          </div>
-          <div className="table-row">
-            <span>discord</span>
-            <span className={`chip ${communication.discord.configured ? 'pass' : 'warn'}`}>
-              {communication.discord.configured ? 'configured' : 'pending'}
-            </span>
-            <span className="muted">
-              mode={communication.discord.routing_mode} auto_spawn=
-              {String(communication.discord.auto_spawn_sub_sphere_threads)}
-            </span>
-          </div>
-          <div className="table-row">
-            <span>agent routes</span>
-            <span className="chip pass">{communication.agent_bindings.length}</span>
-            <span className="muted">orchestrator or direct per-agent bindings</span>
-          </div>
-          <div className="table-row">
-            <span>sub-sphere prism routes</span>
-            <span className="chip pass">{communication.sub_sphere_bindings.length}</span>
-            <span className="muted">discord/telegram/in-app prism route bindings</span>
-          </div>
-          <div className="table-row">
-            <span>discord gateway</span>
-            <span
-              className={`chip ${
-                communication.discord_gateway_state.lifecycle === 'fatal'
-                  ? 'fail'
-                  : communication.discord_gateway_state.lifecycle === 'connected'
-                    ? 'pass'
-                    : 'warn'
-              }`}
-            >
-              {communication.discord_gateway_state.lifecycle}
-            </span>
-            <span className="muted">
-              resume={String(communication.discord_gateway_state.resume_recommended)}
-            </span>
-          </div>
-          <div className="table-row">
-            <span>telegram inbox</span>
-            <span className="chip pass">{communication.telegram_inbox_count}</span>
-            <span className="muted">
-              pending discord interactions={communication.discord_pending_interaction_count}
-            </span>
-          </div>
-        </div>
-
-        <div className="row gap wrap" style={{ marginTop: 12 }}>
-          <div className="field grow">
-            <label>In-App Thread</label>
-            <select
-              value={inAppThreadId}
-              onChange={(event) => setInAppThreadId(event.target.value)}
-            >
-              {[...new Set([
-                inAppThreadId,
-                ...communication.agent_bindings
-                  .map((binding) => binding.in_app_thread_id ?? '')
-                  .filter((value) => value.trim().length > 0),
-              ])]
-                .filter((value) => value.trim().length > 0)
-                .map((threadId) => (
-                  <option key={threadId} value={threadId}>
-                    {threadId}
-                  </option>
-                ))}
-            </select>
-          </div>
-          <button
-            className="btn secondary"
-            onClick={() =>
-              runTask('Loading in-app thread', async () => {
-                if (!inAppThreadId.trim()) {
-                  throw new Error('Select an in-app thread first.');
-                }
-                setInAppMessages(await installerApi.getInAppThreadMessages(inAppThreadId, 80, 0));
-              })
-            }
-            disabled={busy}
-          >
-            Load In-App Messages
-          </button>
-        </div>
-
-        <div className="table" style={{ marginTop: 8 }}>
-          <div className="table-row">
-            <span>telegram inbox entries</span>
-            <span className="chip pass">{telegramInbox.length}</span>
-            <span className="muted">latest inbound updates routed to agents</span>
-          </div>
-          {telegramInbox.slice(0, 8).map((entry) => (
-            <div className="table-row" key={`${entry.update_id}-${entry.received_at_epoch_ms}`}>
-              <span className="mono">{entry.chat_id}</span>
-              <span className="chip pass">{entry.routed_agent_id}</span>
-              <span className="muted">{entry.text}</span>
-            </div>
-          ))}
-        </div>
-
-        <div className="table" style={{ marginTop: 8 }}>
-          <div className="table-row">
-            <span>in-app thread messages</span>
-            <span className="chip pass">{inAppMessages.length}</span>
-            <span className="muted">direct app communication history</span>
-          </div>
-          {inAppMessages.slice(0, 12).map((entry) => (
-            <div className="table-row" key={entry.message_id}>
-              <span className="mono">{entry.agent_id}</span>
-              <span className="chip pass">{entry.thread_id}</span>
-              <span className="muted">{entry.content}</span>
-            </div>
-          ))}
-        </div>
-      </section>
-    );
-  }
-
-  function renderSecurity() {
-    return (
-      <section className="panel glass-surface">
-        <div className="section-header">
-          <div>
-            <h2>Security & Persistence</h2>
-            <p className="muted">Configure encrypted snapshots and secret storage mode.</p>
-          </div>
-          <img
-            className="shape-asset shape-security"
-            src={geometryAsset(theme, 'genesis-crystal')}
-            alt=""
-            aria-hidden="true"
-          />
-        </div>
         <div className="field">
-          <label>Snapshot Path</label>
-          <div className="input-with-icon">
-            <img
-              className="field-icon"
-              src={iconAsset(theme, 'icon-folder')}
-              alt=""
-              aria-hidden="true"
-            />
-            <input
-              className="with-icon"
-              value={snapshotPath}
-              onChange={(event) => setSnapshotPath(event.target.value)}
-            />
-          </div>
+          <label>Prism Name</label>
+          <input value={prismName} onChange={(event) => setPrismName(event.target.value)} />
         </div>
 
-        <div className="row gap wrap">
-          <label className="toggle">
-            <input
-              type="checkbox"
-              checked={security.encryption_enabled}
-              onChange={(event) =>
-                setSecurity((prev) => ({ ...prev, encryption_enabled: event.target.checked }))
-              }
-            />
-            Enable Snapshot Encryption
-          </label>
-
-          <label className="toggle">
-            <input
-              type="checkbox"
-              checked={security.auto_save_enabled}
-              onChange={(event) =>
-                setSecurity((prev) => ({ ...prev, auto_save_enabled: event.target.checked }))
-              }
-            />
-            Enable Auto-Save
-          </label>
+        <div className="card-grid three-up">
+          <article className="setup-card">
+            <h3>Synthesis</h3>
+            <p>Integrates perspectives and proposes actions.</p>
+          </article>
+          <article className="setup-card">
+            <h3>Monitor</h3>
+            <p>Watches system state, health, and consistency.</p>
+          </article>
+          <article className="setup-card">
+            <h3>Auditor</h3>
+            <p>Checks policy, safety, and constitutional alignment.</p>
+          </article>
         </div>
 
-        <div className="row gap">
-          <div className="field grow">
-            <label>Passphrase</label>
-            <div className="input-with-icon">
-              <img
-                className="field-icon"
-                src={iconAsset(theme, 'icon-lock')}
-                alt=""
-                aria-hidden="true"
-              />
-              <input
-                className="with-icon"
-                type="password"
-                value={snapshotPassphrase}
-                onChange={(event) => setSnapshotPassphrase(event.target.value)}
-                placeholder="Enter passphrase"
-              />
-            </div>
-            <img
-              className="strength-asset"
-              src={componentAsset(theme, 'inputs/strength-bar')}
-              alt="Passphrase strength indicator"
-            />
-          </div>
-
-          <div className="field grow">
-            <label>Secret Backend Mode</label>
-            <select
-              value={security.secret_backend_mode}
-              onChange={(event) =>
-                setSecurity((prev) => ({ ...prev, secret_backend_mode: event.target.value }))
-              }
-            >
-              <option value="dual_write">dual_write</option>
-              <option value="keychain_only">keychain_only</option>
-              <option value="encrypted_file_only">encrypted_file_only</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="row gap">
-          <img
-            className="crystal-action-asset"
-            src={componentAsset(theme, 'cards/crystal-action-card')}
-            alt=""
-            aria-hidden="true"
-          />
-          <button
-            className="btn primary"
-            onClick={() =>
-              runTask('Saving security settings', async () => {
-                const updated = await installerApi.updateSecuritySettings({
-                  snapshot_path: snapshotPath,
-                  encryption_enabled: security.encryption_enabled,
-                  passphrase: snapshotPassphrase || null,
-                  auto_save_enabled: security.auto_save_enabled,
-                  secret_backend_mode: security.secret_backend_mode,
-                });
-                setSecurity(updated);
-              })
-            }
-            disabled={busy}
-          >
-            Save Security
-          </button>
-
-          <button
-            className="btn secondary"
-            onClick={() =>
-              runTask('Flushing snapshot', async () => {
-                await installerApi.flushRuntimeAutoSnapshot();
-              })
-            }
-            disabled={busy}
-          >
-            Flush Snapshot
-          </button>
-        </div>
-      </section>
-    );
-  }
-
-  function renderObservability() {
-    return (
-      <section className="panel glass-surface">
-        <div className="section-header">
-          <div>
-            <h2>Observability</h2>
-            <p className="muted">Dual-tier logs with encrypted full events and redacted graph feed.</p>
-          </div>
-          <img
-            className="shape-asset shape-observability"
-            src={geometryAsset(theme, 'icosahedron')}
-            alt=""
-            aria-hidden="true"
-          />
-        </div>
-
-        <div className="row gap">
-          <div className="field grow">
-            <label>Retention Days</label>
-            <input
-              type="number"
-              min={1}
-              max={365}
-              value={observability.retention_days}
-              onChange={(event) =>
-                setObservability((prev) => ({
-                  ...prev,
-                  retention_days: Number(event.target.value || 90),
-                }))
-              }
-            />
-          </div>
-
-          <div className="field grow">
-            <label>Log Level</label>
-            <select
-              value={observability.log_level}
-              onChange={(event) =>
-                setObservability((prev) => ({ ...prev, log_level: event.target.value }))
-              }
-            >
-              <option>error</option>
-              <option>warn</option>
-              <option>info</option>
-              <option>debug</option>
-              <option>trace</option>
-            </select>
-          </div>
-        </div>
-
-        <img
-          className="topology-asset"
-          src={componentAsset(theme, 'topology/fallback-chain')}
-          alt="Fallback chain visualization"
-        />
-
-        <div className="observability-paths">
-          <p className="mono muted path-row">
-            <img
-              className="inline-icon tiny"
-              src={iconAsset(theme, 'icon-terminal')}
-              alt=""
-              aria-hidden="true"
-            />
-            {observability.full_event_log_path}
-          </p>
-          <p className="mono muted path-row">
-            <img
-              className="inline-icon tiny"
-              src={iconAsset(theme, 'icon-node')}
-              alt=""
-              aria-hidden="true"
-            />
-            {observability.redacted_graph_feed_path}
-          </p>
-        </div>
-
-        <img
-          className="banner-asset"
-          src={componentAsset(theme, 'banners/banner-fallback')}
-          alt="Fallback notification banner"
-        />
-
-        <button
-          className="btn primary"
-          onClick={() =>
-            runTask('Saving observability settings', async () => {
-              const updated = await installerApi.updateObservabilitySettings(
-                observability.retention_days,
-                observability.log_level,
-              );
-              setObservability(updated);
-            })
-          }
-          disabled={busy}
-        >
-          Save Observability
+        <button className="btn primary" onClick={() => runTask('Sending prism test message', sendPrismTestMessage)} disabled={busy}>
+          Test Prism Communication
         </button>
+
+        {prismTestResult ? <pre className="console">{prismTestResult}</pre> : null}
       </section>
     );
   }
 
-  function renderReview() {
+  function renderStarterTasksStep() {
     return (
-      <section className="panel glass-surface">
-        <div className="row between">
-          <h2>Review & Install</h2>
-          <button
-            className="btn secondary"
-            onClick={() =>
-              runTask('Refreshing review summary', async () => {
-                setReview(await installerApi.getInstallReviewSummary());
-              })
-            }
-            disabled={busy}
-          >
-            Refresh
-          </button>
+      <section className="wizard-panel">
+        <h2>Start Learning with Simple Tasks</h2>
+        <p className="muted">Try a first task to validate behavior and communication.</p>
+
+        <div className="row gap wrap" style={{ marginBottom: 12 }}>
+          <button className="btn ghost" onClick={() => setStarterTask('Organize files in Downloads into dated folders.')}>Suggested Task: Organize Files</button>
+          <button className="btn ghost" onClick={() => setStarterTask('Check local runtime health and summarize warnings.')}>Suggested Task: Runtime Health</button>
+          <button className="btn ghost" onClick={() => setStarterTask('Draft a short daily priority plan from local notes.')}>Suggested Task: Daily Plan</button>
         </div>
 
-        {review ? (
-          <>
-            <p className="mono">can_install={String(review.can_install)}</p>
-            <p className="mono muted">{review.provider_chain.join(' -> ')}</p>
-            <img
-              className="topology-asset"
-              src={componentAsset(theme, 'topology/fallback-chain')}
-              alt="Configured fallback chain"
-            />
+        <div className="field">
+          <label>Task</label>
+          <textarea value={starterTask} onChange={(event) => setStarterTask(event.target.value)} rows={3} />
+        </div>
 
-            <div className="table">
-              {review.issues.map((issue, index) => (
-                <div className="table-row" key={`${issue.severity}-${index}`}>
-                  <span className={`chip ${issue.severity === 'error' ? 'fail' : 'warn'}`}>
-                    {issue.severity}
-                  </span>
-                  <span>{issue.message}</span>
-                </div>
-              ))}
-            </div>
+        <button className="btn primary" onClick={() => runTask('Running starter task', runStarterTask)} disabled={busy}>
+          Run Task
+        </button>
 
-            <img
-              className="progress-asset"
-              src={componentAsset(theme, review.can_install ? 'progress/progress-bar-complete' : 'progress/progress-bar')}
-              alt="Install readiness progress"
-            />
-
-            <button
-              className="btn primary"
-              onClick={() =>
-                runTask('Running install sequence', async () => {
-                  const latest = await installerApi.getInstallReviewSummary();
-                  setReview(latest);
-                  if (!latest.can_install) {
-                    throw new Error('Review has blocking errors; resolve them before install.');
-                  }
-
-                  const result = await installerApi.submitDeliberation(SMOKE_QUERY, selectedGlobal);
-                  setSmokeResult(
-                    `provider=${result.provider_id} model=${result.model} fallback=${String(result.used_fallback)} output=${result.output_text}`,
-                  );
-                  await installerApi.flushRuntimeAutoSnapshot();
-                  setStepIndex(7);
-                })
-              }
-              disabled={busy || !review.can_install}
-            >
-              Initiate Sequence
-            </button>
-          </>
-        ) : (
-          <p className="muted">Load review summary to continue.</p>
-        )}
+        {starterTaskResult ? <pre className="console">{starterTaskResult}</pre> : null}
       </section>
     );
   }
 
-  function renderDone() {
+  function renderDoneStep() {
     return (
-      <section className="panel glass-surface">
-        <div className="section-header">
-          <div>
-            <h2>Installation Complete</h2>
-            <p className="muted">Installer sequence and snapshot flush completed.</p>
-          </div>
-          <img
-            className="shape-asset shape-done"
-            src={geometryAsset(theme, 'octahedron')}
-            alt=""
-            aria-hidden="true"
-          />
+      <section className="wizard-panel">
+        <h2>Setup Complete</h2>
+        <p className="muted">Your MetaCanon sphere is established and ready.</p>
+
+        <div className="card-grid three-up">
+          <article className="setup-card">
+            <h3>Open Dashboard</h3>
+            <p>View live agent activity and system health.</p>
+          </article>
+          <article className="setup-card">
+            <h3>Open Communications</h3>
+            <p>Use Telegram, Discord, Mini App, or local in-app channel.</p>
+          </article>
+          <article className="setup-card">
+            <h3>Review Activity</h3>
+            <p>Inspect initialization summary and first task dispatch.</p>
+          </article>
         </div>
 
-        {smokeResult ? <pre className="console">{smokeResult}</pre> : null}
-
-        <div className="panel compact glass-surface" style={{ marginTop: 16 }}>
-          <div className="row between">
-            <h3>Genesis + 3-Agent Bootstrap</h3>
-            <span className="muted">soul file, soul facet, orchestrator, prism</span>
-          </div>
-
-          <div className="field">
-            <label>Vision Core</label>
-            <input
-              value={guidedVisionCore}
-              onChange={(event) => setGuidedVisionCore(event.target.value)}
-            />
-          </div>
-          <div className="field">
-            <label>Core Values (comma or newline separated)</label>
-            <textarea
-              value={guidedCoreValues}
-              onChange={(event) => setGuidedCoreValues(event.target.value)}
-              rows={3}
-            />
-          </div>
-          <div className="field">
-            <label>Will Directives (comma or newline separated)</label>
-            <textarea
-              value={guidedWillDirectives}
-              onChange={(event) => setGuidedWillDirectives(event.target.value)}
-              rows={3}
-            />
-          </div>
-          <div className="field">
-            <label>Soul Facet Vision</label>
-            <input
-              value={guidedFacetVision}
-              onChange={(event) => setGuidedFacetVision(event.target.value)}
-            />
-          </div>
-          <div className="field">
-            <label>Genesis Signing Secret</label>
-            <input
-              type="password"
-              value={guidedSigningSecret}
-              onChange={(event) => setGuidedSigningSecret(event.target.value)}
-              placeholder="Required to sign soul file"
-            />
-          </div>
-          <button
-            className="btn primary"
-            onClick={() =>
-              runTask('Creating genesis soul file', async () => {
-                if (!guidedSigningSecret.trim()) {
-                  throw new Error('Enter a signing secret for genesis.');
-                }
-                const result = await installerApi.invokeGuidedGenesisRite({
-                  vision_core: guidedVisionCore,
-                  core_values: parseListInput(guidedCoreValues),
-                  will_directives: parseListInput(guidedWillDirectives),
-                  signing_secret: guidedSigningSecret,
-                  facet_vision: guidedFacetVision || null,
-                });
-                setGenesisResult(result);
-              })
-            }
-            disabled={busy}
-          >
-            Create Soul File + Facet
-          </button>
-          {genesisResult ? (
-            <pre className="console">
-              {`genesis_hash=${genesisResult.genesis_hash}\nsignature=${genesisResult.signature}\ncreated_at=${genesisResult.created_at}`}
-            </pre>
-          ) : null}
-
-          <div className="dynamic-field-grid" style={{ marginTop: 12 }}>
-            <div className="field grow">
-              <label>Orchestrator Agent</label>
-              <select
-                value={bootstrapOrchestratorAgentId}
-                onChange={(event) => setBootstrapOrchestratorAgentId(event.target.value)}
-              >
-                {CORE_AGENT_IDS.map((id) => (
-                  <option key={id} value={id}>
-                    {id}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="field grow">
-              <label>Prism Agent</label>
-              <select
-                value={bootstrapPrismAgentId}
-                onChange={(event) => setBootstrapPrismAgentId(event.target.value)}
-              >
-                {CORE_AGENT_IDS.map((id) => (
-                  <option key={id} value={id}>
-                    {id}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="field grow">
-              <label>Prism Sub-Sphere ID</label>
-              <input
-                value={bootstrapPrismSubSphereId}
-                onChange={(event) => setBootstrapPrismSubSphereId(event.target.value)}
-                placeholder="meta-prism"
-              />
-            </div>
-          </div>
-
-          <div className="dynamic-field-grid">
-            <div className="field grow">
-              <label>agent-genesis Telegram Chat ID</label>
-              <input
-                value={agentGenesisTelegramId}
-                onChange={(event) => setAgentGenesisTelegramId(event.target.value)}
-              />
-            </div>
-            <div className="field grow">
-              <label>agent-synthesis Telegram Chat ID</label>
-              <input
-                value={agentSynthesisTelegramId}
-                onChange={(event) => setAgentSynthesisTelegramId(event.target.value)}
-              />
-            </div>
-            <div className="field grow">
-              <label>agent-auditor Telegram Chat ID</label>
-              <input
-                value={agentAuditorTelegramId}
-                onChange={(event) => setAgentAuditorTelegramId(event.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="dynamic-field-grid">
-            <div className="field grow">
-              <label>agent-genesis Discord Thread ID</label>
-              <input
-                value={agentGenesisDiscordThreadId}
-                onChange={(event) => setAgentGenesisDiscordThreadId(event.target.value)}
-              />
-            </div>
-            <div className="field grow">
-              <label>agent-synthesis Discord Thread ID</label>
-              <input
-                value={agentSynthesisDiscordThreadId}
-                onChange={(event) => setAgentSynthesisDiscordThreadId(event.target.value)}
-              />
-            </div>
-            <div className="field grow">
-              <label>agent-auditor Discord Thread ID</label>
-              <input
-                value={agentAuditorDiscordThreadId}
-                onChange={(event) => setAgentAuditorDiscordThreadId(event.target.value)}
-              />
-            </div>
-          </div>
-
-          <button
-            className="btn primary"
-            onClick={() =>
-              runTask('Bootstrapping three agents', async () => {
-                const result = await installerApi.bootstrapThreeAgents({
-                  orchestrator_agent_id: bootstrapOrchestratorAgentId,
-                  prism_agent_id: bootstrapPrismAgentId,
-                  telegram_chat_id_genesis: agentGenesisTelegramId || null,
-                  telegram_chat_id_synthesis: agentSynthesisTelegramId || null,
-                  telegram_chat_id_auditor: agentAuditorTelegramId || null,
-                  discord_thread_id_genesis: agentGenesisDiscordThreadId || null,
-                  discord_thread_id_synthesis: agentSynthesisDiscordThreadId || null,
-                  discord_thread_id_auditor: agentAuditorDiscordThreadId || null,
-                  prism_sub_sphere_id: bootstrapPrismSubSphereId || null,
-                });
-                setBootstrapResult(result);
-                setCommunication(result.communication);
-                setDispatchAgentId(result.orchestrator_agent_id);
-                setAgentBindingId(result.orchestrator_agent_id);
-                setDispatchSubSphereId(result.prism_sub_sphere_id);
-                await refreshCommunicationInbox(result.communication);
-              })
-            }
-            disabled={busy}
-          >
-            Initialize 3 Agents
-          </button>
-
-          {bootstrapResult ? (
-            <pre className="console">
-              {`agents=${bootstrapResult.agent_ids.join(',')}\norchestrator=${bootstrapResult.orchestrator_agent_id}\nprism=${bootstrapResult.prism_agent_id}\nprism_sub_sphere=${bootstrapResult.prism_sub_sphere_id}`}
-            </pre>
-          ) : null}
-        </div>
-
-        <div className="panel compact glass-surface" style={{ marginTop: 16 }}>
-          <div className="row between">
-            <h3>Start Training</h3>
-            <button
-              className="btn secondary"
-              onClick={() =>
-                runTask('Refreshing training state', async () => {
-                  await refreshTrainingState();
-                  if (trainingSubSphereId) {
-                    setTrainingWorkflows(await installerApi.getWorkflowList(trainingSubSphereId));
-                  }
-                })
-              }
-              disabled={busy}
-            >
-              Refresh
-            </button>
-          </div>
-
-          <div className="field">
-            <label>New Sub-Sphere Name</label>
-            <input
-              value={trainingSubSphereName}
-              onChange={(event) => setTrainingSubSphereName(event.target.value)}
-            />
-          </div>
-          <div className="field">
-            <label>Sub-Sphere Objective</label>
-            <input
-              value={trainingSubSphereObjective}
-              onChange={(event) => setTrainingSubSphereObjective(event.target.value)}
-            />
-          </div>
-          <label className="checkbox-row">
-            <input
-              type="checkbox"
-              checked={trainingHitlRequired}
-              onChange={(event) => setTrainingHitlRequired(event.target.checked)}
-            />
-            <span>Require HITL for this training sub-sphere</span>
-          </label>
-          <button
-            className="btn primary"
-            onClick={() =>
-              runTask('Creating training sub-sphere', async () => {
-                const created = await installerApi.createTaskSubSphere({
-                  name: trainingSubSphereName,
-                  objective: trainingSubSphereObjective,
-                  hitl_required: trainingHitlRequired,
-                });
-                setTrainingSubSphereId(created.sub_sphere_id);
-                setTrainingResult(`sub_sphere_created=${created.sub_sphere_id}`);
-                await refreshTrainingState();
-              })
-            }
-            disabled={busy}
-          >
-            Create Sub-Sphere
-          </button>
-
-          <div className="field">
-            <label>Target Sub-Sphere</label>
-            <select
-              value={trainingSubSphereId}
-              onChange={(event) => setTrainingSubSphereId(event.target.value)}
-            >
-              <option value="">Select a sub-sphere</option>
-              {trainingSubSpheres.map((entry) => (
-                <option key={entry.sub_sphere_id} value={entry.sub_sphere_id}>
-                  {entry.name} ({entry.sub_sphere_id})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="row gap">
-            <button
-              className="btn secondary"
-              onClick={() =>
-                runTask('Starting workflow training session', async () => {
-                  if (!trainingSubSphereId) {
-                    throw new Error('Select a sub-sphere before starting training.');
-                  }
-                  const session = await installerApi.startWorkflowTraining(trainingSubSphereId);
-                  setTrainingSessionId(session.session_id);
-                  setTrainingResult(`session_started=${session.session_id}`);
-                })
-              }
-              disabled={busy}
-            >
-              Start Session
-            </button>
-            <p className="mono muted">session={trainingSessionId || '(none)'}</p>
-          </div>
-
-          <div className="field">
-            <label>Training Message</label>
-            <input
-              value={trainingMessage}
-              onChange={(event) => setTrainingMessage(event.target.value)}
-            />
-          </div>
-          <button
-            className="btn secondary"
-            onClick={() =>
-              runTask('Submitting training message', async () => {
-                if (!trainingSessionId) {
-                  throw new Error('Start a session first.');
-                }
-                await installerApi.submitTrainingMessage(trainingSessionId, trainingMessage);
-                setTrainingResult(`message_submitted_to=${trainingSessionId}`);
-              })
-            }
-            disabled={busy}
-          >
-            Submit Message
-          </button>
-
-          <div className="field">
-            <label>Workflow Name</label>
-            <input
-              value={trainingWorkflowName}
-              onChange={(event) => setTrainingWorkflowName(event.target.value)}
-            />
-          </div>
-          <button
-            className="btn primary"
-            onClick={() =>
-              runTask('Saving trained workflow', async () => {
-                if (!trainingSessionId) {
-                  throw new Error('Start a session first.');
-                }
-                const workflow = await installerApi.saveTrainedWorkflow(
-                  trainingSessionId,
-                  trainingWorkflowName,
-                );
-                setTrainingResult(`workflow_saved=${workflow.workflow_id}`);
-                setTrainingWorkflows(await installerApi.getWorkflowList(workflow.sub_sphere_id));
-              })
-            }
-            disabled={busy}
-          >
-            Save Workflow
-          </button>
-
-          {trainingResult ? <pre className="console">{trainingResult}</pre> : null}
-          {trainingWorkflows.length > 0 ? (
-            <div className="table">
-              {trainingWorkflows.map((workflow) => (
-                <div className="table-row" key={workflow.workflow_id}>
-                  <span>{workflow.workflow_name}</span>
-                  <span className="mono muted">{workflow.workflow_id}</span>
-                  <span className="chip pass">steps={workflow.steps.length}</span>
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </div>
-
-        <div className="row gap">
-          <button
-            className="btn secondary"
-            onClick={() =>
-              runTask('Refreshing state', async () => {
-                await initialLoad();
-              })
-            }
-            disabled={busy}
-          >
-            Refresh State
-          </button>
-          <button className="btn primary" onClick={() => setStepIndex(6)} disabled={busy}>
-            View Review
-          </button>
-        </div>
+        <pre className="console">
+          {`providers=${fallbackOrder.join(' -> ')}\nconstitution=${constitutionVersion}\nprism=${prismName}\nreview_can_install=${String(review?.can_install ?? false)}\nbootstrap_ready=${String(Boolean(bootstrapResult))}`}
+        </pre>
       </section>
     );
   }
@@ -2342,66 +2244,75 @@ export default function App() {
   function renderCurrentStep() {
     switch (stepIndex) {
       case 0:
-        return renderWelcome();
+        return renderThemeStep();
       case 1:
-        return renderSystemCheck();
+        return renderWelcomeStep();
       case 2:
-        return renderComputeSelection();
+        return renderComputeStep();
       case 3:
-        return renderProviderConfig();
+        return renderProviderSetupStep();
       case 4:
-        return renderSecurity();
+        return renderCommunicationStep();
       case 5:
-        return renderObservability();
+        return renderGenesisStep();
       case 6:
-        return renderReview();
+        return renderConstitutionStep();
       case 7:
+        return renderInitializationStep();
+      case 8:
+        return renderMeetPrismStep();
+      case 9:
+        return renderStarterTasksStep();
+      case 10:
       default:
-        return renderDone();
+        return renderDoneStep();
     }
   }
 
   return (
-    <div className="app-shell">
-      {renderStepNav()}
-      <main className="content">
-        <header className="panel compact glass-surface">
-          <div className="row between">
-            <div>
-              <p className="mono muted">step_{stepIndex + 1}</p>
-              <h2>{STEPS[stepIndex]}</h2>
-            </div>
-            <img
-              className="step-indicator-asset"
-              src={componentAsset(theme, 'progress/step-indicator')}
-              alt=""
-              aria-hidden="true"
+    <div className="wizard-shell">
+      <header className="wizard-header panel glass-surface">
+        <div className="row between wrap">
+          <div>
+            <p className="mono muted">Step {stepIndex + 1} of {STEPS.length}</p>
+            <h2>{STEPS[stepIndex]}</h2>
+          </div>
+          <div className="header-actions">
+            <button className="theme-toggle" onClick={() => setTheme((value) => (value === 'void' ? 'light' : 'void'))} aria-label="Toggle theme">
+              <img className="icon-light icon-asset" src={iconAsset(theme, 'icon-sun')} alt="" aria-hidden="true" />
+              <img className="icon-void icon-asset" src={iconAsset(theme, 'icon-star')} alt="" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+        <div className="step-dots">
+          {STEPS.map((label, index) => (
+            <button
+              key={label}
+              className={`dot ${index <= stepIndex ? 'active' : ''}`}
+              onClick={() => setStepIndex(index)}
+              aria-label={`Go to ${label}`}
             />
-            <div className="row gap">
-              <button
-                className="btn ghost"
-                onClick={() => setStepIndex((prev) => Math.max(0, prev - 1))}
-                disabled={busy || stepIndex === 0}
-              >
+          ))}
+        </div>
+      </header>
+
+      <main className="wizard-content">{renderCurrentStep()}</main>
+
+      <footer className="wizard-footer panel compact glass-surface">
+        <div className="row between wrap gap">
+          <div />
+          <div className="row gap">
+            {stepIndex > 0 ? (
+              <button className="btn ghost" onClick={() => setStepIndex((prev) => Math.max(0, prev - 1))} disabled={busy}>
                 Back
               </button>
-              <button
-                className="btn secondary"
-                onClick={() => setStepIndex((prev) => Math.min(STEPS.length - 1, prev + 1))}
-                disabled={busy || stepIndex === STEPS.length - 1}
-              >
-                Continue
-              </button>
-            </div>
+            ) : null}
+            <button className="btn primary" onClick={() => void onContinue()} disabled={busy || stepIndex === STEPS.length - 1 || !canContinue()}>
+              Continue
+            </button>
           </div>
-        </header>
-
-        {renderCurrentStep()}
-
-        <footer className="panel compact glass-surface">
-          <p className="mono">status: {status}</p>
-        </footer>
-      </main>
+        </div>
+      </footer>
     </div>
   );
 }
