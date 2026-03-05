@@ -16,3 +16,17 @@ This repository contains the complete full-stack source code for the MetaCanon A
 ## Architecture Overview
 
 The MetaCanon AI stack is a constitutionally-governed, sovereign AI platform. The `metacanon-core` Rust library provides the foundational runtime, which is consumed by the `metacanon-installer` desktop app. The `sphere-engine-server` orchestrates multi-agent deliberations (SphereThread), with `sphere-skin-council-nebula` and `sphere-tma-app` providing web and Telegram frontend interfaces respectively. The `metacanon-code-api` serves as a proxy for live code display on the MetaCanon website.
+
+## Brief Integration
+
+The technical brief is integrated into this repository with explicit status and workstream docs:
+
+- `CODEX_TEAM_BRIEF_2026-03-05.md`
+- `docs/BRIEF_INTEGRATION_STATUS.md`
+- `docs/TEAM_WORKSTREAMS.md`
+
+Validation script:
+
+```bash
+./scripts/verify_brief_integration.sh
+```
