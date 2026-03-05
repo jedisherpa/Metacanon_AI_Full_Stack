@@ -18,7 +18,7 @@ use serde_json::Value;
 use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -39,8 +39,15 @@ struct ModelDownloadStatus {
 }
 
 struct InstallerState {
-    runtime: UiCommandRuntime,
+    runtime: Arc<UiCommandRuntime>,
     model_download: Arc<Mutex<ModelDownloadStatus>>,
+    telegram_deliberation_listener: Arc<Mutex<TelegramDeliberationListenerState>>,
+}
+
+#[derive(Debug, Clone)]
+struct TelegramDeliberationListenerState {
+    running: bool,
+    last_processed_update_id: i64,
 }
 
 impl InstallerState {
@@ -58,7 +65,7 @@ impl InstallerState {
             .unwrap_or_else(|_| UiCommandRuntime::new());
 
         Self {
-            runtime,
+            runtime: Arc::new(runtime),
             model_download: Arc::new(Mutex::new(ModelDownloadStatus {
                 status: ModelDownloadState::Idle,
                 model_id: None,
@@ -66,6 +73,12 @@ impl InstallerState {
                 detail: "No model download in progress.".to_string(),
                 updated_at_epoch_ms: now_epoch_ms(),
             })),
+            telegram_deliberation_listener: Arc::new(Mutex::new(
+                TelegramDeliberationListenerState {
+                    running: false,
+                    last_processed_update_id: 0,
+                },
+            )),
         }
     }
 }
@@ -191,6 +204,147 @@ fn has_ollama_model(model_id: &str) -> Result<bool, String> {
     Ok(model_names
         .iter()
         .any(|name| name.trim().to_ascii_lowercase() == normalized_target))
+}
+
+fn send_telegram_progress(runtime: &UiCommandRuntime, text: &str) {
+    let _ = ui::send_agent_message(
+        runtime,
+        "telegram".to_string(),
+        "agent-synthesis".to_string(),
+        text.to_string(),
+    );
+}
+
+fn start_telegram_deliberation_listener_inner(
+    runtime: Arc<UiCommandRuntime>,
+    listener_state: Arc<Mutex<TelegramDeliberationListenerState>>,
+) {
+    std::thread::spawn(move || loop {
+        let is_running = listener_state
+            .lock()
+            .map(|guard| guard.running)
+            .unwrap_or(false);
+        if !is_running {
+            break;
+        }
+
+        let _ = ui::poll_telegram_updates_once(&runtime, 50);
+        let inbox = ui::get_telegram_inbox(&runtime, 200, 0).unwrap_or_default();
+        let mut sorted = inbox;
+        sorted.sort_by_key(|entry| entry.update_id);
+
+        for entry in sorted {
+            let mut should_process = false;
+            if let Ok(mut state) = listener_state.lock() {
+                if entry.update_id > state.last_processed_update_id {
+                    state.last_processed_update_id = entry.update_id;
+                    should_process = true;
+                }
+            }
+            if !should_process {
+                continue;
+            }
+
+            let raw_text = entry.text.trim();
+            let maybe_query = if let Some(rest) = raw_text.strip_prefix("/deliberate ") {
+                Some(rest.trim().to_string())
+            } else if raw_text == "/deliberate" {
+                Some(String::new())
+            } else {
+                None
+            };
+
+            let Some(query) = maybe_query else {
+                continue;
+            };
+
+            if query.is_empty() {
+                send_telegram_progress(
+                    &runtime,
+                    "Usage: /deliberate <question>. Example: /deliberate create a daily plan.",
+                );
+                continue;
+            }
+
+            send_telegram_progress(&runtime, &format!("Running Task: {query}..."));
+            send_telegram_progress(
+                &runtime,
+                "Step 1/4 Validate request and gather provider chain...",
+            );
+
+            if let Ok(review) = ui::get_install_review_summary(&runtime) {
+                send_telegram_progress(
+                    &runtime,
+                    &format!(
+                        "Step 2/4 Provider chain: {}",
+                        review.provider_chain.join(" -> ")
+                    ),
+                );
+            } else {
+                send_telegram_progress(
+                    &runtime,
+                    "Step 2/4 Provider chain unavailable, continuing...",
+                );
+            }
+
+            send_telegram_progress(&runtime, "Step 3/4 Running deliberation torus...");
+            match ui::submit_deliberation(&runtime, query.clone(), None) {
+                Ok(result) => {
+                    let routing = result
+                        .metadata
+                        .get("routing")
+                        .cloned()
+                        .unwrap_or_else(|| "unknown".to_string());
+                    let mut body = result.output_text.clone();
+                    if body.len() > 2800 {
+                        body.truncate(2800);
+                        body.push_str("\n\n[truncated]");
+                    }
+                    send_telegram_progress(
+                        &runtime,
+                        &format!(
+                            "Step 4/4 Complete.\nProvider: {}\nModel: {}\nFallback: {}\nRouting: {}\n\n{}",
+                            result.provider_id, result.model, result.used_fallback, routing, body
+                        ),
+                    );
+                }
+                Err(error) => {
+                    send_telegram_progress(&runtime, &format!("Deliberation failed: {}", error));
+                }
+            }
+        }
+
+        std::thread::sleep(Duration::from_millis(1500));
+    });
+}
+
+#[tauri::command]
+fn start_telegram_deliberation_listener(
+    state: tauri::State<'_, InstallerState>,
+) -> Result<String, String> {
+    let mut listener = state
+        .telegram_deliberation_listener
+        .lock()
+        .map_err(|_| "failed to lock telegram deliberation listener state".to_string())?;
+
+    if listener.running {
+        return Ok("telegram deliberation listener already running".to_string());
+    }
+
+    listener.last_processed_update_id = ui::get_telegram_inbox(&state.runtime, 200, 0)
+        .unwrap_or_default()
+        .iter()
+        .map(|entry| entry.update_id)
+        .max()
+        .unwrap_or(0);
+    listener.running = true;
+    drop(listener);
+
+    start_telegram_deliberation_listener_inner(
+        Arc::clone(&state.runtime),
+        Arc::clone(&state.telegram_deliberation_listener),
+    );
+    Ok("telegram deliberation listener started".to_string())
 }
 
 #[tauri::command]
@@ -942,6 +1096,7 @@ fn main() {
             defer_discord_interaction,
             complete_discord_interaction,
             send_discord_typing_indicator,
+            start_telegram_deliberation_listener,
             run_system_check,
             get_local_bootstrap_status,
             install_local_model_pack,

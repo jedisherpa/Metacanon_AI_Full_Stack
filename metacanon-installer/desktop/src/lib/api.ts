@@ -165,6 +165,8 @@ export const installerApi = {
     }),
   getCommunicationStatus: () =>
     call<CommunicationStatus>('get_communication_status'),
+  startTelegramDeliberationListener: () =>
+    call<string>('start_telegram_deliberation_listener'),
   updateTelegramIntegration: (payload: {
     enabled: boolean;
     routing_mode: AgentRoutingMode;

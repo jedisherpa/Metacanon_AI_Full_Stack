@@ -773,6 +773,10 @@ export default function App() {
       live_api: discordLiveApi,
     });
 
+    if (telegramEnabled && telegramLiveApi) {
+      await installerApi.startTelegramDeliberationListener();
+    }
+
     setCommunication(await installerApi.getCommunicationStatus());
   }
 
