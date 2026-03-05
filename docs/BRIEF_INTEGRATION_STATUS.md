@@ -1,6 +1,9 @@
 # Brief Integration Status
 
-Source brief: `CODEX_TEAM_BRIEF_2026-03-05.md`
+Source briefs:
+
+- `CODEX_TEAM_BRIEF_2026-03-05.md`
+- `SUBJECT_METACANON_DEVELOPER_EVALUATION_NEXT_STEPS_2026-03-05.md`
 
 This document tracks what is already integrated from the brief and what remains.
 
@@ -66,3 +69,18 @@ Status: `Pending`
 2. Add CI for code-map line-range validation against `metacanon-core`.
 3. Integrate website frontend to consume live snippet endpoints.
 4. Add independent CI/CD pipelines per repository and release promotion flow.
+
+## 6) Dual-Mode Website Backend Follow-Up
+
+Status: `Integrated (analysis + plan), Implementation Pending`
+
+Integrated artifacts:
+
+- `docs/WEBSITE_DUAL_MODE_BACKEND_RESPONSE.md`
+- `docs/WEBSITE_DUAL_MODE_IMPLEMENTATION_PLAN.md`
+
+Pending implementation:
+
+1. Add Tauri `get_code_snippet` local command in `metacanon-installer`.
+2. Complete dual-mode config and parity tests in `metacanon-code-api`.
+3. Wire frontend mode switching to local/cloud backends.

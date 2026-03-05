@@ -22,8 +22,11 @@ The MetaCanon AI stack is a constitutionally-governed, sovereign AI platform. Th
 The technical brief is integrated into this repository with explicit status and workstream docs:
 
 - `CODEX_TEAM_BRIEF_2026-03-05.md`
+- `SUBJECT_METACANON_DEVELOPER_EVALUATION_NEXT_STEPS_2026-03-05.md`
 - `docs/BRIEF_INTEGRATION_STATUS.md`
 - `docs/TEAM_WORKSTREAMS.md`
+- `docs/WEBSITE_DUAL_MODE_BACKEND_RESPONSE.md`
+- `docs/WEBSITE_DUAL_MODE_IMPLEMENTATION_PLAN.md`
 
 Validation script:
 

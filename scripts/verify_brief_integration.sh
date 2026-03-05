@@ -65,4 +65,9 @@ require_path "metacanon-code-api/code-map.yaml"
 # Governance payload for sphere engine server
 require_path "sphere-engine-server/governance/governance.yaml"
 
+# Follow-up brief integration docs
+require_path "SUBJECT_METACANON_DEVELOPER_EVALUATION_NEXT_STEPS_2026-03-05.md"
+require_path "docs/WEBSITE_DUAL_MODE_BACKEND_RESPONSE.md"
+require_path "docs/WEBSITE_DUAL_MODE_IMPLEMENTATION_PLAN.md"
+
 ok "brief integration checks complete"
