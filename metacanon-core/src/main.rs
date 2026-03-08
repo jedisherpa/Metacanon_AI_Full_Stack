@@ -3,10 +3,11 @@ use metacanon_ai::ui::{
     finalize_setup_compute_selection, flush_runtime_auto_snapshot, get_compute_options,
     get_install_review_summary, get_observability_status, get_provider_health,
     get_security_persistence_settings, get_sub_sphere_list, get_workflow_list,
-    load_runtime_snapshot, run_system_check, save_runtime_snapshot, save_trained_workflow,
-    set_global_compute_provider, set_provider_priority, start_workflow_training,
-    submit_deliberation, submit_training_message, update_observability_settings,
-    update_provider_config, update_security_persistence_settings, UiCommandError, UiCommandRuntime,
+    initialize_prism_runtime, load_runtime_snapshot, run_prism_round, run_system_check,
+    save_runtime_snapshot, save_trained_workflow, set_global_compute_provider,
+    set_provider_priority, start_workflow_training, submit_deliberation,
+    submit_training_message, update_observability_settings, update_provider_config,
+    update_security_persistence_settings, PrismRoundRequest, UiCommandError, UiCommandRuntime,
 };
 use serde_json::json;
 use std::env;
@@ -38,7 +39,6 @@ struct SetupOptions {
     anthropic_key: Option<String>,
     moonshot_key: Option<String>,
     grok_key: Option<String>,
-    grok_live: bool,
     smoke_query: Option<String>,
     snapshot_encryption: Option<bool>,
     snapshot_passphrase: Option<String>,
@@ -53,6 +53,15 @@ struct DeliberateOptions {
     common: CommandOptions,
     query: String,
     provider_override: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct PrismRoundOptions {
+    common: CommandOptions,
+    query: String,
+    provider_override: Option<String>,
+    channel: Option<String>,
+    force_deliberation: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -104,6 +113,7 @@ enum CliCommand {
     SystemCheck(CommandOptions),
     Review(CommandOptions),
     Deliberate(DeliberateOptions),
+    PrismRound(PrismRoundOptions),
     SubSphereCreate(SubSphereCreateOptions),
     SubSphereList(CommandOptions),
     WorkflowStart(WorkflowStartOptions),
@@ -138,6 +148,7 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         CliCommand::SystemCheck(options) => run_system_check_command(options),
         CliCommand::Review(options) => run_review(options),
         CliCommand::Deliberate(options) => run_deliberate(options),
+        CliCommand::PrismRound(options) => run_prism_round_command(options),
         CliCommand::SubSphereCreate(options) => run_sub_sphere_create(options),
         CliCommand::SubSphereList(options) => run_sub_sphere_list(options),
         CliCommand::WorkflowStart(options) => run_workflow_start(options),
@@ -163,6 +174,7 @@ fn parse_command(args: &[String]) -> Result<CliCommand, String> {
         "system-check" => Ok(CliCommand::SystemCheck(parse_common_options(&args[2..])?)),
         "review" => Ok(CliCommand::Review(parse_common_options(&args[2..])?)),
         "deliberate" => Ok(CliCommand::Deliberate(parse_deliberate_options(&args[2..])?)),
+        "prism-round" => Ok(CliCommand::PrismRound(parse_prism_round_options(&args[2..])?)),
         "sub-sphere-create" => Ok(CliCommand::SubSphereCreate(parse_sub_sphere_create_options(
             &args[2..],
         )?)),
@@ -182,7 +194,7 @@ fn parse_command(args: &[String]) -> Result<CliCommand, String> {
         "snapshot-load" => Ok(CliCommand::SnapshotLoad(parse_common_options(&args[2..])?)),
         "snapshot-flush" => Ok(CliCommand::SnapshotFlush(parse_common_options(&args[2..])?)),
         unknown => Err(format!(
-            "unknown command '{unknown}'. expected one of: setup, health, system-check, review, deliberate, sub-sphere-create, sub-sphere-list, workflow-start, workflow-message, workflow-save, workflow-list, workflow-delete, snapshot-save, snapshot-load, snapshot-flush, help"
+            "unknown command '{unknown}'. expected one of: setup, health, system-check, review, deliberate, prism-round, sub-sphere-create, sub-sphere-list, workflow-start, workflow-message, workflow-save, workflow-list, workflow-delete, snapshot-save, snapshot-load, snapshot-flush, help"
         )),
     }
 }
@@ -245,7 +257,6 @@ fn parse_setup_options(args: &[String]) -> Result<SetupOptions, String> {
             "--grok-key" => {
                 options.grok_key = Some(take_flag_value(args, &mut index, "--grok-key")?)
             }
-            "--grok-live" => options.grok_live = true,
             "--smoke-query" => {
                 options.smoke_query = Some(take_flag_value(args, &mut index, "--smoke-query")?)
             }
@@ -316,6 +327,53 @@ fn parse_deliberate_options(args: &[String]) -> Result<DeliberateOptions, String
         common,
         query,
         provider_override,
+    })
+}
+
+fn parse_prism_round_options(args: &[String]) -> Result<PrismRoundOptions, String> {
+    let mut channel = None;
+    let mut common = CommandOptions::default();
+    let mut query: Option<String> = None;
+    let mut provider_override = None;
+    let mut force_deliberation = true;
+    let mut index = 0;
+
+    while index < args.len() {
+        match args[index].as_str() {
+            "--snapshot" => common.snapshot_path = take_flag_value(args, &mut index, "--snapshot")?,
+            "--load-existing" => common.load_existing = true,
+            "--no-load-existing" => common.load_existing = false,
+            "--provider" => {
+                provider_override = Some(take_flag_value(args, &mut index, "--provider")?)
+            }
+            "--query" => query = Some(take_flag_value(args, &mut index, "--query")?),
+            "--channel" => channel = Some(take_flag_value(args, &mut index, "--channel")?),
+            "--direct" => force_deliberation = false,
+            "--force-deliberation" => force_deliberation = true,
+            token if token.starts_with('-') => {
+                return Err(format!("unknown prism-round option '{token}'"))
+            }
+            token => {
+                if query.is_some() {
+                    return Err(format!("unexpected extra argument '{token}'"));
+                }
+                query = Some(token.to_string());
+            }
+        }
+        index += 1;
+    }
+
+    let query = query.ok_or_else(|| "missing query for prism-round command".to_string())?;
+    if query.trim().is_empty() {
+        return Err("query must not be empty".to_string());
+    }
+
+    Ok(PrismRoundOptions {
+        common,
+        query,
+        provider_override,
+        channel,
+        force_deliberation,
     })
 }
 
@@ -568,10 +626,6 @@ fn run_setup(options: SetupOptions) -> Result<(), String> {
         resolve_secret(options.grok_key.clone(), &["GROK_API_KEY", "XAI_API_KEY"]),
     )?;
 
-    if options.grok_live {
-        update_provider_config(&runtime, "grok".to_string(), json!({"live_api": true}))
-            .map_err(render_ui_error)?;
-    }
 
     if let Some(smoke_query) = options.smoke_query.clone() {
         let result = submit_deliberation(&runtime, smoke_query, None).map_err(render_ui_error)?;
@@ -740,6 +794,53 @@ fn run_deliberate(options: DeliberateOptions) -> Result<(), String> {
     println!("model={}", result.model);
     println!("used_fallback={}", result.used_fallback);
     println!("output={}", result.output_text);
+    Ok(())
+}
+
+fn run_prism_round_command(options: PrismRoundOptions) -> Result<(), String> {
+    let runtime = runtime_from_snapshot_options(&options.common).map_err(render_ui_error)?;
+    let init = initialize_prism_runtime(
+        &runtime,
+        metacanon_ai::ui::PrismRuntimeInitRequest {
+            prism_display_name: Some("CLI Prism".to_string()),
+            prism_sub_sphere_id: None,
+            telegram_chat_id: None,
+            discord_thread_id: None,
+        },
+    )
+    .map_err(render_ui_error)?;
+    let result = run_prism_round(
+        &runtime,
+        PrismRoundRequest {
+            query: options.query,
+            provider_override: options.provider_override,
+            channel: options.channel,
+            force_deliberation: options.force_deliberation,
+        },
+    )
+    .map_err(render_ui_error)?;
+
+    println!("orchestrator={}", init.orchestrator_agent_id);
+    println!("signer_did={}", init.sphere_signer_did.unwrap_or_else(|| "none".to_string()));
+    println!("route={}", result.route);
+    println!("round_id={}", result.round_id.unwrap_or_else(|| "none".to_string()));
+    println!(
+        "event_publish={}/{} failed={}",
+        result.event_publish.succeeded,
+        result.event_publish.attempted,
+        result.event_publish.failed
+    );
+    for lane in result.lane_outputs {
+        println!(
+            "lane={} provider={} model={} fallback={}",
+            lane.lane, lane.provider_id, lane.model, lane.used_fallback
+        );
+        println!("lane_output={}", lane.output_text);
+    }
+    println!("provider={}", result.final_result.provider_id);
+    println!("model={}", result.final_result.model);
+    println!("used_fallback={}", result.final_result.used_fallback);
+    println!("output={}", result.final_result.output_text);
     Ok(())
 }
 
@@ -959,6 +1060,7 @@ fn print_help() {
     println!("  metacanon system-check [options]");
     println!("  metacanon review [options]");
     println!("  metacanon deliberate <query> [options]");
+    println!("  metacanon prism-round <query> [options]");
     println!("  metacanon sub-sphere-create --name <name> --objective <objective> [--hitl-required] [options]");
     println!("  metacanon sub-sphere-list [options]");
     println!("  metacanon workflow-start --sub-sphere-id <id> [options]");
@@ -985,7 +1087,6 @@ fn print_help() {
     println!("  --anthropic-key <key>     set Anthropic API key");
     println!("  --moonshot-key <key>      set Moonshot Kimi API key");
     println!("  --grok-key <key>          set xAI Grok API key");
-    println!("  --grok-live               enable live Grok transport");
     println!("  --smoke-query <text>      run a smoke deliberation query after setup");
     println!("  --snapshot-encryption     enable encrypted snapshot mode");
     println!("  --no-snapshot-encryption  disable encrypted snapshot mode");
@@ -999,6 +1100,8 @@ fn print_help() {
     println!("deliberate options:");
     println!("  --provider <id>           per-request provider override");
     println!("  --query <text>            explicit query field (alternative to positional query)");
+    println!("  --channel <name>          channel label for prism-round (default: installer)");
+    println!("  --direct                  force prism-round to stay in direct mode");
     println!();
     println!("sub-sphere/workflow options:");
     println!("  sub-sphere-create: --name, --objective, --hitl-required|--no-hitl-required");
@@ -1027,7 +1130,6 @@ mod tests {
         let parsed = parse_setup_options(&[
             "--cloud-priority".to_string(),
             "openai,anthropic,grok".to_string(),
-            "--grok-live".to_string(),
         ])
         .expect("setup options should parse");
 
@@ -1039,7 +1141,6 @@ mod tests {
                 "grok".to_string()
             ])
         );
-        assert!(parsed.grok_live);
     }
 
     #[test]

@@ -4,8 +4,8 @@ use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 
 use crate::compute::{
-    estimate_token_count, normalized_ascii_embedding, ComputeError, ComputeProvider, ComputeResult,
-    GenerateRequest, GenerateResponse, ProviderHealth, ProviderKind, TokenUsage,
+    ComputeError, ComputeProvider, ComputeResult, GenerateRequest, GenerateResponse,
+    ProviderHealth, ProviderKind, TokenUsage,
 };
 
 pub const MOONSHOT_KIMI_PROVIDER_ID: &str = "moonshot_kimi";
@@ -23,7 +23,6 @@ pub struct MoonshotKimiConfig {
     pub api_key: Option<String>,
     pub base_url: String,
     pub model: String,
-    pub live_api: bool,
     pub available: bool,
 }
 
@@ -33,7 +32,6 @@ impl Default for MoonshotKimiConfig {
             api_key: None,
             base_url: MOONSHOT_KIMI_DEFAULT_BASE_URL.to_string(),
             model: MOONSHOT_KIMI_DEFAULT_MODEL.to_string(),
-            live_api: false,
             available: true,
         }
     }
@@ -189,43 +187,6 @@ impl MoonshotKimiProvider {
             latency_ms,
         })
     }
-
-    fn simulate_chat_completion(
-        &self,
-        request: &MoonshotKimiChatRequest,
-    ) -> MoonshotKimiChatResponse {
-        let prompt = request
-            .messages
-            .iter()
-            .rev()
-            .find(|message| message.role == "user")
-            .map(|message| message.content.as_str())
-            .unwrap_or("");
-
-        let prompt_tokens = estimate_token_count(prompt);
-        let temperature = request.temperature.unwrap_or(0.7);
-        let completion_tokens = 70.min(request.max_tokens.unwrap_or(70).max(1));
-
-        MoonshotKimiChatResponse {
-            model: request.model.clone(),
-            choices: vec![MoonshotKimiChoice {
-                message: MoonshotKimiMessage {
-                    role: "assistant".to_string(),
-                    content: format!(
-                        "Moonshot Kimi [{}] generated a cloud response (temp={temperature:.2}) for: {}",
-                        request.model, prompt
-                    ),
-                },
-                finish_reason: Some("stop".to_string()),
-            }],
-            usage: Some(MoonshotKimiUsage {
-                prompt_tokens,
-                completion_tokens,
-                total_tokens: prompt_tokens.saturating_add(completion_tokens),
-            }),
-        }
-    }
-
     fn chat_completions_endpoint(&self) -> String {
         format!(
             "{}/chat/completions",
@@ -393,16 +354,8 @@ impl ComputeProvider for MoonshotKimiProvider {
             return Err(MoonshotKimiAdapterError::EmptyEmbeddingInput.to_compute_error());
         }
 
-        if self.config.live_api {
-            self.request_live_embedding(api_key, input)
-                .map_err(|error| error.to_compute_error())
-        } else {
-            Ok(normalized_ascii_embedding(
-                &format!("{}::{input}", self.config.model),
-                24,
-                0x6D_6F_6F_6E_73_68,
-            ))
-        }
+        self.request_live_embedding(api_key, input)
+            .map_err(|error| error.to_compute_error())
     }
 
     fn generate_response(&self, req: GenerateRequest) -> ComputeResult<GenerateResponse> {
@@ -415,12 +368,9 @@ impl ComputeProvider for MoonshotKimiProvider {
         let request = self
             .map_generate_request(req)
             .map_err(|error| error.to_compute_error())?;
-        let (response, latency_ms) = if self.config.live_api {
-            self.request_live_chat_completion(api_key, &request)
-                .map_err(|error| error.to_compute_error())?
-        } else {
-            (self.simulate_chat_completion(&request), 132)
-        };
+        let (response, latency_ms) = self
+            .request_live_chat_completion(api_key, &request)
+            .map_err(|error| error.to_compute_error())?;
         self.map_response(response, latency_ms)
             .map_err(|error| error.to_compute_error())
     }
@@ -628,8 +578,4 @@ mod tests {
         );
     }
 
-    #[test]
-    fn default_config_keeps_live_api_disabled_for_deterministic_tests() {
-        assert!(!MoonshotKimiConfig::default().live_api);
-    }
 }

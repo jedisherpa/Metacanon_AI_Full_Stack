@@ -5,9 +5,8 @@ use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 
 use crate::compute::{
-    estimate_token_count, normalized_ascii_embedding, ComputeError, ComputeProvider, ComputeResult,
-    GenerateRequest, GenerateResponse, ProviderHealth, ProviderKind, TokenUsage,
-    PROVIDER_QWEN_LOCAL,
+    ComputeError, ComputeProvider, ComputeResult, GenerateRequest, GenerateResponse, ProviderHealth,
+    ProviderKind, TokenUsage, PROVIDER_QWEN_LOCAL,
 };
 
 pub const QWEN_LOCAL_PROVIDER_ID: &str = PROVIDER_QWEN_LOCAL;
@@ -32,7 +31,6 @@ pub struct QwenLocalConfig {
     pub downgrade_model_id: String,
     pub llama_cpp_binary: String,
     pub llama_cpp_model_path: String,
-    pub live_api: bool,
     pub available: bool,
 }
 
@@ -42,13 +40,12 @@ impl Default for QwenLocalConfig {
             primary_target: QWEN_DEFAULT_LOCAL_TARGET.to_string(),
             downgrade_profile: QWEN_DEFAULT_DOWNGRADE_PROFILE.to_string(),
             downgrade_target: QWEN_DOWNGRADE_LOCAL_TARGET.to_string(),
-            runtime_backend: "llama.cpp".to_string(),
+            runtime_backend: "ollama".to_string(),
             base_url: QWEN_DEFAULT_BASE_URL.to_string(),
             primary_model_id: QWEN_DEFAULT_PRIMARY_MODEL_ID.to_string(),
             downgrade_model_id: QWEN_DEFAULT_DOWNGRADE_MODEL_ID.to_string(),
             llama_cpp_binary: QWEN_DEFAULT_LLAMACPP_BINARY.to_string(),
             llama_cpp_model_path: String::new(),
-            live_api: false,
             available: true,
         }
     }
@@ -347,44 +344,24 @@ impl ComputeProvider for QwenLocalProvider {
             return Err(self.unavailable_error("health_check"));
         }
 
-        if self.config.live_api {
-            match self.probe_live_backend() {
-                Ok(()) => {
-                    return Ok(ProviderHealth::healthy(
-                        QWEN_LOCAL_PROVIDER_ID,
-                        ProviderKind::Local,
-                        Some(format!(
-                            "live_api=true, backend={}, primary={}, downgrade={}",
-                            self.config.runtime_backend,
-                            self.config.primary_model_id,
-                            self.config.downgrade_model_id
-                        )),
-                    ));
-                }
-                Err(error) => {
-                    return Ok(ProviderHealth::unhealthy(
-                        QWEN_LOCAL_PROVIDER_ID,
-                        ProviderKind::Local,
-                        Some(format!(
-                            "live_api=true, backend={}, probe_error={error}",
-                            self.config.runtime_backend
-                        )),
-                    ));
-                }
-            }
-        }
-
-        Ok(ProviderHealth::healthy(
-            QWEN_LOCAL_PROVIDER_ID,
-            ProviderKind::Local,
-            Some(format!(
-                "live_api=false, backend={}, primary={}, downgrade={} ({})",
-                self.config.runtime_backend,
-                self.config.primary_target,
-                self.config.downgrade_target,
-                self.config.downgrade_profile
+        match self.probe_live_backend() {
+            Ok(()) => Ok(ProviderHealth::healthy(
+                QWEN_LOCAL_PROVIDER_ID,
+                ProviderKind::Local,
+                Some(format!(
+                    "backend={}, primary={}, downgrade={} ({})",
+                    self.config.runtime_backend,
+                    self.config.primary_target,
+                    self.config.downgrade_target,
+                    self.config.downgrade_profile
+                )),
             )),
-        ))
+            Err(error) => Ok(ProviderHealth::unhealthy(
+                QWEN_LOCAL_PROVIDER_ID,
+                ProviderKind::Local,
+                Some(format!("backend={}, probe_error={error}", self.config.runtime_backend)),
+            )),
+        }
     }
 
     fn get_embedding(&self, text: &str) -> ComputeResult<Vec<f64>> {
@@ -397,14 +374,17 @@ impl ComputeProvider for QwenLocalProvider {
             ));
         }
 
-        if self.config.live_api && self.backend_is_ollama() {
+        if self.backend_is_ollama() {
             return self.request_live_embedding_ollama(
                 text,
                 self.select_runtime_model_for_request(&GenerateRequest::new(text)),
             );
         }
 
-        Ok(normalized_ascii_embedding(text, 16, 0x71_77_65_6E))
+        Err(self.map_live_error(
+            "embedding",
+            format!("unsupported runtime_backend '{}' for embeddings", self.config.runtime_backend),
+        ))
     }
 
     fn generate_response(&self, req: GenerateRequest) -> ComputeResult<GenerateResponse> {
@@ -422,115 +402,74 @@ impl ComputeProvider for QwenLocalProvider {
         let selected_target = self.select_target_for_request(&req).to_string();
         let selected_model = self.select_runtime_model_for_request(&req).to_string();
 
-        if self.config.live_api {
-            if self.backend_is_ollama() {
-                let (response, latency_ms) =
-                    self.request_live_generate_ollama(&req, &selected_model)?;
-                let output_text = response.response.trim().to_string();
-                if output_text.is_empty() {
-                    return Err(self.map_live_error("generate", "empty response text"));
-                }
-
-                let usage = response.prompt_eval_count.zip(response.eval_count).map(
-                    |(prompt_tokens, completion_tokens)| TokenUsage {
-                        prompt_tokens,
-                        completion_tokens,
-                        total_tokens: prompt_tokens.saturating_add(completion_tokens),
-                    },
-                );
-
-                let mut metadata = BTreeMap::new();
-                metadata.insert(
-                    "runtime_backend".to_string(),
-                    self.config.runtime_backend.clone(),
-                );
-                metadata.insert("routing".to_string(), "local_live".to_string());
-                metadata.insert("api".to_string(), "api/generate".to_string());
-                metadata.insert("runtime_model".to_string(), selected_model.clone());
-                metadata.insert("target_label".to_string(), selected_target);
-
-                return Ok(GenerateResponse {
-                    provider_id: QWEN_LOCAL_PROVIDER_ID.to_string(),
-                    model: response.model,
-                    output_text,
-                    finish_reason: response.done_reason,
-                    usage,
-                    metadata,
-                    latency_ms,
-                });
+        if self.backend_is_ollama() {
+            let (response, latency_ms) =
+                self.request_live_generate_ollama(&req, &selected_model)?;
+            let output_text = response.response.trim().to_string();
+            if output_text.is_empty() {
+                return Err(self.map_live_error("generate", "empty response text"));
             }
 
-            if self.backend_is_llama_cpp() {
-                let (output_text, latency_ms) =
-                    self.request_live_generate_llama(&req, &selected_target)?;
-                let mut metadata = BTreeMap::new();
-                metadata.insert(
-                    "runtime_backend".to_string(),
-                    self.config.runtime_backend.clone(),
-                );
-                metadata.insert("routing".to_string(), "local_live".to_string());
-                metadata.insert("api".to_string(), "llama.cpp-cli".to_string());
-                metadata.insert("runtime_model".to_string(), selected_model.clone());
-                metadata.insert("target_label".to_string(), selected_target);
+            let usage = response.prompt_eval_count.zip(response.eval_count).map(
+                |(prompt_tokens, completion_tokens)| TokenUsage {
+                    prompt_tokens,
+                    completion_tokens,
+                    total_tokens: prompt_tokens.saturating_add(completion_tokens),
+                },
+            );
 
-                return Ok(GenerateResponse {
-                    provider_id: QWEN_LOCAL_PROVIDER_ID.to_string(),
-                    model: selected_model,
-                    output_text,
-                    finish_reason: Some("stop".to_string()),
-                    usage: None,
-                    metadata,
-                    latency_ms,
-                });
-            }
+            let mut metadata = BTreeMap::new();
+            metadata.insert(
+                "runtime_backend".to_string(),
+                self.config.runtime_backend.clone(),
+            );
+            metadata.insert("routing".to_string(), "local_live".to_string());
+            metadata.insert("api".to_string(), "api/generate".to_string());
+            metadata.insert("runtime_model".to_string(), selected_model.clone());
+            metadata.insert("target_label".to_string(), selected_target);
 
-            return Err(self.map_live_error(
-                "generate",
-                format!(
-                    "unsupported runtime_backend '{}' for live mode",
-                    self.config.runtime_backend
-                ),
-            ));
+            return Ok(GenerateResponse {
+                provider_id: QWEN_LOCAL_PROVIDER_ID.to_string(),
+                model: response.model,
+                output_text,
+                finish_reason: response.done_reason,
+                usage,
+                metadata,
+                latency_ms,
+            });
         }
 
-        let downgrade = selected_target == self.config.downgrade_target;
-        let completion_tokens = if downgrade { 32 } else { 48 };
+        if self.backend_is_llama_cpp() {
+            let (output_text, latency_ms) =
+                self.request_live_generate_llama(&req, &selected_target)?;
+            let mut metadata = BTreeMap::new();
+            metadata.insert(
+                "runtime_backend".to_string(),
+                self.config.runtime_backend.clone(),
+            );
+            metadata.insert("routing".to_string(), "local_live".to_string());
+            metadata.insert("api".to_string(), "llama.cpp-cli".to_string());
+            metadata.insert("runtime_model".to_string(), selected_model.clone());
+            metadata.insert("target_label".to_string(), selected_target);
 
-        let prompt_tokens = estimate_token_count(prompt);
-        let usage = TokenUsage {
-            prompt_tokens,
-            completion_tokens,
-            total_tokens: prompt_tokens.saturating_add(completion_tokens),
-        };
+            return Ok(GenerateResponse {
+                provider_id: QWEN_LOCAL_PROVIDER_ID.to_string(),
+                model: selected_model,
+                output_text,
+                finish_reason: Some("stop".to_string()),
+                usage: None,
+                metadata,
+                latency_ms,
+            });
+        }
 
-        let mut metadata = BTreeMap::new();
-        metadata.insert(
-            "runtime_backend".to_string(),
-            self.config.runtime_backend.clone(),
-        );
-        metadata.insert(
-            "profile".to_string(),
-            if downgrade {
-                self.config.downgrade_profile.clone()
-            } else {
-                "Q8_0".to_string()
-            },
-        );
-        metadata.insert("routing".to_string(), "local_simulated".to_string());
-        metadata.insert("runtime_model".to_string(), selected_model.clone());
-
-        Ok(GenerateResponse {
-            provider_id: QWEN_LOCAL_PROVIDER_ID.to_string(),
-            model: selected_target.clone(),
-            output_text: format!(
-                "Qwen local [{}] generated a local response for: {}",
-                selected_target, prompt
+        Err(self.map_live_error(
+            "generate",
+            format!(
+                "unsupported runtime_backend '{}'",
+                self.config.runtime_backend
             ),
-            finish_reason: Some("stop".to_string()),
-            usage: Some(usage),
-            metadata,
-            latency_ms: if downgrade { 42 } else { 35 },
-        })
+        ))
     }
 }
 
@@ -602,11 +541,6 @@ mod tests {
         assert_eq!(config.downgrade_target, QWEN_DOWNGRADE_LOCAL_TARGET);
     }
 
-    #[test]
-    fn default_config_keeps_live_api_disabled_for_deterministic_tests() {
-        let provider = QwenLocalProvider::default();
-        assert!(!provider.config().live_api);
-    }
 
     #[test]
     fn downgrade_profile_selects_downgrade_target() {

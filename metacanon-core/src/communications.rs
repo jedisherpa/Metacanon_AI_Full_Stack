@@ -143,7 +143,6 @@ pub struct TelegramUpdatePullResult {
     pub processed_updates: usize,
     pub dispatched_messages: usize,
     pub next_offset: Option<i64>,
-    pub simulated: bool,
     pub note: Option<String>,
 }
 
@@ -157,8 +156,7 @@ pub struct TelegramWebhookResult {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TelegramWebhookConfigResult {
-    pub applied_live: bool,
-    pub simulated: bool,
+    pub applied: bool,
     pub webhook_url: Option<String>,
     pub allowed_updates: Vec<String>,
 }
@@ -187,7 +185,6 @@ pub struct DiscordInteractionCompletionResult {
     pub interaction_id: String,
     pub message_id: String,
     pub delivered_live: bool,
-    pub simulated: bool,
     pub routed_thread_id: String,
 }
 
@@ -196,7 +193,6 @@ pub struct TypingIndicatorResult {
     pub platform: CommunicationPlatform,
     pub target_id: String,
     pub delivered_live: bool,
-    pub simulated: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -226,7 +222,6 @@ pub struct TelegramIntegrationConfig {
     pub use_webhook: bool,
     pub webhook_url: Option<String>,
     pub webhook_secret_token: Option<String>,
-    pub live_api: bool,
     pub last_error: Option<String>,
 }
 
@@ -241,7 +236,6 @@ impl Default for TelegramIntegrationConfig {
             use_webhook: false,
             webhook_url: None,
             webhook_secret_token: None,
-            live_api: false,
             last_error: None,
         }
     }
@@ -256,7 +250,6 @@ pub struct DiscordIntegrationConfig {
     pub orchestrator_thread_id: Option<String>,
     pub routing_mode: AgentRoutingMode,
     pub auto_spawn_sub_sphere_threads: bool,
-    pub live_api: bool,
     pub last_error: Option<String>,
 }
 
@@ -270,7 +263,6 @@ impl Default for DiscordIntegrationConfig {
             orchestrator_thread_id: None,
             routing_mode: AgentRoutingMode::PerAgent,
             auto_spawn_sub_sphere_threads: true,
-            live_api: false,
             last_error: None,
         }
     }
@@ -312,14 +304,12 @@ pub struct CommunicationDispatchResult {
     pub thread_id: String,
     pub message_id: String,
     pub delivered_live: bool,
-    pub simulated: bool,
     pub note: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TelegramIntegrationStatus {
     pub enabled: bool,
-    pub live_api: bool,
     pub routing_mode: AgentRoutingMode,
     pub use_webhook: bool,
     pub configured: bool,
@@ -333,7 +323,6 @@ pub struct TelegramIntegrationStatus {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DiscordIntegrationStatus {
     pub enabled: bool,
-    pub live_api: bool,
     pub routing_mode: AgentRoutingMode,
     pub configured: bool,
     pub has_bot_token: bool,
@@ -495,13 +484,12 @@ impl CommunicationHub {
         CommunicationStatus {
             telegram: TelegramIntegrationStatus {
                 enabled: self.telegram.enabled,
-                live_api: self.telegram.live_api,
                 routing_mode: self.telegram.routing_mode,
                 use_webhook: self.telegram.use_webhook,
                 configured: self.telegram.enabled
                     && telegram_target_present
                     && telegram_ingress_configured
-                    && (!self.telegram.live_api || has_telegram_token),
+                    && has_telegram_token,
                 has_bot_token: has_telegram_token,
                 default_chat_id: self.telegram.default_chat_id.clone(),
                 orchestrator_chat_id: self.telegram.orchestrator_chat_id.clone(),
@@ -510,11 +498,10 @@ impl CommunicationHub {
             },
             discord: DiscordIntegrationStatus {
                 enabled: self.discord.enabled,
-                live_api: self.discord.live_api,
                 routing_mode: self.discord.routing_mode,
                 configured: self.discord.enabled
                     && discord_target_present
-                    && (!self.discord.live_api || has_discord_token),
+                    && has_discord_token,
                 has_bot_token: has_discord_token,
                 guild_id: self.discord.guild_id.clone(),
                 default_channel_id: self.discord.default_channel_id.clone(),
@@ -641,10 +628,6 @@ impl CommunicationHub {
                 }
                 Err(error) => {
                     self.discord.last_error = Some(error.to_string());
-                    discord_thread_id = Some(format!(
-                        "sim-discord-thread-{normalized_sub_sphere_id}-{}",
-                        now_epoch_millis()
-                    ));
                 }
             }
         }
@@ -706,12 +689,8 @@ impl CommunicationHub {
                 if let Some(thread_id) = binding.discord_thread_id.clone() {
                     thread_id
                 } else if self.discord.auto_spawn_sub_sphere_threads {
-                    let created = self
-                        .create_discord_thread(&format!("sub-sphere-{sub_sphere_id}"))
-                        .unwrap_or_else(|error| {
-                            self.discord.last_error = Some(error.to_string());
-                            format!("sim-discord-thread-{sub_sphere_id}-{}", now_epoch_millis())
-                        });
+                    let created = self.create_discord_thread(&format!("sub-sphere-{sub_sphere_id}"))?;
+                    self.discord.last_error = None;
 
                     if let Some(entry) = self.sub_sphere_bindings.get_mut(&sub_sphere_id) {
                         entry.discord_thread_id = Some(created.clone());
@@ -780,16 +759,10 @@ impl CommunicationHub {
             });
         }
 
-        if !(self.telegram.live_api && has_non_empty(&self.telegram.bot_token)) {
-            return Ok(TelegramUpdatePullResult {
-                fetched_updates: 0,
-                processed_updates: 0,
-                dispatched_messages: 0,
-                next_offset: self.telegram_next_update_offset,
-                simulated: true,
-                note: Some(
-                    "telegram live_api disabled or token missing; polling skipped".to_string(),
-                ),
+        if !has_non_empty(&self.telegram.bot_token) {
+            return Err(CommunicationError::MissingRoutingTarget {
+                platform: CommunicationPlatform::Telegram,
+                reason: "bot_token is required for Telegram polling".to_string(),
             });
         }
 
@@ -838,7 +811,6 @@ impl CommunicationHub {
             processed_updates,
             dispatched_messages,
             next_offset: self.telegram_next_update_offset,
-            simulated: false,
             note: None,
         })
     }
@@ -903,25 +875,15 @@ impl CommunicationHub {
         self.telegram.webhook_url = normalized_url.clone();
         self.telegram.webhook_secret_token = normalize_optional_string(secret_token);
 
-        if self.telegram.live_api && has_non_empty(&self.telegram.bot_token) {
-            let body = json!({
-                "url": normalized_url,
-                "secret_token": self.telegram.webhook_secret_token,
-                "allowed_updates": allowed_updates,
-            });
-            let _ = self.call_telegram_method_json("setWebhook", &body)?;
-            self.telegram.last_error = None;
-            return Ok(TelegramWebhookConfigResult {
-                applied_live: true,
-                simulated: false,
-                webhook_url: self.telegram.webhook_url.clone(),
-                allowed_updates,
-            });
-        }
-
+        let body = json!({
+            "url": normalized_url,
+            "secret_token": self.telegram.webhook_secret_token,
+            "allowed_updates": allowed_updates,
+        });
+        let _ = self.call_telegram_method_json("setWebhook", &body)?;
+        self.telegram.last_error = None;
         Ok(TelegramWebhookConfigResult {
-            applied_live: false,
-            simulated: true,
+            applied: true,
             webhook_url: self.telegram.webhook_url.clone(),
             allowed_updates,
         })
@@ -935,21 +897,11 @@ impl CommunicationHub {
         self.telegram.webhook_url = None;
         self.telegram.webhook_secret_token = None;
 
-        if self.telegram.live_api && has_non_empty(&self.telegram.bot_token) {
-            let body = json!({ "drop_pending_updates": false });
-            let _ = self.call_telegram_method_json("deleteWebhook", &body)?;
-            self.telegram.last_error = None;
-            return Ok(TelegramWebhookConfigResult {
-                applied_live: true,
-                simulated: false,
-                webhook_url: existing_url,
-                allowed_updates: Vec::new(),
-            });
-        }
-
+        let body = json!({ "drop_pending_updates": false });
+        let _ = self.call_telegram_method_json("deleteWebhook", &body)?;
+        self.telegram.last_error = None;
         Ok(TelegramWebhookConfigResult {
-            applied_live: false,
-            simulated: true,
+            applied: true,
             webhook_url: existing_url,
             allowed_updates: Vec::new(),
         })
@@ -1123,52 +1075,35 @@ impl CommunicationHub {
         }
 
         self.discord_gateway_state.lifecycle = DiscordGatewayLifecycle::Connecting;
-        if self.discord.live_api && has_non_empty(&self.discord.bot_token) {
-            let payload = self.call_discord_get_json("/gateway/bot")?;
-            let gateway_url = payload
-                .get("url")
-                .and_then(Value::as_str)
-                .map(ToString::to_string)
-                .unwrap_or_else(|| "wss://gateway.discord.gg/?v=10&encoding=json".to_string());
-            let shard_count = payload
-                .get("shards")
-                .and_then(Value::as_u64)
-                .and_then(|value| u32::try_from(value).ok());
-            let session_start_remaining = payload
-                .get("session_start_limit")
-                .and_then(|value| value.get("remaining"))
-                .and_then(Value::as_u64)
-                .and_then(|value| u32::try_from(value).ok());
+        let payload = self.call_discord_get_json("/gateway/bot")?;
+        let gateway_url = payload
+            .get("url")
+            .and_then(Value::as_str)
+            .map(ToString::to_string)
+            .unwrap_or_else(|| "wss://gateway.discord.gg/?v=10&encoding=json".to_string());
+        let shard_count = payload
+            .get("shards")
+            .and_then(Value::as_u64)
+            .and_then(|value| u32::try_from(value).ok());
+        let session_start_remaining = payload
+            .get("session_start_limit")
+            .and_then(|value| value.get("remaining"))
+            .and_then(Value::as_u64)
+            .and_then(|value| u32::try_from(value).ok());
 
-            self.discord_gateway_state.lifecycle = DiscordGatewayLifecycle::Connected;
-            self.discord_gateway_state.gateway_url = Some(gateway_url.clone());
-            self.discord_gateway_state.shard_count = shard_count;
-            self.discord_gateway_state.session_start_limit_remaining = session_start_remaining;
-            self.discord_gateway_state.last_error = None;
-
-            return Ok(DiscordGatewayProbeResult {
-                lifecycle: DiscordGatewayLifecycle::Connected,
-                gateway_url,
-                shard_count,
-                session_start_limit_remaining: session_start_remaining,
-                live_probe: true,
-                note: None,
-            });
-        }
-
-        let gateway_url = "wss://gateway.discord.gg/?v=10&encoding=json".to_string();
         self.discord_gateway_state.lifecycle = DiscordGatewayLifecycle::Connected;
         self.discord_gateway_state.gateway_url = Some(gateway_url.clone());
+        self.discord_gateway_state.shard_count = shard_count;
+        self.discord_gateway_state.session_start_limit_remaining = session_start_remaining;
         self.discord_gateway_state.last_error = None;
+
         Ok(DiscordGatewayProbeResult {
             lifecycle: DiscordGatewayLifecycle::Connected,
             gateway_url,
-            shard_count: None,
-            session_start_limit_remaining: None,
-            live_probe: false,
-            note: Some(
-                "discord live_api disabled or token missing; gateway probe simulated".to_string(),
-            ),
+            shard_count,
+            session_start_limit_remaining: session_start_remaining,
+            live_probe: true,
+            note: None,
         })
     }
 
@@ -1336,41 +1271,30 @@ impl CommunicationHub {
             ));
         }
 
-        if self.discord.live_api && has_non_empty(&self.discord.bot_token) {
-            let endpoint = format!(
-                "{}/webhooks/{}/{}/messages/@original",
-                DISCORD_API_BASE_URL, pending.application_id, pending.token
-            );
-            let mut body = json!({ "content": response_text });
-            if ephemeral {
-                body["flags"] = json!(64);
-            }
-
-            let payload = self.discord_json_request_with_retry(
-                reqwest::Method::PATCH,
-                &endpoint,
-                Some(&body),
-            )?;
-            let message_id = payload
-                .get("id")
-                .and_then(Value::as_str)
-                .map(ToString::to_string)
-                .unwrap_or_else(|| format!("discord-followup-{}", now_epoch_millis()));
-            self.discord.last_error = None;
-            return Ok(DiscordInteractionCompletionResult {
-                interaction_id: pending.interaction_id,
-                message_id,
-                delivered_live: true,
-                simulated: false,
-                routed_thread_id: pending.routed_thread_id,
-            });
+        let endpoint = format!(
+            "{}/webhooks/{}/{}/messages/@original",
+            DISCORD_API_BASE_URL, pending.application_id, pending.token
+        );
+        let mut body = json!({ "content": response_text });
+        if ephemeral {
+            body["flags"] = json!(64);
         }
 
+        let payload = self.discord_json_request_with_retry(
+            reqwest::Method::PATCH,
+            &endpoint,
+            Some(&body),
+        )?;
+        let message_id = payload
+            .get("id")
+            .and_then(Value::as_str)
+            .map(ToString::to_string)
+            .unwrap_or_else(|| format!("discord-followup-{}", now_epoch_millis()));
+        self.discord.last_error = None;
         Ok(DiscordInteractionCompletionResult {
             interaction_id: pending.interaction_id,
-            message_id: self.next_message_id("discord-followup-sim"),
-            delivered_live: false,
-            simulated: true,
+            message_id,
+            delivered_live: true,
             routed_thread_id: pending.routed_thread_id,
         })
     }
@@ -1386,25 +1310,15 @@ impl CommunicationHub {
             }
         })?;
 
-        if self.telegram.live_api && has_non_empty(&self.telegram.bot_token) {
-            let body = json!({
-                "chat_id": chat_id,
-                "action": "typing"
-            });
-            let _ = self.call_telegram_method_json("sendChatAction", &body)?;
-            return Ok(TypingIndicatorResult {
-                platform: CommunicationPlatform::Telegram,
-                target_id: chat_id,
-                delivered_live: true,
-                simulated: false,
-            });
-        }
-
+        let body = json!({
+            "chat_id": chat_id,
+            "action": "typing"
+        });
+        let _ = self.call_telegram_method_json("sendChatAction", &body)?;
         Ok(TypingIndicatorResult {
             platform: CommunicationPlatform::Telegram,
             target_id: chat_id,
-            delivered_live: false,
-            simulated: true,
+            delivered_live: true,
         })
     }
 
@@ -1419,22 +1333,12 @@ impl CommunicationHub {
             }
         })?;
 
-        if self.discord.live_api && has_non_empty(&self.discord.bot_token) {
-            let endpoint = format!("{}/channels/{}/typing", DISCORD_API_BASE_URL, channel_id);
-            let _ = self.discord_json_request_with_retry(reqwest::Method::POST, &endpoint, None)?;
-            return Ok(TypingIndicatorResult {
-                platform: CommunicationPlatform::Discord,
-                target_id: channel_id,
-                delivered_live: true,
-                simulated: false,
-            });
-        }
-
+        let endpoint = format!("{}/channels/{}/typing", DISCORD_API_BASE_URL, channel_id);
+        let _ = self.discord_json_request_with_retry(reqwest::Method::POST, &endpoint, None)?;
         Ok(TypingIndicatorResult {
             platform: CommunicationPlatform::Discord,
             target_id: channel_id,
-            delivered_live: false,
-            simulated: true,
+            delivered_live: true,
         })
     }
 
@@ -1580,7 +1484,7 @@ impl CommunicationHub {
             .and_then(|value| normalize_optional_string(Some(value.clone())))
             .ok_or_else(|| CommunicationError::MissingRoutingTarget {
                 platform: CommunicationPlatform::Telegram,
-                reason: "bot_token is required for live_api".to_string(),
+                reason: "bot_token is required for Discord API access".to_string(),
             })?;
         let endpoint = format!("{}/bot{}/{}", TELEGRAM_API_BASE_URL, bot_token, method);
         self.telegram_json_request_with_retry(&endpoint, body)
@@ -1661,7 +1565,7 @@ impl CommunicationHub {
             .and_then(|value| normalize_optional_string(Some(value.clone())))
             .ok_or_else(|| CommunicationError::MissingRoutingTarget {
                 platform: CommunicationPlatform::Discord,
-                reason: "bot_token is required for live_api".to_string(),
+                reason: "bot_token is required for Telegram API access".to_string(),
             })?;
 
         let target_hint = endpoint
@@ -1887,71 +1791,34 @@ impl CommunicationHub {
                     thread_id: thread_id.to_string(),
                     message_id,
                     delivered_live: true,
-                    simulated: false,
                     note: note.map(ToString::to_string),
                 })
             }
             CommunicationPlatform::Telegram => {
-                if self.telegram.live_api && has_non_empty(&self.telegram.bot_token) {
-                    let message_id = self.send_telegram_message(thread_id, message)?;
-                    self.telegram.last_error = None;
-                    Ok(CommunicationDispatchResult {
-                        platform,
-                        agent_id: agent_id.to_string(),
-                        sub_sphere_id,
-                        thread_id: thread_id.to_string(),
-                        message_id,
-                        delivered_live: true,
-                        simulated: false,
-                        note: note.map(ToString::to_string),
-                    })
-                } else {
-                    let message_id = self.next_message_id("telegram-sim");
-                    Ok(CommunicationDispatchResult {
-                        platform,
-                        agent_id: agent_id.to_string(),
-                        sub_sphere_id,
-                        thread_id: thread_id.to_string(),
-                        message_id,
-                        delivered_live: false,
-                        simulated: true,
-                        note: Some(note.map(ToString::to_string).unwrap_or_else(|| {
-                            "telegram live_api disabled or token missing; simulated dispatch"
-                                .to_string()
-                        })),
-                    })
-                }
+                let message_id = self.send_telegram_message(thread_id, message)?;
+                self.telegram.last_error = None;
+                Ok(CommunicationDispatchResult {
+                    platform,
+                    agent_id: agent_id.to_string(),
+                    sub_sphere_id,
+                    thread_id: thread_id.to_string(),
+                    message_id,
+                    delivered_live: true,
+                    note: note.map(ToString::to_string),
+                })
             }
             CommunicationPlatform::Discord => {
-                if self.discord.live_api && has_non_empty(&self.discord.bot_token) {
-                    let message_id = self.send_discord_message(thread_id, message)?;
-                    self.discord.last_error = None;
-                    Ok(CommunicationDispatchResult {
-                        platform,
-                        agent_id: agent_id.to_string(),
-                        sub_sphere_id,
-                        thread_id: thread_id.to_string(),
-                        message_id,
-                        delivered_live: true,
-                        simulated: false,
-                        note: note.map(ToString::to_string),
-                    })
-                } else {
-                    let message_id = self.next_message_id("discord-sim");
-                    Ok(CommunicationDispatchResult {
-                        platform,
-                        agent_id: agent_id.to_string(),
-                        sub_sphere_id,
-                        thread_id: thread_id.to_string(),
-                        message_id,
-                        delivered_live: false,
-                        simulated: true,
-                        note: Some(note.map(ToString::to_string).unwrap_or_else(|| {
-                            "discord live_api disabled or token missing; simulated dispatch"
-                                .to_string()
-                        })),
-                    })
-                }
+                let message_id = self.send_discord_message(thread_id, message)?;
+                self.discord.last_error = None;
+                Ok(CommunicationDispatchResult {
+                    platform,
+                    agent_id: agent_id.to_string(),
+                    sub_sphere_id,
+                    thread_id: thread_id.to_string(),
+                    message_id,
+                    delivered_live: true,
+                    note: note.map(ToString::to_string),
+                })
             }
         }
     }
@@ -1996,14 +1863,6 @@ impl CommunicationHub {
     }
 
     fn create_discord_thread(&mut self, thread_name: &str) -> Result<String, CommunicationError> {
-        if !(self.discord.live_api && has_non_empty(&self.discord.bot_token)) {
-            return Ok(format!(
-                "sim-discord-thread-{}-{}",
-                thread_name.replace(' ', "-"),
-                now_epoch_millis()
-            ));
-        }
-
         let channel_id = self.discord.default_channel_id.clone().ok_or_else(|| {
             CommunicationError::MissingRoutingTarget {
                 platform: CommunicationPlatform::Discord,
@@ -2213,7 +2072,6 @@ mod tests {
             use_webhook: false,
             webhook_url: None,
             webhook_secret_token: None,
-            live_api: false,
             last_error: None,
         });
         hub.bind_agent_route(AgentBinding {
@@ -2225,11 +2083,10 @@ mod tests {
         })
         .expect("binding should succeed");
 
-        let dispatched = hub
-            .dispatch_to_agent(CommunicationPlatform::Telegram, "agent-9", "status ping")
-            .expect("dispatch should succeed");
-        assert_eq!(dispatched.thread_id, "orchestrator-chat");
-        assert!(dispatched.simulated);
+        let routed = hub
+            .resolve_agent_target(CommunicationPlatform::Telegram, "agent-9")
+            .expect("route should resolve");
+        assert_eq!(routed, "orchestrator-chat");
     }
 
     #[test]
@@ -2243,7 +2100,6 @@ mod tests {
             orchestrator_thread_id: None,
             routing_mode: AgentRoutingMode::PerAgent,
             auto_spawn_sub_sphere_threads: true,
-            live_api: false,
             last_error: None,
         });
 
@@ -2252,10 +2108,8 @@ mod tests {
             .expect("sub-sphere binding should be created");
         assert_eq!(binding.sub_sphere_id, "ss-123");
         assert_eq!(binding.prism_agent_id, "prism-ss-123");
-        assert!(binding
-            .discord_thread_id
-            .as_deref()
-            .is_some_and(|value| value.starts_with("sim-discord-thread")));
+        assert!(binding.discord_thread_id.is_none());
+        assert!(hub.discord.last_error.is_some());
     }
 
     #[test]
@@ -2275,7 +2129,6 @@ mod tests {
             .expect("in-app dispatch should succeed");
         assert_eq!(result.thread_id, "inapp-thread-2");
         assert!(result.delivered_live);
-        assert!(!result.simulated);
 
         let entries = hub.get_in_app_thread_messages("inapp-thread-2", 20, 0);
         assert_eq!(entries.len(), 1);
@@ -2295,7 +2148,6 @@ mod tests {
             use_webhook: true,
             webhook_url: Some("https://example.com/tg".to_string()),
             webhook_secret_token: Some("secret".to_string()),
-            live_api: true,
             last_error: None,
         });
 
@@ -2323,7 +2175,6 @@ mod tests {
             use_webhook: true,
             webhook_url: Some("https://example.com/webhook".to_string()),
             webhook_secret_token: None,
-            live_api: false,
             last_error: None,
         });
         hub.bind_agent_route(AgentBinding {
@@ -2370,7 +2221,6 @@ mod tests {
             orchestrator_thread_id: None,
             routing_mode: AgentRoutingMode::PerAgent,
             auto_spawn_sub_sphere_threads: true,
-            live_api: false,
             last_error: None,
         });
         hub.bind_agent_route(AgentBinding {
@@ -2420,7 +2270,6 @@ mod tests {
             orchestrator_thread_id: None,
             routing_mode: AgentRoutingMode::PerAgent,
             auto_spawn_sub_sphere_threads: true,
-            live_api: false,
             last_error: None,
         });
         hub.bind_agent_route(AgentBinding {
@@ -2468,7 +2317,6 @@ mod tests {
             orchestrator_thread_id: None,
             routing_mode: AgentRoutingMode::PerAgent,
             auto_spawn_sub_sphere_threads: true,
-            live_api: false,
             last_error: None,
         });
         hub.bind_agent_route(AgentBinding {
@@ -2499,11 +2347,10 @@ mod tests {
         assert_eq!(ack.deferred_response_type, 5);
         assert_eq!(ack.routed_agent_id, "agent-3");
 
-        let completion = hub
+        let completion_error = hub
             .complete_discord_interaction("interaction-1", "all systems go", false)
-            .expect("completion should succeed");
-        assert!(completion.simulated);
-        assert_eq!(completion.routed_thread_id, "inapp-agent-3");
+            .expect_err("completion should require a Discord bot token");
+        assert!(matches!(completion_error, CommunicationError::MissingRoutingTarget { .. }));
     }
 
     #[test]

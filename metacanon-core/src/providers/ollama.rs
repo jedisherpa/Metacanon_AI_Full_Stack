@@ -4,8 +4,8 @@ use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 
 use crate::compute::{
-    estimate_token_count, normalized_ascii_embedding, ComputeError, ComputeProvider, ComputeResult,
-    GenerateRequest, GenerateResponse, ProviderHealth, ProviderKind, TokenUsage, PROVIDER_OLLAMA,
+    ComputeError, ComputeProvider, ComputeResult, GenerateRequest, GenerateResponse, ProviderHealth,
+    ProviderKind, TokenUsage, PROVIDER_OLLAMA,
 };
 
 pub const OLLAMA_PROVIDER_ID: &str = PROVIDER_OLLAMA;
@@ -19,7 +19,6 @@ pub struct OllamaConfig {
     pub base_url: String,
     pub default_model: String,
     pub installed_models: Vec<String>,
-    pub live_api: bool,
     pub available: bool,
 }
 
@@ -30,7 +29,6 @@ impl Default for OllamaConfig {
             base_url: OLLAMA_DEFAULT_BASE_URL.to_string(),
             default_model: default_model.clone(),
             installed_models: vec![default_model],
-            live_api: false,
             available: true,
         }
     }
@@ -91,12 +89,11 @@ impl OllamaProvider {
                         "ollama model override cannot be empty",
                     ));
                 }
-                if self.config.live_api
-                    || self
-                        .config
-                        .installed_models
-                        .iter()
-                        .any(|installed| installed == requested)
+                if self
+                    .config
+                    .installed_models
+                    .iter()
+                    .any(|installed| installed == requested)
                 {
                     Ok(requested.to_string())
                 } else {
@@ -106,10 +103,6 @@ impl OllamaProvider {
                 }
             }
             None => {
-                if self.config.live_api {
-                    return Ok(self.config.default_model.clone());
-                }
-
                 if self
                     .config
                     .installed_models
@@ -263,7 +256,7 @@ impl OllamaProvider {
         Ok(parsed.embedding)
     }
 
-    fn probe_live_api(&self) -> Result<(), String> {
+    fn probe_runtime_endpoint(&self) -> Result<(), String> {
         let client = self
             .build_http_client()
             .map_err(|error| error.message.clone())?;
@@ -294,41 +287,23 @@ impl ComputeProvider for OllamaProvider {
             return Err(self.unavailable_error("health_check"));
         }
 
-        if self.config.live_api {
-            match self.probe_live_api() {
-                Ok(()) => {
-                    return Ok(ProviderHealth::healthy(
-                        OLLAMA_PROVIDER_ID,
-                        ProviderKind::Local,
-                        Some(format!(
-                            "live_api=true, base_url={}, default_model={}",
-                            self.config.base_url, self.config.default_model
-                        )),
-                    ));
-                }
-                Err(error) => {
-                    return Ok(ProviderHealth::unhealthy(
-                        OLLAMA_PROVIDER_ID,
-                        ProviderKind::Local,
-                        Some(format!(
-                            "live_api=true, base_url={}, probe_error={error}",
-                            self.config.base_url
-                        )),
-                    ));
-                }
-            }
-        }
-
-        Ok(ProviderHealth::healthy(
-            OLLAMA_PROVIDER_ID,
-            ProviderKind::Local,
-            Some(format!(
-                "live_api=false, base_url={}, default_model={}, installed_models={}",
-                self.config.base_url,
-                self.config.default_model,
-                self.config.installed_models.len()
+        match self.probe_runtime_endpoint() {
+            Ok(()) => Ok(ProviderHealth::healthy(
+                OLLAMA_PROVIDER_ID,
+                ProviderKind::Local,
+                Some(format!(
+                    "base_url={}, default_model={}, installed_models={}",
+                    self.config.base_url,
+                    self.config.default_model,
+                    self.config.installed_models.len()
+                )),
             )),
-        ))
+            Err(error) => Ok(ProviderHealth::unhealthy(
+                OLLAMA_PROVIDER_ID,
+                ProviderKind::Local,
+                Some(format!("base_url={}, probe_error={error}", self.config.base_url)),
+            )),
+        }
     }
 
     fn get_embedding(&self, text: &str) -> ComputeResult<Vec<f64>> {
@@ -342,11 +317,7 @@ impl ComputeProvider for OllamaProvider {
         }
 
         let model = self.config.default_model.clone();
-        if self.config.live_api {
-            return self.request_live_embedding(text, &model);
-        }
-
-        Ok(normalized_ascii_embedding(text, 16, 0x6F_6C_6C_61))
+        self.request_live_embedding(text, &model)
     }
 
     fn generate_response(&self, req: GenerateRequest) -> ComputeResult<GenerateResponse> {
@@ -363,61 +334,34 @@ impl ComputeProvider for OllamaProvider {
 
         let selected_model = self.resolve_model_for_request(&req)?;
 
-        if self.config.live_api {
-            let (response, latency_ms) = self.request_live_generate(&req, &selected_model)?;
-            let output_text = response.response.trim().to_string();
-            if output_text.is_empty() {
-                return Err(self.map_live_http_error("generate", "empty response text"));
-            }
-
-            let usage = response.prompt_eval_count.zip(response.eval_count).map(
-                |(prompt_tokens, completion_tokens)| TokenUsage {
-                    prompt_tokens,
-                    completion_tokens,
-                    total_tokens: prompt_tokens.saturating_add(completion_tokens),
-                },
-            );
-
-            let mut metadata = BTreeMap::new();
-            metadata.insert("base_url".to_string(), self.config.base_url.clone());
-            metadata.insert("routing".to_string(), "local_live".to_string());
-            metadata.insert("api".to_string(), "api/generate".to_string());
-
-            return Ok(GenerateResponse {
-                provider_id: OLLAMA_PROVIDER_ID.to_string(),
-                model: response.model,
-                output_text,
-                finish_reason: response.done_reason,
-                usage,
-                metadata,
-                latency_ms,
-            });
+        let (response, latency_ms) = self.request_live_generate(&req, &selected_model)?;
+        let output_text = response.response.trim().to_string();
+        if output_text.is_empty() {
+            return Err(self.map_live_http_error("generate", "empty response text"));
         }
 
-        let prompt_tokens = estimate_token_count(prompt);
-        let completion_tokens = 40;
-        let usage = TokenUsage {
-            prompt_tokens,
-            completion_tokens,
-            total_tokens: prompt_tokens.saturating_add(completion_tokens),
-        };
+        let usage = response.prompt_eval_count.zip(response.eval_count).map(
+            |(prompt_tokens, completion_tokens)| TokenUsage {
+                prompt_tokens,
+                completion_tokens,
+                total_tokens: prompt_tokens.saturating_add(completion_tokens),
+            },
+        );
 
         let mut metadata = BTreeMap::new();
         metadata.insert("base_url".to_string(), self.config.base_url.clone());
-        metadata.insert("routing".to_string(), "local_simulated".to_string());
+        metadata.insert("routing".to_string(), "local_live".to_string());
+        metadata.insert("api".to_string(), "api/generate".to_string());
         metadata.insert("selected_model".to_string(), selected_model.clone());
 
         Ok(GenerateResponse {
             provider_id: OLLAMA_PROVIDER_ID.to_string(),
-            model: selected_model.clone(),
-            output_text: format!(
-                "Ollama [{}] generated a local response for: {}",
-                selected_model, prompt
-            ),
-            finish_reason: Some("stop".to_string()),
-            usage: Some(usage),
+            model: response.model,
+            output_text,
+            finish_reason: response.done_reason,
+            usage,
             metadata,
-            latency_ms: 28,
+            latency_ms,
         })
     }
 }
@@ -490,11 +434,6 @@ mod tests {
         assert!(config.installed_models.contains(&config.default_model));
     }
 
-    #[test]
-    fn default_config_keeps_live_api_disabled_for_deterministic_tests() {
-        let provider = OllamaProvider::default();
-        assert!(!provider.config().live_api);
-    }
 
     #[test]
     fn explicit_model_override_is_used_when_model_is_installed() {

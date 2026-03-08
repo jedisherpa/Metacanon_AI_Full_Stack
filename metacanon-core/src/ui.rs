@@ -15,6 +15,10 @@ use crate::genesis::{
     AIBoundaries, Ratchet, SensitiveComputePolicy, SoulFacet, SoulFile, TaskSubSphere,
     TaskSubSphereStatus, WillVector,
 };
+use crate::lanes::auditor::AuditorLane;
+use crate::lanes::synthesis::SynthesisLane;
+use crate::lanes::watcher::WatcherLane;
+use crate::lanes::RuntimeLane;
 use crate::lens_library::{LensLibraryEntry, LensLibraryState, LensLibraryTier};
 use crate::providers::anthropic::{
     AnthropicConfig, AnthropicProvider, ANTHROPIC_DEFAULT_BASE_URL, ANTHROPIC_DEFAULT_MODEL,
@@ -43,7 +47,9 @@ use crate::providers::qwen_local::{
     QWEN_DEFAULT_DOWNGRADE_PROFILE, QWEN_DEFAULT_LLAMACPP_BINARY, QWEN_DEFAULT_LOCAL_TARGET,
     QWEN_DEFAULT_PRIMARY_MODEL_ID, QWEN_DOWNGRADE_LOCAL_TARGET,
 };
+use crate::prism::{PrismMessage, PrismRoute, PrismRuntime};
 use crate::specialist_lens::{ActiveSpecialistLens, SpecialistLensDefinition};
+use crate::sphere_client::{runtime_thread_id, SphereClient, SphereRuntimeEvent};
 use crate::storage::{read_snapshot_json, write_snapshot_json, SnapshotStorageError};
 use crate::sub_sphere_torus::{DeliberationRecord, SubSphereQueryResult, SubSphereTorus};
 use crate::task_sub_sphere::{
@@ -51,6 +57,7 @@ use crate::task_sub_sphere::{
 };
 use crate::tool_registry::ToolRegistry;
 use crate::torus::{DefaultActionValidator, DeliberationTorus, TorusConfig, TorusError};
+use crate::torus_runtime::LaneResponse;
 use crate::workflow::{
     WorkflowDefinition, WorkflowError, WorkflowRegistry, WorkflowTrainingSession,
 };
@@ -68,6 +75,8 @@ pub const OBSERVABILITY_RETENTION_DAYS: u32 = 90;
 pub const UI_STATE_SNAPSHOT_SCHEMA_VERSION: u32 = 1;
 pub const DEFAULT_OBSERVABILITY_LOG_LEVEL: &str = "info";
 pub const DEFAULT_SECURITY_SNAPSHOT_PATH: &str = ".metacanon_ai/runtime_snapshot.json";
+pub const DEFAULT_AGENT_PRISM_ID: &str = "agent-prism";
+pub const DEFAULT_AGENT_WATCHER_ID: &str = "agent-watcher";
 pub const DEFAULT_AGENT_GENESIS_ID: &str = "agent-genesis";
 pub const DEFAULT_AGENT_SYNTHESIS_ID: &str = "agent-synthesis";
 pub const DEFAULT_AGENT_AUDITOR_ID: &str = "agent-auditor";
@@ -155,6 +164,8 @@ pub struct GenesisRiteRequest {
     #[serde(default)]
     pub will_directives: Vec<String>,
     pub signing_secret: String,
+    #[serde(default = "crate::genesis::default_extensions")]
+    pub extensions: Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -177,6 +188,12 @@ pub struct GuidedGenesisRequest {
     pub signing_secret: String,
     #[serde(default)]
     pub facet_vision: Option<String>,
+    #[serde(default)]
+    pub constitution_source: Option<String>,
+    #[serde(default)]
+    pub constitution_version: Option<String>,
+    #[serde(default)]
+    pub constitution_upload_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -205,6 +222,31 @@ pub struct ThreeAgentBootstrapResult {
     pub orchestrator_agent_id: String,
     pub prism_agent_id: String,
     pub prism_sub_sphere_id: String,
+    pub communication: CommunicationStatus,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PrismRuntimeInitRequest {
+    #[serde(default)]
+    pub prism_display_name: Option<String>,
+    #[serde(default)]
+    pub prism_sub_sphere_id: Option<String>,
+    #[serde(default)]
+    pub telegram_chat_id: Option<String>,
+    #[serde(default)]
+    pub discord_thread_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PrismRuntimeInitResult {
+    pub agent_ids: Vec<String>,
+    pub orchestrator_agent_id: String,
+    pub prism_agent_id: String,
+    pub watcher_agent_id: String,
+    pub synthesis_agent_id: String,
+    pub auditor_agent_id: String,
+    pub prism_sub_sphere_id: String,
+    pub sphere_signer_did: Option<String>,
     pub communication: CommunicationStatus,
 }
 
@@ -249,6 +291,50 @@ pub struct DeliberationCommandResult {
     pub output_text: String,
     pub finish_reason: Option<String>,
     pub metadata: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PrismRoundRequest {
+    pub query: String,
+    #[serde(default)]
+    pub provider_override: Option<String>,
+    #[serde(default)]
+    pub channel: Option<String>,
+    #[serde(default)]
+    pub force_deliberation: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PrismLaneOutput {
+    pub lane: String,
+    pub requested_provider_id: String,
+    pub provider_id: String,
+    pub provider_chain: Vec<String>,
+    pub used_fallback: bool,
+    pub model: String,
+    pub output_text: String,
+    pub finish_reason: Option<String>,
+    pub metadata: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct PrismEventPublishStatus {
+    pub enabled: bool,
+    pub attempted: usize,
+    pub succeeded: usize,
+    pub failed: usize,
+    pub errors: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PrismRoundCommandResult {
+    pub route: String,
+    pub decision_summary: String,
+    pub required_lanes: Vec<String>,
+    pub round_id: Option<String>,
+    pub lane_outputs: Vec<PrismLaneOutput>,
+    pub final_result: DeliberationCommandResult,
+    pub event_publish: PrismEventPublishStatus,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -739,7 +825,10 @@ impl UiState {
                 continue;
             };
             ensure_known_provider(&provider_id)?;
-            merged_provider_configs.insert(provider_id, config);
+            merged_provider_configs.insert(
+                provider_id.clone(),
+                sanitize_provider_config_value(&provider_id, config),
+            );
         }
 
         self.global_provider_id = global_provider_id;
@@ -1106,6 +1195,27 @@ fn default_observability_log_level() -> String {
     DEFAULT_OBSERVABILITY_LOG_LEVEL.to_string()
 }
 
+fn sanitize_provider_config_value(provider_id: &str, config: Value) -> Value {
+    let mut object = match config {
+        Value::Object(map) => map,
+        other => return other,
+    };
+
+
+    if provider_id == PROVIDER_QWEN_LOCAL {
+        let runtime_backend_needs_default = object
+            .get("runtime_backend")
+            .and_then(Value::as_str)
+            .map(|value| value.trim().is_empty())
+            .unwrap_or(true);
+        if runtime_backend_needs_default {
+            object.insert("runtime_backend".to_string(), Value::String("ollama".to_string()));
+        }
+    }
+
+    Value::Object(object)
+}
+
 fn default_provider_configs() -> BTreeMap<String, Value> {
     let mut configs = BTreeMap::new();
     configs.insert(PROVIDER_QWEN_LOCAL.to_string(), default_qwen_config_value());
@@ -1135,13 +1245,12 @@ fn default_qwen_config_value() -> Value {
         "primary_target": QWEN_DEFAULT_LOCAL_TARGET,
         "downgrade_profile": QWEN_DEFAULT_DOWNGRADE_PROFILE,
         "downgrade_target": QWEN_DOWNGRADE_LOCAL_TARGET,
-        "runtime_backend": "llama.cpp",
+        "runtime_backend": "ollama",
         "base_url": QWEN_DEFAULT_BASE_URL,
         "primary_model_id": QWEN_DEFAULT_PRIMARY_MODEL_ID,
         "downgrade_model_id": QWEN_DEFAULT_DOWNGRADE_MODEL_ID,
         "llama_cpp_binary": QWEN_DEFAULT_LLAMACPP_BINARY,
         "llama_cpp_model_path": "",
-        "live_api": false,
         "available": true
     })
 }
@@ -1151,7 +1260,6 @@ fn default_ollama_config_value() -> Value {
         "base_url": OLLAMA_DEFAULT_BASE_URL,
         "default_model": OLLAMA_DEFAULT_MODEL,
         "installed_models": [OLLAMA_DEFAULT_MODEL],
-        "live_api": false,
         "available": true
     })
 }
@@ -1162,7 +1270,6 @@ fn default_openai_config_value() -> Value {
         "base_url": OPENAI_DEFAULT_BASE_URL,
         "chat_model": OPENAI_DEFAULT_CHAT_MODEL,
         "embedding_model": OPENAI_DEFAULT_EMBEDDING_MODEL,
-        "live_api": false,
         "available": true
     })
 }
@@ -1172,7 +1279,6 @@ fn default_anthropic_config_value() -> Value {
         "api_key": Value::Null,
         "base_url": ANTHROPIC_DEFAULT_BASE_URL,
         "model": ANTHROPIC_DEFAULT_MODEL,
-        "live_api": false,
         "available": true
     })
 }
@@ -1182,7 +1288,6 @@ fn default_moonshot_kimi_config_value() -> Value {
         "api_key": Value::Null,
         "base_url": MOONSHOT_KIMI_DEFAULT_BASE_URL,
         "model": MOONSHOT_KIMI_DEFAULT_MODEL,
-        "live_api": false,
         "available": true
     })
 }
@@ -1202,7 +1307,6 @@ fn default_grok_config_value() -> Value {
         "api_key": Value::Null,
         "base_url": GROK_DEFAULT_BASE_URL,
         "model": GROK_DEFAULT_MODEL,
-        "live_api": false,
         "available": true
     })
 }
@@ -1812,10 +1916,6 @@ fn qwen_config_from_value(config: Option<&Value>) -> Result<QwenLocalConfig, UiC
         parsed.llama_cpp_model_path = value;
     }
 
-    if let Some(value) = bool_field(PROVIDER_QWEN_LOCAL, object, "live_api")? {
-        parsed.live_api = value;
-    }
-
     if let Some(value) = bool_field(PROVIDER_QWEN_LOCAL, object, "available")? {
         parsed.available = value;
     }
@@ -1871,10 +1971,6 @@ fn ollama_config_from_value(config: Option<&Value>) -> Result<OllamaConfig, UiCo
         parsed.available = value;
     }
 
-    if let Some(value) = bool_field(PROVIDER_OLLAMA, object, "live_api")? {
-        parsed.live_api = value;
-    }
-
     Ok(parsed)
 }
 
@@ -1928,10 +2024,6 @@ fn openai_config_from_value(config: Option<&Value>) -> Result<OpenAiConfig, UiCo
         parsed.available = value;
     }
 
-    if let Some(value) = bool_field(OPENAI_PROVIDER_ID, object, "live_api")? {
-        parsed.live_api = value;
-    }
-
     Ok(parsed)
 }
 
@@ -1973,10 +2065,6 @@ fn anthropic_config_from_value(config: Option<&Value>) -> Result<AnthropicConfig
 
     if let Some(value) = bool_field(ANTHROPIC_PROVIDER_ID, object, "available")? {
         parsed.available = value;
-    }
-
-    if let Some(value) = bool_field(ANTHROPIC_PROVIDER_ID, object, "live_api")? {
-        parsed.live_api = value;
     }
 
     Ok(parsed)
@@ -2024,10 +2112,6 @@ fn moonshot_kimi_config_from_value(
         parsed.available = value;
     }
 
-    if let Some(value) = bool_field(MOONSHOT_KIMI_PROVIDER_ID, object, "live_api")? {
-        parsed.live_api = value;
-    }
-
     Ok(parsed)
 }
 
@@ -2065,10 +2149,6 @@ fn grok_config_from_value(config: Option<&Value>) -> Result<GrokConfig, UiComman
             });
         }
         parsed.model = value;
-    }
-
-    if let Some(value) = bool_field(GROK_PROVIDER_ID, object, "live_api")? {
-        parsed.live_api = value;
     }
 
     if let Some(value) = bool_field(GROK_PROVIDER_ID, object, "available")? {
@@ -2247,7 +2327,7 @@ pub fn invoke_genesis_rite(
     };
 
     let mut state = runtime.lock_state()?;
-    let soul_file = SoulFile::new(
+    let mut soul_file = SoulFile::new(
         vision_core,
         core_values,
         request.soul_facets,
@@ -2265,6 +2345,9 @@ pub fn invoke_genesis_rite(
         },
         &signing_secret,
     );
+    soul_file.extensions = request.extensions;
+    soul_file.ensure_forward_compat_defaults();
+    soul_file.regenerate_integrity(&signing_secret);
 
     state.genesis_soul_file = Some(soul_file.clone());
     Ok(GenesisRiteResult {
@@ -2300,6 +2383,35 @@ pub fn invoke_guided_genesis_rite(
         .filter(|value| !value.is_empty())
         .unwrap_or("Foundational stewardship of values and constitutional alignment.")
         .to_string();
+    let constitution_source = request
+        .constitution_source
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("latest")
+        .to_string();
+    let constitution_version = request
+        .constitution_version
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("Constitution vCurrent")
+        .to_string();
+    let constitution_upload_path = request
+        .constitution_upload_path
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+    let extensions = json!({
+        "installer": {
+            "constitution": {
+                "source": constitution_source,
+                "version": constitution_version,
+                "custom_path": constitution_upload_path,
+            }
+        }
+    });
 
     let soul_facets = vec![crate::genesis::SoulFacet {
         vision: facet_vision,
@@ -2337,6 +2449,7 @@ pub fn invoke_guided_genesis_rite(
             morpheus: GenesisMorpheusSettings::default(),
             will_directives: request.will_directives,
             signing_secret: request.signing_secret,
+            extensions,
         },
     )
 }
@@ -2444,6 +2557,113 @@ pub fn bootstrap_three_agents(
         orchestrator_agent_id,
         prism_agent_id,
         prism_sub_sphere_id,
+        communication,
+    })
+}
+
+pub fn initialize_prism_runtime(
+    runtime: &UiCommandRuntime,
+    request: PrismRuntimeInitRequest,
+) -> Result<PrismRuntimeInitResult, UiCommandError> {
+    let prism_sub_sphere_id = request
+        .prism_sub_sphere_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(DEFAULT_PRISM_SUB_SPHERE_ID)
+        .to_string();
+
+    let mut state = runtime.lock_state()?;
+    let telegram_chat_id = normalize_optional_text(request.telegram_chat_id)
+        .or_else(|| state.communications.telegram.orchestrator_chat_id.clone())
+        .or_else(|| state.communications.telegram.default_chat_id.clone());
+    let discord_thread_id = normalize_optional_text(request.discord_thread_id)
+        .or_else(|| state.communications.discord.orchestrator_thread_id.clone())
+        .or_else(|| state.communications.discord.default_channel_id.clone());
+
+    let stale_orchestrators = state
+        .communications
+        .agent_bindings
+        .values()
+        .filter(|binding| binding.is_orchestrator)
+        .map(|binding| binding.agent_id.clone())
+        .collect::<Vec<_>>();
+    for agent_id in stale_orchestrators {
+        if let Some(existing) = state.communications.agent_bindings.get(&agent_id).cloned() {
+            state.communications.bind_agent_route(AgentBinding {
+                is_orchestrator: false,
+                ..existing
+            })?;
+        }
+    }
+
+    let agent_bindings = [
+        AgentBinding {
+            agent_id: DEFAULT_AGENT_PRISM_ID.to_string(),
+            telegram_chat_id: telegram_chat_id.clone(),
+            discord_thread_id: discord_thread_id.clone(),
+            in_app_thread_id: Some(format!("inapp-{}", DEFAULT_AGENT_PRISM_ID)),
+            is_orchestrator: true,
+        },
+        AgentBinding {
+            agent_id: DEFAULT_AGENT_WATCHER_ID.to_string(),
+            telegram_chat_id: None,
+            discord_thread_id: None,
+            in_app_thread_id: Some(format!("inapp-{}", DEFAULT_AGENT_WATCHER_ID)),
+            is_orchestrator: false,
+        },
+        AgentBinding {
+            agent_id: DEFAULT_AGENT_SYNTHESIS_ID.to_string(),
+            telegram_chat_id: None,
+            discord_thread_id: None,
+            in_app_thread_id: Some(format!("inapp-{}", DEFAULT_AGENT_SYNTHESIS_ID)),
+            is_orchestrator: false,
+        },
+        AgentBinding {
+            agent_id: DEFAULT_AGENT_AUDITOR_ID.to_string(),
+            telegram_chat_id: None,
+            discord_thread_id: None,
+            in_app_thread_id: Some(format!("inapp-{}", DEFAULT_AGENT_AUDITOR_ID)),
+            is_orchestrator: false,
+        },
+    ];
+
+    for binding in agent_bindings {
+        state.communications.bind_agent_route(binding)?;
+    }
+
+    state
+        .communications
+        .bind_sub_sphere_prism_route(SubSpherePrismBinding {
+            sub_sphere_id: prism_sub_sphere_id.clone(),
+            prism_agent_id: DEFAULT_AGENT_PRISM_ID.to_string(),
+            telegram_chat_id: telegram_chat_id.clone(),
+            discord_thread_id: discord_thread_id.clone(),
+            in_app_thread_id: Some(format!("inapp-{}", prism_sub_sphere_id)),
+        })?;
+
+    let communication = state.communications.status();
+    drop(state);
+    runtime.auto_save_snapshot_best_effort();
+
+    let sphere_signer_did = SphereClient::from_env()
+        .ok()
+        .and_then(|client| client.signer_did("prism"));
+
+    Ok(PrismRuntimeInitResult {
+        agent_ids: vec![
+            DEFAULT_AGENT_PRISM_ID.to_string(),
+            DEFAULT_AGENT_WATCHER_ID.to_string(),
+            DEFAULT_AGENT_SYNTHESIS_ID.to_string(),
+            DEFAULT_AGENT_AUDITOR_ID.to_string(),
+        ],
+        orchestrator_agent_id: DEFAULT_AGENT_PRISM_ID.to_string(),
+        prism_agent_id: DEFAULT_AGENT_PRISM_ID.to_string(),
+        watcher_agent_id: DEFAULT_AGENT_WATCHER_ID.to_string(),
+        synthesis_agent_id: DEFAULT_AGENT_SYNTHESIS_ID.to_string(),
+        auditor_agent_id: DEFAULT_AGENT_AUDITOR_ID.to_string(),
+        prism_sub_sphere_id,
+        sphere_signer_did,
         communication,
     })
 }
@@ -2629,6 +2849,378 @@ pub fn set_provider_priority(
 
     Ok(ProviderPriorityUpdateResult {
         cloud_provider_priority: normalized_priority,
+    })
+}
+
+fn deliberate_live_request(
+    state: &UiState,
+    prompt: String,
+    provider_override: Option<String>,
+) -> Result<DeliberationCommandResult, UiCommandError> {
+    let normalized_override = provider_override.as_deref().and_then(normalize_provider_id);
+    if let Some(provider_id) = normalized_override.as_deref() {
+        ensure_known_provider(provider_id)?;
+    }
+
+    let requested_provider_id = state
+        .compute_router
+        .resolve_provider_id(normalized_override.as_deref());
+    let torus = DeliberationTorus::new(TorusConfig::with_cloud_fallback_priority(
+        state.cloud_provider_priority.clone(),
+    ));
+    let provider_chain =
+        torus.fallback_chain_for_request(&state.compute_router, normalized_override.as_deref());
+
+    let mut request = GenerateRequest::new(prompt.trim().to_string());
+    if let Some(provider_id) = normalized_override.clone() {
+        request = request.with_provider_override(provider_id);
+    }
+
+    if let Err(error) = crate::action_validator::ActionValidator::validate_action(
+        &DefaultActionValidator,
+        &request,
+    ) {
+        return Err(UiCommandError::DeliberationFailed {
+            requested_provider: requested_provider_id.clone(),
+            attempts: vec![ProviderAttemptError {
+                provider_id: requested_provider_id,
+                error_kind: compute_error_kind_label(&ComputeErrorKind::InvalidRequest).to_string(),
+                message: error.to_string(),
+            }],
+        });
+    }
+
+    let mut attempts = Vec::new();
+
+    for provider_id in &provider_chain {
+        let Some(provider) = state.compute_router.provider(provider_id) else {
+            attempts.push(ProviderAttemptError {
+                provider_id: provider_id.clone(),
+                error_kind: compute_error_kind_label(&ComputeErrorKind::ProviderNotRegistered)
+                    .to_string(),
+                message: format!("provider '{provider_id}' is not registered"),
+            });
+            continue;
+        };
+
+        let mut provider_request = request.clone();
+        provider_request.provider_override = Some(provider_id.clone());
+
+        match provider.generate_response(provider_request) {
+            Ok(mut response) => {
+                if response.provider_id.trim().is_empty() {
+                    response.provider_id = provider.provider_id().to_string();
+                }
+
+                return Ok(DeliberationCommandResult {
+                    requested_provider_id: requested_provider_id.clone(),
+                    provider_override: normalized_override.clone(),
+                    provider_id: response.provider_id.clone(),
+                    provider_chain: provider_chain.clone(),
+                    used_fallback: response.provider_id != requested_provider_id,
+                    model: response.model,
+                    output_text: response.output_text,
+                    finish_reason: response.finish_reason,
+                    metadata: response.metadata,
+                });
+            }
+            Err(error) => {
+                attempts.push(ProviderAttemptError {
+                    provider_id: provider_id.clone(),
+                    error_kind: compute_error_kind_label(&error.kind).to_string(),
+                    message: error.message,
+                });
+            }
+        }
+    }
+
+    Err(UiCommandError::DeliberationFailed {
+        requested_provider: requested_provider_id,
+        attempts,
+    })
+}
+
+fn build_prism_final_prompt(query: &str, lane_outputs: &[PrismLaneOutput]) -> String {
+    let watcher = lane_outputs
+        .iter()
+        .find(|output| output.lane == "watcher")
+        .map(|output| output.output_text.as_str())
+        .unwrap_or("No watcher review captured.");
+    let synthesis = lane_outputs
+        .iter()
+        .find(|output| output.lane == "synthesis")
+        .map(|output| output.output_text.as_str())
+        .unwrap_or("No synthesis draft captured.");
+    let auditor = lane_outputs
+        .iter()
+        .find(|output| output.lane == "auditor")
+        .map(|output| output.output_text.as_str())
+        .unwrap_or("No auditor notes captured.");
+
+    format!(
+        "Prism synthesis. Combine the three internal lane responses into one user-facing answer. Preserve critical cautions from Watcher and recording requirements from Auditor, but keep the final reply concise and useful.
+
+User request:
+{}
+
+Watcher:
+{}
+
+Synthesis:
+{}
+
+Auditor:
+{}",
+        query.trim(), watcher.trim(), synthesis.trim(), auditor.trim()
+    )
+}
+
+fn trim_runtime_text(text: &str, max_len: usize) -> String {
+    let trimmed = text.trim();
+    if trimmed.len() <= max_len {
+        return trimmed.to_string();
+    }
+    let mut shortened = trimmed[..max_len].to_string();
+    shortened.push_str("...");
+    shortened
+}
+
+fn publish_runtime_event_best_effort(
+    client: Option<&SphereClient>,
+    publish_status: &mut PrismEventPublishStatus,
+    thread_name: &str,
+    author_agent_id: &str,
+    intent: &str,
+    payload: Value,
+) {
+    let Some(client) = client else {
+        return;
+    };
+
+    publish_status.attempted = publish_status.attempted.saturating_add(1);
+    let event = SphereRuntimeEvent {
+        thread_id: runtime_thread_id(thread_name),
+        author_agent_id: author_agent_id.to_string(),
+        intent: intent.to_string(),
+        payload,
+    };
+
+    match client.publish_runtime_event(&event) {
+        Ok(()) => {
+            publish_status.succeeded = publish_status.succeeded.saturating_add(1);
+        }
+        Err(error) => {
+            publish_status.failed = publish_status.failed.saturating_add(1);
+            if publish_status.errors.len() < 8 {
+                publish_status.errors.push(error.to_string());
+            }
+        }
+    }
+}
+
+pub fn run_prism_round(
+    runtime: &UiCommandRuntime,
+    request: PrismRoundRequest,
+) -> Result<PrismRoundCommandResult, UiCommandError> {
+    let state = runtime.lock_state()?;
+    let query = request.query.trim().to_string();
+    if query.is_empty() {
+        return Err(UiCommandError::EmptyQuery);
+    }
+
+    let normalized_override = request.provider_override.as_deref().and_then(normalize_provider_id);
+    if let Some(provider_id) = normalized_override.as_deref() {
+        ensure_known_provider(provider_id)?;
+    }
+
+    let channel = request
+        .channel
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("installer")
+        .to_string();
+
+    let mut prism_runtime = PrismRuntime::new();
+    let message = PrismMessage {
+        channel,
+        content: query.clone(),
+        force_deliberation: request.force_deliberation,
+    };
+    let decision = prism_runtime.inspect_message(&message);
+    let sphere_client = SphereClient::from_env().ok();
+    let mut event_publish = PrismEventPublishStatus {
+        enabled: sphere_client.is_some(),
+        ..PrismEventPublishStatus::default()
+    };
+
+    publish_runtime_event_best_effort(
+        sphere_client.as_ref(),
+        &mut event_publish,
+        "prism-inbound",
+        "prism",
+        "USER_MESSAGE_RECEIVED",
+        json!({
+            "channel": message.channel.clone(),
+            "query": query.clone(),
+            "forceDeliberation": request.force_deliberation,
+            "providerOverride": normalized_override.clone(),
+        }),
+    );
+    publish_runtime_event_best_effort(
+        sphere_client.as_ref(),
+        &mut event_publish,
+        "prism-inbound",
+        "prism",
+        "PRISM_MESSAGE_ACCEPTED",
+        json!({
+            "route": match decision.route { PrismRoute::Direct => "direct", PrismRoute::Deliberate => "deliberate" },
+            "summary": decision.summary.clone(),
+            "requiredLanes": decision.required_lanes.clone(),
+        }),
+    );
+
+    if decision.route == PrismRoute::Direct {
+        let final_result = deliberate_live_request(&state, query.clone(), normalized_override.clone())?;
+        publish_runtime_event_best_effort(
+            sphere_client.as_ref(),
+            &mut event_publish,
+            "prism-outbound",
+            "prism",
+            "PRISM_RESPONSE_READY",
+            json!({
+                "route": "direct",
+                "providerId": final_result.provider_id.clone(),
+                "model": final_result.model.clone(),
+                "responsePreview": trim_runtime_text(&final_result.output_text, 320),
+            }),
+        );
+
+        return Ok(PrismRoundCommandResult {
+            route: "direct".to_string(),
+            decision_summary: decision.summary,
+            required_lanes: decision.required_lanes,
+            round_id: None,
+            lane_outputs: Vec::new(),
+            final_result,
+            event_publish,
+        });
+    }
+
+    let round = prism_runtime.begin_round(&message);
+    publish_runtime_event_best_effort(
+        sphere_client.as_ref(),
+        &mut event_publish,
+        "torus-rounds",
+        "torus",
+        "TORUS_ROUND_OPENED",
+        json!({
+            "roundId": round.round_id.clone(),
+            "origin": round.origin.clone(),
+            "channel": message.channel.clone(),
+            "query": query.clone(),
+            "requiredLanes": decision.required_lanes.clone(),
+        }),
+    );
+
+    let lane_handlers: [Box<dyn RuntimeLane>; 3] = [
+        Box::new(WatcherLane),
+        Box::new(SynthesisLane),
+        Box::new(AuditorLane),
+    ];
+    let mut lane_outputs = Vec::new();
+
+    for lane in lane_handlers {
+        let lane_name = lane.kind().as_str().to_string();
+        let lane_prompt = lane.build_prompt(&query);
+        publish_runtime_event_best_effort(
+            sphere_client.as_ref(),
+            &mut event_publish,
+            lane.kind().thread_name(),
+            &lane_name,
+            "LANE_REQUESTED",
+            json!({
+                "roundId": round.round_id.clone(),
+                "lane": lane_name.clone(),
+                "promptPreview": trim_runtime_text(&lane_prompt, 320),
+            }),
+        );
+
+        let lane_result = deliberate_live_request(&state, lane_prompt, normalized_override.clone())?;
+        let output = PrismLaneOutput {
+            lane: lane.kind().as_str().to_string(),
+            requested_provider_id: lane_result.requested_provider_id.clone(),
+            provider_id: lane_result.provider_id.clone(),
+            provider_chain: lane_result.provider_chain.clone(),
+            used_fallback: lane_result.used_fallback,
+            model: lane_result.model.clone(),
+            output_text: lane_result.output_text.clone(),
+            finish_reason: lane_result.finish_reason.clone(),
+            metadata: lane_result.metadata.clone(),
+        };
+        let _ = prism_runtime.torus_mut().record_lane_response(LaneResponse {
+            round_id: round.round_id.clone(),
+            lane: lane.kind(),
+            content: output.output_text.clone(),
+        });
+
+        publish_runtime_event_best_effort(
+            sphere_client.as_ref(),
+            &mut event_publish,
+            lane.kind().thread_name(),
+            &output.lane,
+            "LANE_RESPONSE_RECORDED",
+            json!({
+                "roundId": round.round_id.clone(),
+                "lane": output.lane.clone(),
+                "providerId": output.provider_id.clone(),
+                "model": output.model.clone(),
+                "responsePreview": trim_runtime_text(&output.output_text, 320),
+            }),
+        );
+
+        lane_outputs.push(output);
+    }
+
+    let final_prompt = build_prism_final_prompt(&query, &lane_outputs);
+    let final_result = deliberate_live_request(&state, final_prompt, normalized_override.clone())?;
+
+    publish_runtime_event_best_effort(
+        sphere_client.as_ref(),
+        &mut event_publish,
+        "torus-rounds",
+        "torus",
+        "ROUND_CONVERGED",
+        json!({
+            "roundId": round.round_id.clone(),
+            "laneCount": lane_outputs.len(),
+            "providerId": final_result.provider_id.clone(),
+            "model": final_result.model.clone(),
+        }),
+    );
+    publish_runtime_event_best_effort(
+        sphere_client.as_ref(),
+        &mut event_publish,
+        "prism-outbound",
+        "prism",
+        "PRISM_RESPONSE_READY",
+        json!({
+            "roundId": round.round_id.clone(),
+            "route": "deliberate",
+            "providerId": final_result.provider_id.clone(),
+            "model": final_result.model.clone(),
+            "responsePreview": trim_runtime_text(&final_result.output_text, 320),
+        }),
+    );
+
+    Ok(PrismRoundCommandResult {
+        route: "deliberate".to_string(),
+        decision_summary: decision.summary,
+        required_lanes: decision.required_lanes,
+        round_id: Some(round.round_id),
+        lane_outputs,
+        final_result,
+        event_publish,
     })
 }
 
@@ -2824,9 +3416,10 @@ pub fn update_provider_config(
         .cloned()
         .unwrap_or_else(Map::new);
     merge_json_objects(&mut merged, patch);
+    let sanitized = sanitize_provider_config_value(&normalized_provider, Value::Object(merged));
     state
         .provider_configs
-        .insert(normalized_provider.clone(), Value::Object(merged));
+        .insert(normalized_provider.clone(), sanitized);
 
     if let Err(error) = state.rebuild_compute_router() {
         state
@@ -2864,7 +3457,6 @@ pub fn update_telegram_integration(
     bot_token: Option<String>,
     default_chat_id: Option<String>,
     orchestrator_chat_id: Option<String>,
-    live_api: bool,
 ) -> Result<CommunicationStatus, UiCommandError> {
     let mut state = runtime.lock_state()?;
     let existing = state.communications.telegram.clone();
@@ -2879,7 +3471,6 @@ pub fn update_telegram_integration(
             use_webhook: existing.use_webhook,
             webhook_url: existing.webhook_url,
             webhook_secret_token: existing.webhook_secret_token,
-            live_api,
             last_error: None,
         });
     Ok(state.communications.status())
@@ -2895,7 +3486,6 @@ pub fn update_discord_integration(
     default_channel_id: Option<String>,
     orchestrator_thread_id: Option<String>,
     auto_spawn_sub_sphere_threads: bool,
-    live_api: bool,
 ) -> Result<CommunicationStatus, UiCommandError> {
     let mut state = runtime.lock_state()?;
     state
@@ -2908,7 +3498,6 @@ pub fn update_discord_integration(
             orchestrator_thread_id: normalize_optional_text(orchestrator_thread_id),
             routing_mode: parse_agent_routing_mode(&routing_mode)?,
             auto_spawn_sub_sphere_threads,
-            live_api,
             last_error: None,
         });
     Ok(state.communications.status())
@@ -3739,6 +4328,7 @@ mod tests {
                 morpheus: GenesisMorpheusSettings::default(),
                 will_directives: vec!["protect user intent".to_string()],
                 signing_secret: "integration-test-secret".to_string(),
+                extensions: crate::genesis::default_extensions(),
             },
         )
         .expect("genesis rite should succeed");
@@ -3770,6 +4360,7 @@ mod tests {
                 morpheus: GenesisMorpheusSettings::default(),
                 will_directives: Vec::new(),
                 signing_secret: "secret".to_string(),
+                extensions: crate::genesis::default_extensions(),
             },
         )
         .expect_err("empty vision core should fail");
@@ -4156,7 +4747,6 @@ mod tests {
             Some("telegram-secret-token".to_string()),
             Some("chat-a".to_string()),
             None,
-            true,
         )
         .expect("telegram update should succeed");
         update_discord_integration(
@@ -4167,7 +4757,6 @@ mod tests {
             Some("guild-a".to_string()),
             Some("channel-a".to_string()),
             None,
-            true,
             true,
         )
         .expect("discord update should succeed");
@@ -4378,7 +4967,6 @@ mod tests {
             None,
             Some("default-chat".to_string()),
             Some("orchestrator-chat".to_string()),
-            false,
         )
         .expect("telegram integration update should succeed");
         assert!(status.telegram.enabled);
@@ -4400,10 +4988,7 @@ mod tests {
             "agent-7".to_string(),
             "Send latest status".to_string(),
         )
-        .expect("dispatch should succeed");
-        assert_eq!(dispatch.platform, CommunicationPlatform::Telegram);
-        assert_eq!(dispatch.thread_id, "orchestrator-chat");
-        assert!(dispatch.simulated);
+        .expect_err("dispatch should fail without a Telegram bot token");
     }
 
     #[test]
@@ -4418,7 +5003,6 @@ mod tests {
             Some("channel-1".to_string()),
             None,
             true,
-            false,
         )
         .expect("discord integration update should succeed");
 
@@ -4486,7 +5070,6 @@ mod tests {
             None,
             Some("chat-default".to_string()),
             None,
-            false,
         )
         .expect("telegram should configure");
 
@@ -4514,8 +5097,8 @@ mod tests {
         assert_eq!(inbox.len(), 1);
         assert_eq!(inbox[0].update_id, 901);
 
-        let poll_result = poll_telegram_updates_once(&runtime, 10).expect("poll should run");
-        assert!(poll_result.simulated);
+        let poll_error = poll_telegram_updates_once(&runtime, 10).expect_err("poll should require a Telegram bot token");
+        assert!(matches!(poll_error, UiCommandError::Communication { .. }));
 
         clear_telegram_webhook(&runtime).expect("webhook should clear");
     }
@@ -4532,15 +5115,11 @@ mod tests {
             Some("channel-77".to_string()),
             None,
             true,
-            false,
         )
         .expect("discord should configure");
 
-        let probe = probe_discord_gateway(&runtime).expect("gateway probe should work");
-        assert_eq!(
-            probe.lifecycle,
-            crate::communications::DiscordGatewayLifecycle::Connected
-        );
+        let probe_error = probe_discord_gateway(&runtime).expect_err("gateway probe should require a Discord bot token");
+        assert!(matches!(probe_error, UiCommandError::Communication { .. }));
 
         let heartbeat =
             record_discord_gateway_heartbeat(&runtime, Some(42)).expect("heartbeat should update");
@@ -4599,13 +5178,13 @@ mod tests {
         assert_eq!(ack.deferred_response_type, 5);
         assert_eq!(ack.routed_agent_id, "agent-19");
 
-        let completion = complete_discord_interaction(
+        let completion_error = complete_discord_interaction(
             &runtime,
             "ix-900".to_string(),
             "Status acknowledged.".to_string(),
             false,
         )
-        .expect("completion should work");
-        assert!(completion.simulated);
+        .expect_err("completion should require a Discord bot token");
+        assert!(matches!(completion_error, UiCommandError::Communication { .. }));
     }
 }

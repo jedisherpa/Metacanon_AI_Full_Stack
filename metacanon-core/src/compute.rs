@@ -522,7 +522,7 @@ mod tests {
             if self.fail_embedding {
                 return Err(ComputeError::internal(
                     self.id,
-                    "simulated embedding failure",
+                    "mock embedding failure",
                 ));
             }
 
@@ -533,7 +533,7 @@ mod tests {
             if self.fail_generate {
                 return Err(ComputeError::internal(
                     self.id,
-                    "simulated provider failure",
+                    "mock provider failure",
                 ));
             }
 

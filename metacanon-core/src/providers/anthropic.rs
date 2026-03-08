@@ -4,8 +4,8 @@ use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 
 use crate::compute::{
-    estimate_token_count, normalized_ascii_embedding, ComputeError, ComputeProvider, ComputeResult,
-    GenerateRequest, GenerateResponse, ProviderHealth, ProviderKind, TokenUsage,
+    ComputeError, ComputeProvider, ComputeResult, GenerateRequest, GenerateResponse,
+    ProviderHealth, ProviderKind, TokenUsage,
 };
 
 pub const ANTHROPIC_PROVIDER_ID: &str = "anthropic";
@@ -25,7 +25,6 @@ pub struct AnthropicConfig {
     pub api_key: Option<String>,
     pub base_url: String,
     pub model: String,
-    pub live_api: bool,
     pub available: bool,
 }
 
@@ -35,7 +34,6 @@ impl Default for AnthropicConfig {
             api_key: None,
             base_url: ANTHROPIC_DEFAULT_BASE_URL.to_string(),
             model: ANTHROPIC_DEFAULT_MODEL.to_string(),
-            live_api: false,
             available: true,
         }
     }
@@ -203,37 +201,6 @@ impl AnthropicProvider {
         })
     }
 
-    fn simulate_messages(&self, request: &AnthropicMessagesRequest) -> AnthropicMessagesResponse {
-        let prompt = request
-            .messages
-            .iter()
-            .flat_map(|message| message.content.iter())
-            .find(|block| block.block_type == "text")
-            .map(|block| block.text.as_str())
-            .unwrap_or("");
-
-        let prompt_tokens = estimate_token_count(prompt);
-        let temperature = request.temperature.unwrap_or(0.0);
-        let completion_tokens = 64.min(request.max_tokens.max(1));
-        let system_applied = request.system.as_deref().map(str::trim).is_some();
-
-        AnthropicMessagesResponse {
-            model: request.model.clone(),
-            content: vec![AnthropicContentBlock {
-                block_type: "text".to_string(),
-                text: format!(
-                    "Anthropic [{}] generated a cloud response (temp={temperature:.2}, system={system_applied}, version={}) for: {}",
-                    request.model, request.anthropic_version, prompt
-                ),
-            }],
-            stop_reason: Some("end_turn".to_string()),
-            usage: AnthropicUsage {
-                input_tokens: prompt_tokens,
-                output_tokens: completion_tokens,
-            },
-        }
-    }
-
     fn messages_endpoint(&self) -> String {
         format!("{}/messages", self.config.base_url.trim_end_matches('/'))
     }
@@ -310,18 +277,14 @@ impl ComputeProvider for AnthropicProvider {
     fn get_embedding(&self, text: &str) -> ComputeResult<Vec<f64>> {
         self.ensure_available("get_embedding")
             .map_err(|error| error.to_compute_error())?;
-        self.ensure_api_key()
-            .map_err(|error| error.to_compute_error())?;
-
         let input = text.trim();
         if input.is_empty() {
             return Err(AnthropicAdapterError::EmptyEmbeddingInput.to_compute_error());
         }
 
-        Ok(normalized_ascii_embedding(
-            &format!("{}::{input}", self.config.model),
-            24,
-            0x61_6E_74_68_72_6F_70,
+        Err(ComputeError::provider_unavailable(
+            ANTHROPIC_PROVIDER_ID,
+            "anthropic embeddings are not implemented in this runtime",
         ))
     }
 
@@ -335,12 +298,9 @@ impl ComputeProvider for AnthropicProvider {
         let request = self
             .map_generate_request(req)
             .map_err(|error| error.to_compute_error())?;
-        let (response, latency_ms) = if self.config.live_api {
-            self.request_live_messages(api_key, &request)
-                .map_err(|error| error.to_compute_error())?
-        } else {
-            (self.simulate_messages(&request), 145)
-        };
+        let (response, latency_ms) = self
+            .request_live_messages(api_key, &request)
+            .map_err(|error| error.to_compute_error())?;
         self.map_response(response, latency_ms)
             .map_err(|error| error.to_compute_error())
     }
@@ -525,8 +485,4 @@ mod tests {
         assert_eq!(ANTHROPIC_RESPONSE_METADATA_KEY_VERSION, "version");
     }
 
-    #[test]
-    fn default_config_keeps_live_api_disabled_for_deterministic_tests() {
-        assert!(!AnthropicConfig::default().live_api);
-    }
 }

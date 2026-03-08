@@ -4,8 +4,8 @@ use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 
 use crate::compute::{
-    estimate_token_count, normalized_ascii_embedding, ComputeError, ComputeProvider, ComputeResult,
-    GenerateRequest, GenerateResponse, ProviderHealth, ProviderKind, TokenUsage,
+    ComputeError, ComputeProvider, ComputeResult, GenerateRequest, GenerateResponse,
+    ProviderHealth, ProviderKind, TokenUsage,
 };
 
 pub const OPENAI_PROVIDER_ID: &str = "openai";
@@ -26,7 +26,6 @@ pub struct OpenAiConfig {
     pub base_url: String,
     pub chat_model: String,
     pub embedding_model: String,
-    pub live_api: bool,
     pub available: bool,
 }
 
@@ -37,7 +36,6 @@ impl Default for OpenAiConfig {
             base_url: OPENAI_DEFAULT_BASE_URL.to_string(),
             chat_model: OPENAI_DEFAULT_CHAT_MODEL.to_string(),
             embedding_model: OPENAI_DEFAULT_EMBEDDING_MODEL.to_string(),
-            live_api: false,
             available: true,
         }
     }
@@ -361,54 +359,6 @@ impl OpenAiProvider {
         })
     }
 
-    fn simulate_chat_completion(&self, request: &OpenAiChatRequest) -> OpenAiChatResponse {
-        let prompt = request
-            .messages
-            .iter()
-            .rev()
-            .find(|message| message.role == "user")
-            .map(|message| message.content.as_str())
-            .unwrap_or("");
-
-        let prompt_tokens = estimate_token_count(prompt);
-        let temperature = request.temperature.unwrap_or(0.7);
-        let target_completion = request.max_tokens.unwrap_or(68).max(1);
-        let completion_tokens = 68.min(target_completion);
-
-        OpenAiChatResponse {
-            model: request.model.clone(),
-            choices: vec![OpenAiChatChoice {
-                message: OpenAiChatMessage {
-                    role: "assistant".to_string(),
-                    content: format!(
-                        "OpenAI [{}] generated a cloud response (temp={temperature:.2}) for: {}",
-                        request.model, prompt
-                    ),
-                },
-                finish_reason: Some("stop".to_string()),
-                system_prompt_applied: request
-                    .messages
-                    .iter()
-                    .any(|message| message.role == "system"),
-            }],
-            usage: Some(OpenAiUsage {
-                prompt_tokens,
-                completion_tokens,
-                total_tokens: prompt_tokens.saturating_add(completion_tokens),
-            }),
-        }
-    }
-
-    fn simulate_embedding(&self, request: &OpenAiEmbeddingRequest) -> OpenAiEmbeddingResponse {
-        OpenAiEmbeddingResponse {
-            model: request.model.clone(),
-            embedding: normalized_ascii_embedding(
-                &format!("{}::{}", request.model, request.input),
-                24,
-                0x6F_70_65_6E_61_69,
-            ),
-        }
-    }
 }
 
 impl ComputeProvider for OpenAiProvider {
@@ -453,12 +403,9 @@ impl ComputeProvider for OpenAiProvider {
             .map_embedding_request(text, None)
             .map_err(|error| error.to_compute_error())?;
 
-        let response = if self.config.live_api {
-            self.request_live_embedding(api_key, &request)
-                .map_err(|error| error.to_compute_error())?
-        } else {
-            self.simulate_embedding(&request)
-        };
+        let response = self
+            .request_live_embedding(api_key, &request)
+            .map_err(|error| error.to_compute_error())?;
         self.map_embedding_response(response)
             .map_err(|error| error.to_compute_error())
     }
@@ -473,12 +420,9 @@ impl ComputeProvider for OpenAiProvider {
         let request = self
             .map_generate_request(req)
             .map_err(|error| error.to_compute_error())?;
-        let (response, latency_ms) = if self.config.live_api {
-            self.request_live_chat_completion(api_key, &request)
-                .map_err(|error| error.to_compute_error())?
-        } else {
-            (self.simulate_chat_completion(&request), 120)
-        };
+        let (response, latency_ms) = self
+            .request_live_chat_completion(api_key, &request)
+            .map_err(|error| error.to_compute_error())?;
         self.map_chat_response(response, latency_ms)
             .map_err(|error| error.to_compute_error())
     }
@@ -706,8 +650,4 @@ mod tests {
         );
     }
 
-    #[test]
-    fn default_config_keeps_live_api_disabled_for_deterministic_tests() {
-        assert!(!OpenAiConfig::default().live_api);
-    }
 }
