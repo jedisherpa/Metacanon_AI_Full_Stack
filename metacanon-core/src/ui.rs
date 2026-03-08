@@ -47,10 +47,17 @@ use crate::providers::qwen_local::{
     QWEN_DEFAULT_DOWNGRADE_PROFILE, QWEN_DEFAULT_LLAMACPP_BINARY, QWEN_DEFAULT_LOCAL_TARGET,
     QWEN_DEFAULT_PRIMARY_MODEL_ID, QWEN_DOWNGRADE_LOCAL_TARGET,
 };
-use crate::prism::{PrismMessage, PrismRoute, PrismRuntime};
+use crate::action_validator::{ActionValidator, WillVectorActionValidator};
+use crate::prism::{
+    DefaultPrism, Prism, PrismError, PrismMessage, PrismRoute, PrismRuntime,
+    PrismSynthesisRequest,
+};
 use crate::specialist_lens::{ActiveSpecialistLens, SpecialistLensDefinition};
 use crate::sphere_client::{runtime_thread_id, SphereClient, SphereRuntimeEvent};
 use crate::storage::{read_snapshot_json, write_snapshot_json, SnapshotStorageError};
+use crate::sub_sphere_manager::{
+    SubSphereEvent, SubSphereEventOutcome, SubSphereManager, SubSphereManagerError,
+};
 use crate::sub_sphere_torus::{DeliberationRecord, SubSphereQueryResult, SubSphereTorus};
 use crate::task_sub_sphere::{
     TaskSubSphereRuntime, TaskSubSphereRuntimeError, TaskSubSphereSummary,
@@ -567,6 +574,14 @@ impl From<TaskSubSphereRuntimeError> for UiCommandError {
     }
 }
 
+impl From<SubSphereManagerError> for UiCommandError {
+    fn from(value: SubSphereManagerError) -> Self {
+        Self::TaskSubSphereRuntime {
+            message: value.to_string(),
+        }
+    }
+}
+
 impl From<WorkflowError> for UiCommandError {
     fn from(value: WorkflowError) -> Self {
         Self::WorkflowRuntime {
@@ -951,6 +966,24 @@ impl UiState {
         self.compute_router = router;
         Ok(())
     }
+}
+
+fn with_sub_sphere_manager<T, F>(state: &mut UiState, operation: F) -> Result<T, UiCommandError>
+where
+    F: FnOnce(&mut SubSphereManager) -> Result<T, SubSphereManagerError>,
+{
+    let mut manager = SubSphereManager::new(
+        state.task_sub_sphere_runtime.clone(),
+        state.sub_sphere_torus.clone(),
+        state.tool_registry.clone(),
+        state.compute_router.clone(),
+    );
+
+    let result = operation(&mut manager)?;
+    let (runtime_snapshot, torus_snapshot) = manager.snapshot_parts();
+    state.task_sub_sphere_runtime = runtime_snapshot;
+    state.sub_sphere_torus = torus_snapshot;
+    Ok(result)
 }
 
 #[derive(Debug, Clone)]
@@ -1687,7 +1720,59 @@ fn parse_communication_platform(value: &str) -> Result<CommunicationPlatform, Ui
     })
 }
 
-fn validate_outbound_message_against_constitution(message: &str) -> Result<String, UiCommandError> {
+fn effective_runtime_will_vector(state: &UiState) -> WillVector {
+    state
+        .genesis_soul_file
+        .as_ref()
+        .map(|soul_file| soul_file.will_vector.clone())
+        .unwrap_or_default()
+}
+
+fn build_will_vector_validator(state: &UiState) -> WillVectorActionValidator {
+    let mut validator = WillVectorActionValidator::new(effective_runtime_will_vector(state));
+    let has_directives = validator
+        .will_vector
+        .directives
+        .iter()
+        .any(|directive| !directive.trim().is_empty());
+
+    let strict_alignment = state
+        .genesis_soul_file
+        .as_ref()
+        .and_then(|soul_file| soul_file.extensions.get("strict_will_alignment"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+
+    validator.min_alignment_percent = if has_directives && strict_alignment {
+        validator.min_alignment_percent
+    } else {
+        0
+    };
+
+    for term in [
+        "disable constitutional",
+        "bypass constitutional",
+        "override will vector",
+        "delete audit log",
+        "bypass hitl",
+    ] {
+        if !validator
+            .blocked_terms
+            .iter()
+            .any(|existing| existing.eq_ignore_ascii_case(term))
+        {
+            validator.blocked_terms.push(term.to_string());
+        }
+    }
+
+    validator
+}
+
+fn validate_outbound_message_against_constitution(
+    state: &UiState,
+    channel: &str,
+    message: &str,
+) -> Result<String, UiCommandError> {
     let trimmed = message.trim();
     if trimmed.is_empty() {
         return Err(UiCommandError::ConstitutionalViolation {
@@ -1695,29 +1780,8 @@ fn validate_outbound_message_against_constitution(message: &str) -> Result<Strin
         });
     }
 
-    let lowered = trimmed.to_ascii_lowercase();
-    let blocked_patterns = [
-        "disable constitutional",
-        "bypass constitutional",
-        "ignore will vector",
-        "override will vector",
-        "delete audit log",
-        "bypass hitl",
-    ];
-    let mut request = GenerateRequest::new(trimmed.to_string());
-    if let Some(matched) = blocked_patterns
-        .iter()
-        .find(|pattern| lowered.contains(**pattern))
-    {
-        request.metadata.insert(
-            "blocked_by_will_vector".to_string(),
-            format!("matched blocked pattern: {matched}"),
-        );
-    }
-
-    if let Err(error) =
-        crate::torus::ActionValidator::validate_action(&DefaultActionValidator, &request)
-    {
+    let validator = build_will_vector_validator(state);
+    if let Err(error) = validator.validate_outbound_message(channel, trimmed) {
         return Err(UiCommandError::ConstitutionalViolation {
             message: error.to_string(),
         });
@@ -2876,14 +2940,23 @@ fn deliberate_live_request(
         request = request.with_provider_override(provider_id);
     }
 
-    if let Err(error) = crate::action_validator::ActionValidator::validate_action(
-        &DefaultActionValidator,
-        &request,
-    ) {
+    if let Err(error) = DefaultActionValidator.validate_action(&request) {
         return Err(UiCommandError::DeliberationFailed {
             requested_provider: requested_provider_id.clone(),
             attempts: vec![ProviderAttemptError {
-                provider_id: requested_provider_id,
+                provider_id: requested_provider_id.clone(),
+                error_kind: compute_error_kind_label(&ComputeErrorKind::InvalidRequest).to_string(),
+                message: error.to_string(),
+            }],
+        });
+    }
+
+    let will_validator = build_will_vector_validator(state);
+    if let Err(error) = will_validator.validate_generate_request(&request) {
+        return Err(UiCommandError::DeliberationFailed {
+            requested_provider: requested_provider_id.clone(),
+            attempts: vec![ProviderAttemptError {
+                provider_id: requested_provider_id.clone(),
                 error_kind: compute_error_kind_label(&ComputeErrorKind::InvalidRequest).to_string(),
                 message: error.to_string(),
             }],
@@ -2940,39 +3013,74 @@ fn deliberate_live_request(
     })
 }
 
-fn build_prism_final_prompt(query: &str, lane_outputs: &[PrismLaneOutput]) -> String {
-    let watcher = lane_outputs
+fn synthesize_prism_outputs(
+    state: &UiState,
+    query: &str,
+    lane_outputs: &[PrismLaneOutput],
+    provider_override: Option<String>,
+) -> Result<DeliberationCommandResult, UiCommandError> {
+    let normalized_override = provider_override.as_deref().and_then(normalize_provider_id);
+    if let Some(provider_id) = normalized_override.as_deref() {
+        ensure_known_provider(provider_id)?;
+    }
+
+    let requested_provider_id = state
+        .compute_router
+        .resolve_provider_id(normalized_override.as_deref());
+    let provider_chain = state
+        .compute_router
+        .provider_chain_for_request(normalized_override.as_deref());
+
+    let inputs = lane_outputs
         .iter()
-        .find(|output| output.lane == "watcher")
-        .map(|output| output.output_text.as_str())
-        .unwrap_or("No watcher review captured.");
-    let synthesis = lane_outputs
-        .iter()
-        .find(|output| output.lane == "synthesis")
-        .map(|output| output.output_text.as_str())
-        .unwrap_or("No synthesis draft captured.");
-    let auditor = lane_outputs
-        .iter()
-        .find(|output| output.lane == "auditor")
-        .map(|output| output.output_text.as_str())
-        .unwrap_or("No auditor notes captured.");
+        .map(|output| format!("{}:\n{}", output.lane, output.output_text))
+        .collect::<Vec<_>>();
 
-    format!(
-        "Prism synthesis. Combine the three internal lane responses into one user-facing answer. Preserve critical cautions from Watcher and recording requirements from Auditor, but keep the final reply concise and useful.
+    let prism = DefaultPrism::default();
+    let mut request = PrismSynthesisRequest::new(query.to_string(), inputs);
+    request.provider_override = normalized_override.clone();
+    request.metadata.insert(
+        "runtime_path".to_string(),
+        "ui.run_prism_round.prism_synthesis".to_string(),
+    );
 
-User request:
-{}
+    match prism.synthesize(&state.compute_router, request) {
+        Ok(output) => Ok(DeliberationCommandResult {
+            requested_provider_id: requested_provider_id.clone(),
+            provider_override: normalized_override,
+            provider_id: output.provider_id.clone(),
+            provider_chain,
+            used_fallback: output.provider_id != requested_provider_id,
+            model: output.model,
+            output_text: output.content,
+            finish_reason: output.finish_reason,
+            metadata: output.metadata,
+        }),
+        Err(PrismError::Routing(failure)) => {
+            let attempts = failure
+                .attempts
+                .into_iter()
+                .map(|attempt| ProviderAttemptError {
+                    provider_id: attempt.provider_id,
+                    error_kind: compute_error_kind_label(&attempt.error.kind).to_string(),
+                    message: attempt.error.message,
+                })
+                .collect();
 
-Watcher:
-{}
-
-Synthesis:
-{}
-
-Auditor:
-{}",
-        query.trim(), watcher.trim(), synthesis.trim(), auditor.trim()
-    )
+            Err(UiCommandError::DeliberationFailed {
+                requested_provider: failure.requested_provider,
+                attempts,
+            })
+        }
+        Err(error) => Err(UiCommandError::DeliberationFailed {
+            requested_provider: requested_provider_id,
+            attempts: vec![ProviderAttemptError {
+                provider_id: normalized_override.unwrap_or_else(|| state.global_provider_id.clone()),
+                error_kind: compute_error_kind_label(&ComputeErrorKind::InvalidRequest).to_string(),
+                message: error.to_string(),
+            }],
+        }),
+    }
 }
 
 fn trim_runtime_text(text: &str, max_len: usize) -> String {
@@ -3182,8 +3290,12 @@ pub fn run_prism_round(
         lane_outputs.push(output);
     }
 
-    let final_prompt = build_prism_final_prompt(&query, &lane_outputs);
-    let final_result = deliberate_live_request(&state, final_prompt, normalized_override.clone())?;
+    let final_result = synthesize_prism_outputs(
+        &state,
+        &query,
+        &lane_outputs,
+        normalized_override.clone(),
+    )?;
 
     publish_runtime_event_best_effort(
         sphere_client.as_ref(),
@@ -3252,6 +3364,18 @@ pub fn submit_deliberation(
     let mut request = GenerateRequest::new(query);
     if let Some(provider_id) = normalized_override.clone() {
         request = request.with_provider_override(provider_id);
+    }
+
+    let will_validator = build_will_vector_validator(&state);
+    if let Err(validation_error) = will_validator.validate_generate_request(&request) {
+        return Err(UiCommandError::DeliberationFailed {
+            requested_provider: requested_provider_id.clone(),
+            attempts: vec![ProviderAttemptError {
+                provider_id: requested_provider_id.clone(),
+                error_kind: compute_error_kind_label(&ComputeErrorKind::InvalidRequest).to_string(),
+                message: validation_error.to_string(),
+            }],
+        });
     }
 
     match torus.deliberate(
@@ -3547,9 +3671,13 @@ pub fn send_agent_message(
     agent_id: String,
     message: String,
 ) -> Result<CommunicationDispatchResult, UiCommandError> {
-    let normalized_message = validate_outbound_message_against_constitution(&message)?;
     let communication_platform = parse_communication_platform(&platform)?;
     let mut state = runtime.lock_state()?;
+    let normalized_message = validate_outbound_message_against_constitution(
+        &state,
+        communication_platform.as_str(),
+        &message,
+    )?;
     Ok(state.communications.dispatch_to_agent(
         communication_platform,
         &agent_id,
@@ -3563,9 +3691,13 @@ pub fn send_sub_sphere_prism_message(
     sub_sphere_id: String,
     message: String,
 ) -> Result<CommunicationDispatchResult, UiCommandError> {
-    let normalized_message = validate_outbound_message_against_constitution(&message)?;
     let communication_platform = parse_communication_platform(&platform)?;
     let mut state = runtime.lock_state()?;
+    let normalized_message = validate_outbound_message_against_constitution(
+        &state,
+        communication_platform.as_str(),
+        &message,
+    )?;
     Ok(state.communications.dispatch_to_sub_sphere_prism(
         communication_platform,
         &sub_sphere_id,
@@ -3682,8 +3814,12 @@ pub fn complete_discord_interaction(
     response_text: String,
     ephemeral: bool,
 ) -> Result<DiscordInteractionCompletionResult, UiCommandError> {
-    let normalized_response = validate_outbound_message_against_constitution(&response_text)?;
     let mut state = runtime.lock_state()?;
+    let normalized_response = validate_outbound_message_against_constitution(
+        &state,
+        "discord",
+        &response_text,
+    )?;
     Ok(state.communications.complete_discord_interaction(
         &interaction_id,
         &normalized_response,
@@ -4003,10 +4139,22 @@ pub fn create_task_sub_sphere(
     hitl_required: bool,
 ) -> Result<TaskSubSphereSummary, UiCommandError> {
     let mut state = runtime.lock_state()?;
-    let created =
-        state
-            .task_sub_sphere_runtime
-            .create_task_sub_sphere(&name, &objective, hitl_required)?;
+    let created = with_sub_sphere_manager(&mut state, |manager| {
+        let outcome = manager.process_event(SubSphereEvent::Spawn {
+            name: name.clone(),
+            objective: objective.clone(),
+            hitl_required,
+        })?;
+        match outcome {
+            SubSphereEventOutcome::Spawned { sub_sphere_id } => manager
+                .list_sub_spheres()
+                .iter()
+                .find(|entry| entry.sub_sphere_id == sub_sphere_id)
+                .cloned()
+                .ok_or(SubSphereManagerError::EventChannelClosed),
+            _ => Err(SubSphereManagerError::EventChannelClosed),
+        }
+    })?;
     let _ = state
         .communications
         .ensure_sub_sphere_binding_for_spawn(&created.sub_sphere_id);
@@ -4042,9 +4190,13 @@ pub fn pause_sub_sphere(
     sub_sphere_id: String,
 ) -> Result<(), UiCommandError> {
     let mut state = runtime.lock_state()?;
-    Ok(state
-        .task_sub_sphere_runtime
-        .pause_sub_sphere(&sub_sphere_id)?)
+    with_sub_sphere_manager(&mut state, |manager| {
+        manager
+            .process_event(SubSphereEvent::Pause {
+                sub_sphere_id: sub_sphere_id.clone(),
+            })
+            .map(|_| ())
+    })
 }
 
 pub fn dissolve_sub_sphere(
@@ -4053,9 +4205,14 @@ pub fn dissolve_sub_sphere(
     reason: String,
 ) -> Result<(), UiCommandError> {
     let mut state = runtime.lock_state()?;
-    Ok(state
-        .task_sub_sphere_runtime
-        .dissolve_sub_sphere(&sub_sphere_id, &reason)?)
+    with_sub_sphere_manager(&mut state, |manager| {
+        manager
+            .process_event(SubSphereEvent::Dissolve {
+                sub_sphere_id: sub_sphere_id.clone(),
+                reason: reason.clone(),
+            })
+            .map(|_| ())
+    })
 }
 
 pub fn add_lens_to_sub_sphere(
@@ -4108,22 +4265,33 @@ pub fn submit_sub_sphere_query(
     provider_override: Option<String>,
 ) -> Result<SubSphereQueryResult, UiCommandError> {
     let mut state = runtime.lock_state()?;
+    let normalized_query = query.trim().to_string();
+    if normalized_query.is_empty() {
+        return Err(UiCommandError::EmptyQuery);
+    }
     let normalized_override = provider_override.as_deref().and_then(normalize_provider_id);
     if let Some(provider_id) = normalized_override.as_deref() {
         ensure_known_provider(provider_id)?;
     }
-    let task_sub_sphere_runtime = state.task_sub_sphere_runtime.clone();
-    let tool_registry = state.tool_registry.clone();
-    let compute_router = state.compute_router.clone();
-    let result = task_sub_sphere_runtime.submit_sub_sphere_query(
-        &sub_sphere_id,
-        &query,
-        &mut state.sub_sphere_torus,
-        &tool_registry,
-        &compute_router,
-        normalized_override.as_deref(),
-    )?;
-    Ok(result)
+    let will_validator = build_will_vector_validator(&state);
+    if let Err(validation_error) =
+        will_validator.validate_generate_request(&GenerateRequest::new(normalized_query.clone()))
+    {
+        return Err(UiCommandError::ConstitutionalViolation {
+            message: validation_error.to_string(),
+        });
+    }
+    with_sub_sphere_manager(&mut state, |manager| {
+        let outcome = manager.process_event(SubSphereEvent::SubmitQuery {
+            sub_sphere_id: sub_sphere_id.clone(),
+            query: normalized_query.clone(),
+            provider_override: normalized_override.clone(),
+        })?;
+        match outcome {
+            SubSphereEventOutcome::QuerySubmitted { result, .. } => Ok(result),
+            _ => Err(SubSphereManagerError::EventChannelClosed),
+        }
+    })
 }
 
 pub fn get_sub_sphere_deliberation_log(
