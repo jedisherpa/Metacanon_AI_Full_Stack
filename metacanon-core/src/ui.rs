@@ -52,6 +52,7 @@ use crate::prism::{
     DefaultPrism, Prism, PrismError, PrismMessage, PrismRoute, PrismRuntime,
     PrismSynthesisRequest,
 };
+use crate::skill_client::{SkillClient, SkillExecutionRequest};
 use crate::specialist_lens::{ActiveSpecialistLens, SpecialistLensDefinition};
 use crate::sphere_client::{runtime_thread_id, SphereClient, SphereRuntimeEvent};
 use crate::storage::{read_snapshot_json, write_snapshot_json, SnapshotStorageError};
@@ -340,8 +341,21 @@ pub struct PrismRoundCommandResult {
     pub required_lanes: Vec<String>,
     pub round_id: Option<String>,
     pub lane_outputs: Vec<PrismLaneOutput>,
+    pub skill_execution: Option<PrismSkillExecutionResult>,
     pub final_result: DeliberationCommandResult,
     pub event_publish: PrismEventPublishStatus,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PrismSkillExecutionResult {
+    pub skill_id: String,
+    pub run_id: Option<String>,
+    pub status: String,
+    pub message: String,
+    pub code: Option<String>,
+    pub trace_id: Option<String>,
+    pub output_preview: Option<String>,
+    pub output_json: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -484,6 +498,9 @@ pub enum UiCommandError {
     InvalidCommunicationSettings {
         message: String,
     },
+    InvalidSkillInvocation {
+        message: String,
+    },
     LocalBootstrap {
         message: String,
     },
@@ -532,6 +549,9 @@ impl std::fmt::Display for UiCommandError {
             }
             UiCommandError::InvalidCommunicationSettings { message } => {
                 write!(f, "invalid communication settings: {message}")
+            }
+            UiCommandError::InvalidSkillInvocation { message } => {
+                write!(f, "invalid skill invocation: {message}")
             }
             UiCommandError::LocalBootstrap { message } => {
                 write!(f, "local bootstrap error: {message}")
@@ -3017,6 +3037,7 @@ fn synthesize_prism_outputs(
     state: &UiState,
     query: &str,
     lane_outputs: &[PrismLaneOutput],
+    extra_inputs: &[String],
     provider_override: Option<String>,
 ) -> Result<DeliberationCommandResult, UiCommandError> {
     let normalized_override = provider_override.as_deref().and_then(normalize_provider_id);
@@ -3034,6 +3055,7 @@ fn synthesize_prism_outputs(
     let inputs = lane_outputs
         .iter()
         .map(|output| format!("{}:\n{}", output.lane, output.output_text))
+        .chain(extra_inputs.iter().cloned())
         .collect::<Vec<_>>();
 
     let prism = DefaultPrism::default();
@@ -3081,6 +3103,99 @@ fn synthesize_prism_outputs(
             }],
         }),
     }
+}
+
+#[derive(Debug, Clone)]
+struct PrismSkillInvocation {
+    skill_id: String,
+    input: Value,
+}
+
+fn parse_prism_skill_invocation(query: &str) -> Result<Option<PrismSkillInvocation>, UiCommandError> {
+    let trimmed = query.trim();
+    let Some(rest) = trimmed.strip_prefix("/skill ") else {
+        return Ok(None);
+    };
+
+    let rest = rest.trim();
+    if rest.is_empty() {
+        return Err(UiCommandError::InvalidSkillInvocation {
+            message: "expected `/skill <skill_id> [json-or-objective]`".to_string(),
+        });
+    }
+
+    let mut parts = rest.splitn(2, char::is_whitespace);
+    let skill_id = parts.next().unwrap_or_default().trim().to_string();
+    let payload_text = parts.next().unwrap_or_default().trim();
+
+    if skill_id.is_empty() {
+        return Err(UiCommandError::InvalidSkillInvocation {
+            message: "skill_id must not be empty".to_string(),
+        });
+    }
+
+    let input = if payload_text.is_empty() {
+        json!({})
+    } else if payload_text.starts_with('{') || payload_text.starts_with('[') {
+        serde_json::from_str::<Value>(payload_text).map_err(|error| UiCommandError::InvalidSkillInvocation {
+            message: format!("invalid skill payload json: {error}"),
+        })?
+    } else {
+        json!({ "objective": payload_text })
+    };
+
+    Ok(Some(PrismSkillInvocation { skill_id, input }))
+}
+
+fn invoke_prism_skill_best_effort(
+    invocation: &PrismSkillInvocation,
+    round_id: Option<&str>,
+) -> PrismSkillExecutionResult {
+    let trace_id = round_id.map(|value| format!("skill-{value}"));
+    match SkillClient::from_env().and_then(|client| {
+        client.execute_skill(SkillExecutionRequest {
+            skill_id: invocation.skill_id.clone(),
+            input: invocation.input.clone(),
+            trace_id: trace_id.clone(),
+            requested_by: Some(DEFAULT_AGENT_PRISM_ID.to_string()),
+        })
+    }) {
+        Ok(result) => PrismSkillExecutionResult {
+            skill_id: result.skill_id,
+            run_id: Some(result.run_id),
+            status: result.status,
+            message: result.message,
+            code: result.code,
+            trace_id: result.trace_id,
+            output_preview: result.output_preview,
+            output_json: result.output_json,
+        },
+        Err(error) => PrismSkillExecutionResult {
+            skill_id: invocation.skill_id.clone(),
+            run_id: None,
+            status: "error".to_string(),
+            message: error.to_string(),
+            code: Some("SKILL_RUNTIME_REQUEST_FAILED".to_string()),
+            trace_id,
+            output_preview: None,
+            output_json: None,
+        },
+    }
+}
+
+fn build_skill_synthesis_input(skill_execution: &PrismSkillExecutionResult) -> String {
+    let mut lines = vec![
+        format!("Capability Execution ({})", skill_execution.skill_id),
+        format!("status: {}", skill_execution.status),
+        format!("message: {}", skill_execution.message),
+    ];
+    if let Some(code) = skill_execution.code.as_deref() {
+        lines.push(format!("code: {code}"));
+    }
+    if let Some(preview) = skill_execution.output_preview.as_deref() {
+        lines.push(format!("output_preview: {preview}"));
+    }
+    lines.join("\n")
 }
 
 fn trim_runtime_text(text: &str, max_len: usize) -> String {
@@ -3135,6 +3250,7 @@ pub fn run_prism_round(
     if query.is_empty() {
         return Err(UiCommandError::EmptyQuery);
     }
+    let skill_invocation = parse_prism_skill_invocation(&query)?;
 
     let normalized_override = request.provider_override.as_deref().and_then(normalize_provider_id);
     if let Some(provider_id) = normalized_override.as_deref() {
@@ -3153,7 +3269,7 @@ pub fn run_prism_round(
     let message = PrismMessage {
         channel,
         content: query.clone(),
-        force_deliberation: request.force_deliberation,
+        force_deliberation: request.force_deliberation || skill_invocation.is_some(),
     };
     let decision = prism_runtime.inspect_message(&message);
     let sphere_client = SphereClient::from_env().ok();
@@ -3210,6 +3326,7 @@ pub fn run_prism_round(
             required_lanes: decision.required_lanes,
             round_id: None,
             lane_outputs: Vec::new(),
+            skill_execution: None,
             final_result,
             event_publish,
         });
@@ -3290,12 +3407,65 @@ pub fn run_prism_round(
         lane_outputs.push(output);
     }
 
-    let final_result = synthesize_prism_outputs(
+    let skill_execution = skill_invocation.as_ref().map(|invocation| {
+        publish_runtime_event_best_effort(
+            sphere_client.as_ref(),
+            &mut event_publish,
+            "task-events",
+            "prism",
+            "TASK_STARTED",
+            json!({
+                "roundId": round.round_id.clone(),
+                "task": format!("Run skill {}", invocation.skill_id),
+                "skillId": invocation.skill_id.clone(),
+            }),
+        );
+        let result = invoke_prism_skill_best_effort(invocation, Some(&round.round_id));
+        publish_runtime_event_best_effort(
+            sphere_client.as_ref(),
+            &mut event_publish,
+            "task-events",
+            "prism",
+            if result.status == "success" { "TASK_COMPLETED" } else { "TASK_FAILED" },
+            json!({
+                "roundId": round.round_id.clone(),
+                "task": format!("Run skill {}", result.skill_id),
+                "skillId": result.skill_id.clone(),
+                "status": result.status.clone(),
+                "message": result.message.clone(),
+                "outputPreview": result.output_preview.clone(),
+            }),
+        );
+        result
+    });
+
+    let extra_synthesis_inputs = skill_execution
+        .as_ref()
+        .map(|result| vec![build_skill_synthesis_input(result)])
+        .unwrap_or_default();
+
+    let mut final_result = synthesize_prism_outputs(
         &state,
         &query,
         &lane_outputs,
+        &extra_synthesis_inputs,
         normalized_override.clone(),
     )?;
+    if let Some(skill_execution) = skill_execution.as_ref() {
+        final_result.metadata.insert(
+            "skill_execution.skill_id".to_string(),
+            skill_execution.skill_id.clone(),
+        );
+        final_result.metadata.insert(
+            "skill_execution.status".to_string(),
+            skill_execution.status.clone(),
+        );
+        if let Some(code) = skill_execution.code.as_deref() {
+            final_result
+                .metadata
+                .insert("skill_execution.code".to_string(), code.to_string());
+        }
+    }
 
     publish_runtime_event_best_effort(
         sphere_client.as_ref(),
@@ -3331,6 +3501,7 @@ pub fn run_prism_round(
         required_lanes: decision.required_lanes,
         round_id: Some(round.round_id),
         lane_outputs,
+        skill_execution,
         final_result,
         event_publish,
     })

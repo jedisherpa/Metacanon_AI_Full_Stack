@@ -837,6 +837,20 @@ fn run_prism_round_command(options: PrismRoundOptions) -> Result<(), String> {
         );
         println!("lane_output={}", lane.output_text);
     }
+    if let Some(skill) = result.skill_execution {
+        println!("skill_id={}", skill.skill_id);
+        println!("skill_status={}", skill.status);
+        println!("skill_message={}", skill.message);
+        if let Some(code) = skill.code {
+            println!("skill_code={}", code);
+        }
+        if let Some(run_id) = skill.run_id {
+            println!("skill_run_id={}", run_id);
+        }
+        if let Some(output_preview) = skill.output_preview {
+            println!("skill_output={}", output_preview);
+        }
+    }
     println!("provider={}", result.final_result.provider_id);
     println!("model={}", result.final_result.model);
     println!("used_fallback={}", result.final_result.used_fallback);

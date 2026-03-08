@@ -9,6 +9,7 @@ import type { LensPack } from '../../config/lensPack.js';
 import { z } from 'zod';
 import { sendApiError } from '../../lib/apiError.js';
 import { SkillRuntimeError, type SkillRuntime } from '../../agents/skillRuntime.js';
+import { sphereServiceAuthMiddleware } from '../../middleware/sphereServiceAuth.js';
 
 const skillRunSchema = z.object({
   skillId: z.string().min(1),
@@ -20,7 +21,88 @@ export function createEngineRoomRoutes(deps: { lensPack: LensPack; skillRuntime?
   const router = Router();
   const { lensPack, skillRuntime } = deps;
 
+  router.use('/api/v1/runtime/skills', sphereServiceAuthMiddleware);
+
   router.use('/api/v1/engine-room', telegramAuthMiddleware);
+
+  router.get('/api/v1/runtime/skills', async (req, res) => {
+    try {
+      if (!skillRuntime) {
+        sendApiError(req, res, 503, 'SKILL_RUNTIME_UNAVAILABLE', 'Skill runtime is unavailable.', true);
+        return;
+      }
+      res.json({
+        ok: true,
+        skills: skillRuntime.listSkills()
+      });
+    } catch {
+      res.status(500).json({ error: 'Internal server error', code: 'RUNTIME_SKILLS_LIST_ERROR' });
+    }
+  });
+
+  router.get('/api/v1/runtime/skills/:skillId/status', async (req, res) => {
+    try {
+      if (!skillRuntime) {
+        sendApiError(req, res, 503, 'SKILL_RUNTIME_UNAVAILABLE', 'Skill runtime is unavailable.', true);
+        return;
+      }
+      const status = skillRuntime.getSkillStatus(req.params.skillId);
+      res.json({
+        ok: true,
+        status
+      });
+    } catch (err) {
+      if (err instanceof SkillRuntimeError) {
+        sendApiError(req, res, err.statusCode, err.code, err.message, false, err.details);
+        return;
+      }
+      res.status(500).json({ error: 'Internal server error', code: 'RUNTIME_SKILL_STATUS_ERROR' });
+    }
+  });
+
+  router.post('/api/v1/runtime/skills/run', async (req, res) => {
+    try {
+      if (!skillRuntime) {
+        sendApiError(req, res, 503, 'SKILL_RUNTIME_UNAVAILABLE', 'Skill runtime is unavailable.', true);
+        return;
+      }
+
+      const parsed = skillRunSchema.safeParse(req.body);
+      if (!parsed.success) {
+        sendApiError(
+          req,
+          res,
+          400,
+          'SKILL_RUN_INPUT_INVALID',
+          'Invalid skill run payload.',
+          false,
+          parsed.error.flatten()
+        );
+        return;
+      }
+
+      const run = await skillRuntime.runSkill({
+        skillId: parsed.data.skillId,
+        input: parsed.data.input,
+        traceId: parsed.data.traceId,
+        requestedBy: req.spherePrincipal ?? 'bff-service'
+      });
+
+      const statusCode =
+        run.result.status === 'blocked' && run.result.code === 'SKILL_ALREADY_RUNNING' ? 409 : 200;
+
+      res.status(statusCode).json({
+        ok: run.result.status === 'success',
+        run
+      });
+    } catch (err) {
+      if (err instanceof SkillRuntimeError) {
+        sendApiError(req, res, err.statusCode, err.code, err.message, false, err.details);
+        return;
+      }
+      res.status(500).json({ error: 'Internal server error', code: 'RUNTIME_SKILL_RUN_ERROR' });
+    }
+  });
 
   // ─── GET /api/v1/engine-room/status-all ────────────────────────────────────
   router.get('/api/v1/engine-room/status-all', async (req, res) => {

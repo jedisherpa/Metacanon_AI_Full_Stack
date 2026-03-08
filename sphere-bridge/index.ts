@@ -127,6 +127,14 @@ type ParsedPrismRound = {
   route?: string;
   roundId?: string;
   eventPublish?: string;
+  skill?: {
+    skillId?: string;
+    status?: string;
+    message?: string;
+    code?: string;
+    runId?: string;
+    output?: string;
+  };
   provider?: string;
   model?: string;
   usedFallback?: boolean;
@@ -334,6 +342,42 @@ function parsePrismRoundOutput(stdout: string): ParsedPrismRound {
     if (line.startsWith('provider=')) {
       capture = null;
       result.provider = line.slice('provider='.length).trim();
+      continue;
+    }
+    if (line.startsWith('skill_id=')) {
+      capture = null;
+      result.skill = result.skill || {};
+      result.skill.skillId = line.slice('skill_id='.length).trim();
+      continue;
+    }
+    if (line.startsWith('skill_status=')) {
+      capture = null;
+      result.skill = result.skill || {};
+      result.skill.status = line.slice('skill_status='.length).trim();
+      continue;
+    }
+    if (line.startsWith('skill_message=')) {
+      capture = null;
+      result.skill = result.skill || {};
+      result.skill.message = line.slice('skill_message='.length).trim();
+      continue;
+    }
+    if (line.startsWith('skill_code=')) {
+      capture = null;
+      result.skill = result.skill || {};
+      result.skill.code = line.slice('skill_code='.length).trim();
+      continue;
+    }
+    if (line.startsWith('skill_run_id=')) {
+      capture = null;
+      result.skill = result.skill || {};
+      result.skill.runId = line.slice('skill_run_id='.length).trim();
+      continue;
+    }
+    if (line.startsWith('skill_output=')) {
+      capture = null;
+      result.skill = result.skill || {};
+      result.skill.output = line.slice('skill_output='.length).trim();
       continue;
     }
     if (line.startsWith('model=')) {

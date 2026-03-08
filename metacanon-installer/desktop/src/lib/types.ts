@@ -168,12 +168,24 @@ export type PrismEventPublishStatus = {
   errors: string[];
 };
 
+export type PrismSkillExecutionResult = {
+  skill_id: string;
+  run_id?: string | null;
+  status: string;
+  message: string;
+  code?: string | null;
+  trace_id?: string | null;
+  output_preview?: string | null;
+  output_json?: string | null;
+};
+
 export type PrismRoundCommandResult = {
   route: 'direct' | 'deliberate';
   decision_summary: string;
   required_lanes: string[];
   round_id?: string | null;
   lane_outputs: PrismLaneOutput[];
+  skill_execution?: PrismSkillExecutionResult | null;
   final_result: DeliberationCommandResult;
   event_publish: PrismEventPublishStatus;
 };

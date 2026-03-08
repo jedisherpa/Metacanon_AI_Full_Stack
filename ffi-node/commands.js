@@ -1,115 +1,117 @@
-const fs = require('node:fs');
-const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const { createMetaCanonClient } = require("./client.js");
 
-function repoRoot() {
-  return path.resolve(__dirname, '..');
-}
+function createInstallerWebappCommands(options = {}) {
+  const client = options.client || createMetaCanonClient(options.nativeBridge);
 
-function defaultSnapshotPath() {
-  const home = process.env.HOME;
-  return home
-    ? path.join(home, '.metacanon_ai', 'runtime_snapshot.json')
-    : '.metacanon_ai/runtime_snapshot.json';
-}
-
-function runtimeBinaryPath() {
-  return process.env.METACANON_RUNTIME_CONTROL_BIN
-    || path.join(repoRoot(), 'metacanon-core', 'target', 'debug', 'runtime_control');
-}
-
-function buildEnv() {
   return {
-    ...process.env,
-    PATH: `/opt/homebrew/opt/rustup/bin:${process.env.PATH || ''}:${process.env.HOME || ''}/.cargo/bin`,
-  };
-}
+    raw: client,
 
-function runRuntimeControl(command, args = []) {
-  const snapshotPath = process.env.METACANON_RUNTIME_SNAPSHOT || defaultSnapshotPath();
-  const fullArgs = ['--snapshot', snapshotPath, command, ...args];
-  const binPath = runtimeBinaryPath();
-  const opts = { cwd: repoRoot(), env: buildEnv(), encoding: 'utf8' };
+    logEvent(traceId, eventType, payload) {
+      return client.logEvent(traceId, eventType, payload);
+    },
 
-  const result = fs.existsSync(binPath)
-    ? spawnSync(binPath, fullArgs, opts)
-    : spawnSync('cargo', ['run', '--quiet', '--bin', 'runtime_control', '--', ...fullArgs], {
-        ...opts,
-        cwd: path.join(repoRoot(), 'metacanon-core'),
-      });
+    getCodeSnippet(filePath, startLine, endLine) {
+      return client.getCodeSnippet(filePath, startLine, endLine);
+    },
 
-  if (result.error) {
-    throw result.error;
-  }
-  if (result.status !== 0) {
-    throw new Error((result.stderr || result.stdout || `runtime_control failed with status ${result.status}`).trim());
-  }
+    getWillVector(soulFile) {
+      return client.getWillVector(soulFile);
+    },
 
-  const stdout = (result.stdout || '').trim();
-  return stdout ? JSON.parse(stdout) : null;
-}
+    updateSoulFile(soulFile, patch, signingSecret) {
+      return client.updateSoulFile(soulFile, patch, signingSecret);
+    },
 
-function createInstallerWebappCommands() {
-  return {
     getComputeOptions() {
-      return runRuntimeControl('get-compute-options');
+      return client.getComputeOptions();
     },
+
     setGlobalComputeProvider(providerId) {
-      return runRuntimeControl('set-global-compute-provider', [providerId]);
+      return client.setGlobalComputeProvider(providerId);
     },
+
     setProviderPriority(cloudProviderPriority) {
-      return runRuntimeControl('set-provider-priority', [JSON.stringify(cloudProviderPriority)]);
+      return client.setProviderPriority(cloudProviderPriority);
     },
+
     updateProviderConfig(providerId, config) {
-      return runRuntimeControl('update-provider-config', [providerId, JSON.stringify(config)]);
+      return client.updateProviderConfig(providerId, config);
     },
+
     invokeGenesisRite(request) {
-      return runRuntimeControl('invoke-genesis-rite', [JSON.stringify(request)]);
+      return client.genesisRite(request);
     },
+
     validateAction(action, willVector) {
-      const result = runRuntimeControl('validate-action', [JSON.stringify({ action, will_vector: willVector })]);
-      return Boolean(result && result.valid);
+      return client.validateAction(action, willVector);
     },
+
     createTaskSubSphere(payload) {
-      return runRuntimeControl('create-task-sub-sphere', [JSON.stringify(payload)]);
+      return client.createTaskSubSphere(payload.name, payload.objective, payload.hitl_required);
     },
+
     getSubSphereList() {
-      return runRuntimeControl('get-sub-sphere-list');
+      return client.getSubSphereList();
     },
+
     getSubSphereStatus(subSphereId) {
-      return runRuntimeControl('get-sub-sphere-status', [subSphereId]);
+      return client.getSubSphereStatus(subSphereId);
     },
+
     pauseSubSphere(subSphereId) {
-      return runRuntimeControl('pause-sub-sphere', [subSphereId]);
+      return client.pauseSubSphere(subSphereId);
     },
+
     dissolveSubSphere(subSphereId, reason) {
-      return runRuntimeControl('dissolve-sub-sphere', [subSphereId, reason]);
+      return client.dissolveSubSphere(subSphereId, reason);
     },
-    submitSubSphereQuery(subSphereId, query, providerOverride) {
-      return runRuntimeControl('submit-sub-sphere-query', [subSphereId, JSON.stringify({ query, provider_override: providerOverride ?? null })]);
+
+    submitSubSphereQuery(subSphereId, query, providerOverride = null) {
+      return client.submitSubSphereQuery(subSphereId, query, providerOverride);
     },
+
     updateTelegramIntegration(config) {
-      return runRuntimeControl('update-telegram-integration', [JSON.stringify(config)]);
+      return client.updateTelegramIntegration(config);
     },
+
     updateDiscordIntegration(config) {
-      return runRuntimeControl('update-discord-integration', [JSON.stringify(config)]);
+      return client.updateDiscordIntegration(config);
     },
+
     bindAgentCommunicationRoute(payload) {
-      return runRuntimeControl('bind-agent-route', [JSON.stringify(payload)]);
+      return client.bindAgentRoute(
+        payload.agent_id,
+        payload.telegram_chat_id ?? null,
+        payload.discord_thread_id ?? null,
+        payload.in_app_thread_id ?? null,
+        payload.is_orchestrator ?? false
+      );
     },
+
     bindSubSpherePrismRoute(payload) {
-      return runRuntimeControl('bind-sub-sphere-prism-route', [JSON.stringify(payload)]);
+      return client.bindSubSpherePrismRoute(
+        payload.sub_sphere_id,
+        payload.prism_agent_id,
+        payload.telegram_chat_id ?? null,
+        payload.discord_thread_id ?? null,
+        payload.in_app_thread_id ?? null
+      );
     },
+
     sendAgentMessage(payload) {
-      return runRuntimeControl('send-agent-message', [JSON.stringify(payload)]);
+      return client.sendAgentMessage(payload.platform, payload.agent_id, payload.message);
     },
+
     sendSubSpherePrismMessage(payload) {
-      return runRuntimeControl('send-sub-sphere-prism-message', [JSON.stringify(payload)]);
+      return client.sendSubSpherePrismMessage(payload.platform, payload.sub_sphere_id, payload.message);
     },
+
     getCommunicationStatus() {
-      return runRuntimeControl('get-communication-status');
+      return client.getCommunicationStatus();
     },
   };
 }
 
-module.exports = { createInstallerWebappCommands };
+module.exports = {
+  createInstallerWebappCommands,
+};

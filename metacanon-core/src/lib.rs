@@ -9,6 +9,7 @@ pub mod local_store;
 pub mod ffi_bridge;
 pub mod observability;
 pub mod prism;
+pub mod skill_client;
 pub mod providers;
 pub mod secrets;
 pub mod specialist_lens;

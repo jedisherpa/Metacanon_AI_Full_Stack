@@ -1,0 +1,36 @@
+{
+  "name": "metacanon-ffi-node",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Node harness for MetaCanon Rust N-API bridge",
+  "type": "commonjs",
+  "main": "index.js",
+  "types": "client.d.ts",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./client.js": "./client.js",
+    "./commands": "./commands.js",
+    "./commands.js": "./commands.js"
+  },
+  "typesVersions": {
+    "*": {
+      "client": [
+        "client.d.ts"
+      ],
+      "client.js": [
+        "client.d.ts"
+      ],
+      "commands": [
+        "commands.d.ts"
+      ],
+      "commands.js": [
+        "commands.d.ts"
+      ]
+    }
+  },
+  "scripts": {
+    "build:native": "bash ./scripts/build-native.sh",
+    "test": "node --test ./test/*.test.mjs"
+  }
+}
