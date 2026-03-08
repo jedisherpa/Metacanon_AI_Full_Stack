@@ -1,0 +1,64 @@
+services:
+  db:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: council
+      POSTGRES_PASSWORD: council
+      POSTGRES_DB: council
+    volumes:
+      - fullstack-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U council -d council"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  engine-migrate:
+    build:
+      context: ./sphere-engine-server
+    command: ["node", "engine/dist/db/migrate.js"]
+    environment:
+      DATABASE_URL: postgresql://council:council@db:5432/council
+      PORT: 3001
+      CORS_ORIGINS: http://localhost:3020,http://localhost:4173
+      INLINE_WORKER_ENABLED: "false"
+    env_file:
+      - ./sphere-engine-server/engine/.env.example
+    depends_on:
+      db:
+        condition: service_healthy
+
+  engine-api:
+    build:
+      context: ./sphere-engine-server
+    command: ["node", "engine/dist/index.js"]
+    ports:
+      - "3101:3001"
+    environment:
+      DATABASE_URL: postgresql://council:council@db:5432/council
+      PORT: 3001
+      CORS_ORIGINS: http://localhost:3020,http://localhost:4173
+      INLINE_WORKER_ENABLED: "false"
+    env_file:
+      - ./sphere-engine-server/engine/.env.example
+    depends_on:
+      db:
+        condition: service_healthy
+
+  engine-worker:
+    build:
+      context: ./sphere-engine-server
+    command: ["node", "engine/dist/index.worker.js"]
+    environment:
+      DATABASE_URL: postgresql://council:council@db:5432/council
+      INLINE_WORKER_ENABLED: "false"
+    env_file:
+      - ./sphere-engine-server/engine/.env.example
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  fullstack-pgdata:
