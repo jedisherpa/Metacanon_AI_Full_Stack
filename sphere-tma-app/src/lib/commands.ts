@@ -1,6 +1,13 @@
 export type ApiMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE';
 
-export type CommandScope = 'atlas' | 'citadel' | 'forge' | 'hub' | 'engine-room' | 'sphere';
+export type CommandScope =
+  | 'atlas'
+  | 'citadel'
+  | 'forge'
+  | 'hub'
+  | 'engine-room'
+  | 'sphere'
+  | 'runtime';
 
 export type CommandTemplate = Record<string, unknown>;
 
@@ -750,6 +757,213 @@ export const commandCatalog: CommandDefinition[] = [
     bodyTemplate: {
       defaultGroupSize: 12,
       positionRevealSeconds: 30
+    }
+  },
+
+  // MetaCanon Runtime Control (18)
+  {
+    id: 'runtime_health',
+    label: 'Runtime Health',
+    scope: 'runtime',
+    method: 'GET',
+    path: '/api/v1/runtime/healthz',
+    description: 'Check runtime bridge readiness and command-module availability.'
+  },
+  {
+    id: 'runtime_bridge_state',
+    label: 'Runtime Bridge State',
+    scope: 'runtime',
+    method: 'GET',
+    path: '/api/v1/runtime/bridge/state',
+    description: 'Inspect runtime bridge load state and last load error.'
+  },
+  {
+    id: 'runtime_compute_options',
+    label: 'Runtime Compute Options',
+    scope: 'runtime',
+    method: 'GET',
+    path: '/api/v1/runtime/compute/options',
+    description: 'List runtime compute providers and status.'
+  },
+  {
+    id: 'runtime_compute_global',
+    label: 'Runtime Set Global Provider',
+    scope: 'runtime',
+    method: 'POST',
+    path: '/api/v1/runtime/compute/global-provider',
+    description: 'Set active runtime compute provider.',
+    bodyTemplate: { provider_id: 'qwen_local' }
+  },
+  {
+    id: 'runtime_compute_priority',
+    label: 'Runtime Set Cloud Priority',
+    scope: 'runtime',
+    method: 'POST',
+    path: '/api/v1/runtime/compute/priority',
+    description: 'Set cloud fallback priority list.',
+    bodyTemplate: { cloud_provider_priority: ['openai', 'anthropic', 'moonshot_kimi', 'grok'] }
+  },
+  {
+    id: 'runtime_provider_config',
+    label: 'Runtime Provider Config',
+    scope: 'runtime',
+    method: 'POST',
+    path: '/api/v1/runtime/providers/:providerId/config',
+    pathParams: ['providerId'],
+    description: 'Update provider configuration for a runtime provider.',
+    queryTemplate: { providerId: 'openai' },
+    bodyTemplate: { config: { api_key: 'sk-...', live_api: true } }
+  },
+  {
+    id: 'runtime_genesis_invoke',
+    label: 'Runtime Invoke Genesis',
+    scope: 'runtime',
+    method: 'POST',
+    path: '/api/v1/runtime/genesis/invoke',
+    description: 'Run guided Genesis rite through runtime bridge.',
+    bodyTemplate: {
+      vision_core: 'MetaCanon sovereign operation',
+      core_values: ['Sovereignty', 'Clarity'],
+      will_directives: ['Protect private thoughts'],
+      signing_secret: 'replace-with-secret'
+    }
+  },
+  {
+    id: 'runtime_action_validate',
+    label: 'Runtime Validate Action',
+    scope: 'runtime',
+    method: 'POST',
+    path: '/api/v1/runtime/actions/validate',
+    description: 'Validate an action against current Will Vector.',
+    bodyTemplate: {
+      action: { target: 'llm_call', content: 'protect private thoughts' },
+      will_vector: { directives: ['protect private thoughts'] }
+    }
+  },
+  {
+    id: 'runtime_subsphere_create',
+    label: 'Runtime Create Sub-Sphere',
+    scope: 'runtime',
+    method: 'POST',
+    path: '/api/v1/runtime/sub-spheres',
+    description: 'Create a runtime task sub-sphere.',
+    bodyTemplate: {
+      name: 'Research Pod',
+      objective: 'Compile source-of-truth references',
+      hitl_required: true
+    }
+  },
+  {
+    id: 'runtime_subsphere_list',
+    label: 'Runtime List Sub-Spheres',
+    scope: 'runtime',
+    method: 'GET',
+    path: '/api/v1/runtime/sub-spheres',
+    description: 'List active/paused/dissolved runtime sub-spheres.'
+  },
+  {
+    id: 'runtime_subsphere_get',
+    label: 'Runtime Get Sub-Sphere',
+    scope: 'runtime',
+    method: 'GET',
+    path: '/api/v1/runtime/sub-spheres/:subSphereId',
+    pathParams: ['subSphereId'],
+    description: 'Get one runtime sub-sphere status.',
+    queryTemplate: { subSphereId: 'replace-sub-sphere-id' }
+  },
+  {
+    id: 'runtime_subsphere_pause',
+    label: 'Runtime Pause Sub-Sphere',
+    scope: 'runtime',
+    method: 'POST',
+    path: '/api/v1/runtime/sub-spheres/:subSphereId/pause',
+    pathParams: ['subSphereId'],
+    description: 'Pause a runtime sub-sphere.',
+    queryTemplate: { subSphereId: 'replace-sub-sphere-id' },
+    bodyTemplate: {}
+  },
+  {
+    id: 'runtime_subsphere_dissolve',
+    label: 'Runtime Dissolve Sub-Sphere',
+    scope: 'runtime',
+    method: 'POST',
+    path: '/api/v1/runtime/sub-spheres/:subSphereId/dissolve',
+    pathParams: ['subSphereId'],
+    description: 'Dissolve a runtime sub-sphere.',
+    queryTemplate: { subSphereId: 'replace-sub-sphere-id' },
+    bodyTemplate: { reason: 'objective completed' }
+  },
+  {
+    id: 'runtime_subsphere_query',
+    label: 'Runtime Query Sub-Sphere',
+    scope: 'runtime',
+    method: 'POST',
+    path: '/api/v1/runtime/sub-spheres/:subSphereId/query',
+    pathParams: ['subSphereId'],
+    description: 'Submit a query to a runtime sub-sphere deliberation path.',
+    queryTemplate: { subSphereId: 'replace-sub-sphere-id' },
+    bodyTemplate: { query: 'Summarize current risks', provider_override: null }
+  },
+  {
+    id: 'runtime_comms_status',
+    label: 'Runtime Comms Status',
+    scope: 'runtime',
+    method: 'GET',
+    path: '/api/v1/runtime/communications/status',
+    description: 'Fetch runtime Telegram/Discord/In-App communication status.'
+  },
+  {
+    id: 'runtime_comms_agent_bind',
+    label: 'Runtime Bind Agent Route',
+    scope: 'runtime',
+    method: 'POST',
+    path: '/api/v1/runtime/communications/agents/bind',
+    description: 'Bind an agent route for Telegram/Discord/In-App.',
+    bodyTemplate: {
+      agent_id: 'agent-genesis',
+      telegram_chat_id: null,
+      discord_thread_id: null,
+      in_app_thread_id: 'inapp-agent-genesis',
+      is_orchestrator: true
+    }
+  },
+  {
+    id: 'runtime_comms_subsphere_bind',
+    label: 'Runtime Bind Sub-Sphere Prism',
+    scope: 'runtime',
+    method: 'POST',
+    path: '/api/v1/runtime/communications/sub-spheres/prism/bind',
+    description: 'Bind prism route for a sub-sphere.',
+    bodyTemplate: {
+      sub_sphere_id: 'replace-sub-sphere-id',
+      prism_agent_id: 'agent-synthesis',
+      in_app_thread_id: 'inapp-prism-sphere-1'
+    }
+  },
+  {
+    id: 'runtime_comms_agent_message',
+    label: 'Runtime Send Agent Message',
+    scope: 'runtime',
+    method: 'POST',
+    path: '/api/v1/runtime/communications/agents/message',
+    description: 'Dispatch message to an agent route.',
+    bodyTemplate: {
+      platform: 'in_app',
+      agent_id: 'agent-genesis',
+      message: 'Runtime command deck ping'
+    }
+  },
+  {
+    id: 'runtime_comms_subsphere_message',
+    label: 'Runtime Send Sub-Sphere Message',
+    scope: 'runtime',
+    method: 'POST',
+    path: '/api/v1/runtime/communications/sub-spheres/message',
+    description: 'Dispatch message to a sub-sphere prism route.',
+    bodyTemplate: {
+      platform: 'in_app',
+      sub_sphere_id: 'replace-sub-sphere-id',
+      message: 'Prism channel ping'
     }
   }
 ];

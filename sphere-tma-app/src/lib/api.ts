@@ -5,11 +5,13 @@
 
 import { getSphereSigner } from './sphereIdentity';
 import { readAgentApiKey } from './agentApiKey';
+import { readControlApiKey } from './controlApiKey';
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? '';
 const SPHERE_CANONICAL_BASE = '/api/v1/sphere';
 const SPHERE_ALIAS_BASE = '/api/v1/c2';
 const SPHERE_BFF_BASE = '/api/v1/bff/sphere';
+const RUNTIME_BASE = '/api/v1/runtime';
 const SPHERE_AGENT_PRINCIPAL_HEADER = 'x-sphere-agent-principal';
 
 type QueryParams = Record<string, unknown>;
@@ -97,7 +99,12 @@ function buildRequestUrl(path: string): string {
   return `${API_BASE}${normalizeApiPath(path)}`;
 }
 
-function buildTelegramHeaders(): Record<string, string> {
+function isRuntimePath(path: string): boolean {
+  const [pathname] = path.split('?', 2);
+  return pathname === RUNTIME_BASE || pathname.startsWith(`${RUNTIME_BASE}/`);
+}
+
+function buildRequestHeaders(path: string): Record<string, string> {
   const initData = getInitData();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -107,6 +114,13 @@ function buildTelegramHeaders(): Record<string, string> {
   const agentApiKey = readAgentApiKey();
   if (agentApiKey) {
     headers['x-agent-api-key'] = agentApiKey;
+  }
+
+  if (isRuntimePath(path)) {
+    const controlApiKey = readControlApiKey();
+    if (controlApiKey) {
+      headers['x-metacanon-key'] = controlApiKey;
+    }
   }
 
   return headers;
@@ -159,7 +173,7 @@ async function requestWithResponse<T>(
 ): Promise<{ data: T; response: Response }> {
   const res = await fetch(buildRequestUrl(path), {
     method,
-    headers: buildTelegramHeaders(),
+    headers: buildRequestHeaders(path),
     body: body ? JSON.stringify(body) : undefined
   });
 
@@ -438,7 +452,7 @@ async function streamSphereThread(options: SphereThreadStreamOptions): Promise<(
     try {
       const response = await fetch(buildRequestUrl(path), {
         method: 'GET',
-        headers: buildTelegramHeaders(),
+        headers: buildRequestHeaders(path),
         signal: controller.signal
       });
 
@@ -494,6 +508,75 @@ async function streamSphereThread(options: SphereThreadStreamOptions): Promise<(
 
 export const api = {
   executeEndpoint,
+
+  // MetaCanon Runtime Control
+  getRuntimeHealth: () =>
+    request<RuntimeHealth>('GET', `${RUNTIME_BASE}/healthz`),
+  getRuntimeBridgeState: () =>
+    request<RuntimeBridgeState>('GET', `${RUNTIME_BASE}/bridge/state`),
+  getRuntimeComputeOptions: () =>
+    request<RuntimeComputeOption[]>('GET', `${RUNTIME_BASE}/compute/options`),
+  setRuntimeGlobalComputeProvider: (providerId: string) =>
+    request<Record<string, unknown>>('POST', `${RUNTIME_BASE}/compute/global-provider`, {
+      provider_id: providerId
+    }),
+  setRuntimeProviderPriority: (cloudProviderPriority: string[]) =>
+    request<Record<string, unknown>>('POST', `${RUNTIME_BASE}/compute/priority`, {
+      cloud_provider_priority: cloudProviderPriority
+    }),
+  updateRuntimeProviderConfig: (providerId: string, config: Record<string, unknown>) =>
+    request<Record<string, unknown>>('POST', `${RUNTIME_BASE}/providers/${providerId}/config`, {
+      config
+    }),
+  invokeRuntimeGenesis: (payload: Record<string, unknown>) =>
+    request<Record<string, unknown>>('POST', `${RUNTIME_BASE}/genesis/invoke`, payload),
+  validateRuntimeAction: (action: Record<string, unknown>, willVector: Record<string, unknown>) =>
+    request<{ valid: boolean }>('POST', `${RUNTIME_BASE}/actions/validate`, {
+      action,
+      will_vector: willVector
+    }),
+  createRuntimeSubSphere: (payload: {
+    name: string;
+    objective: string;
+    hitl_required?: boolean;
+  }) => request<Record<string, unknown>>('POST', `${RUNTIME_BASE}/sub-spheres`, payload),
+  listRuntimeSubSpheres: () =>
+    request<Array<Record<string, unknown>>>('GET', `${RUNTIME_BASE}/sub-spheres`),
+  getRuntimeSubSphere: (subSphereId: string) =>
+    request<Record<string, unknown>>('GET', `${RUNTIME_BASE}/sub-spheres/${subSphereId}`),
+  pauseRuntimeSubSphere: (subSphereId: string) =>
+    request<Record<string, unknown>>('POST', `${RUNTIME_BASE}/sub-spheres/${subSphereId}/pause`, {}),
+  dissolveRuntimeSubSphere: (subSphereId: string, reason: string) =>
+    request<Record<string, unknown>>('POST', `${RUNTIME_BASE}/sub-spheres/${subSphereId}/dissolve`, {
+      reason
+    }),
+  queryRuntimeSubSphere: (subSphereId: string, query: string, providerOverride?: string | null) =>
+    request<Record<string, unknown>>('POST', `${RUNTIME_BASE}/sub-spheres/${subSphereId}/query`, {
+      query,
+      provider_override: providerOverride ?? null
+    }),
+  getRuntimeCommunicationStatus: () =>
+    request<Record<string, unknown>>('GET', `${RUNTIME_BASE}/communications/status`),
+  updateRuntimeTelegramIntegration: (payload: Record<string, unknown>) =>
+    request<Record<string, unknown>>('POST', `${RUNTIME_BASE}/communications/telegram`, payload),
+  updateRuntimeDiscordIntegration: (payload: Record<string, unknown>) =>
+    request<Record<string, unknown>>('POST', `${RUNTIME_BASE}/communications/discord`, payload),
+  bindRuntimeAgentRoute: (payload: Record<string, unknown>) =>
+    request<Record<string, unknown>>('POST', `${RUNTIME_BASE}/communications/agents/bind`, payload),
+  bindRuntimeSubSpherePrismRoute: (payload: Record<string, unknown>) =>
+    request<Record<string, unknown>>(
+      'POST',
+      `${RUNTIME_BASE}/communications/sub-spheres/prism/bind`,
+      payload
+    ),
+  sendRuntimeAgentMessage: (payload: Record<string, unknown>) =>
+    request<Record<string, unknown>>('POST', `${RUNTIME_BASE}/communications/agents/message`, payload),
+  sendRuntimeSubSphereMessage: (payload: Record<string, unknown>) =>
+    request<Record<string, unknown>>(
+      'POST',
+      `${RUNTIME_BASE}/communications/sub-spheres/message`,
+      payload
+    ),
 
   // Sphere (via BFF auth adapter)
   getSphereCapabilities: () =>
@@ -795,6 +878,30 @@ export const api = {
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+export type RuntimeHealth = {
+  status: 'ok' | 'degraded';
+  bridge_ready: boolean;
+  commands_module_path?: string;
+  error?: string;
+};
+
+export type RuntimeBridgeState = {
+  commands_module_path: string;
+  loaded: boolean;
+  load_error?: string | null;
+};
+
+export type RuntimeComputeOption = {
+  provider_id: string;
+  display_name?: string;
+  kind?: string;
+  configured?: boolean;
+  available?: boolean;
+  selected_global?: boolean;
+  default_if_skipped?: boolean;
+  [key: string]: unknown;
+};
 
 export type AtlasState = {
   ok: boolean;

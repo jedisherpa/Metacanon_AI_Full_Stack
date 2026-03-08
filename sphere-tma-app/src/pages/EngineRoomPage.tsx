@@ -12,7 +12,15 @@ import {
   Check,
   AlertTriangle
 } from 'lucide-react';
-import { api, ApiRequestError, type SphereCapabilities, type SphereStatus } from '../lib/api';
+import {
+  api,
+  ApiRequestError,
+  type RuntimeBridgeState,
+  type RuntimeComputeOption,
+  type RuntimeHealth,
+  type SphereCapabilities,
+  type SphereStatus
+} from '../lib/api';
 import {
   commandCatalog,
   commandCatalogById,
@@ -22,6 +30,7 @@ import {
 } from '../lib/commands';
 import { getTelegramStartParam, triggerHaptic } from '../lib/telegram';
 import { clearAgentApiKey, readAgentApiKey, saveAgentApiKey } from '../lib/agentApiKey';
+import { clearControlApiKey, readControlApiKey, saveControlApiKey } from '../lib/controlApiKey';
 
 type Tab = 'status' | 'db' | 'glossary' | 'constellations' | 'commands';
 type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
@@ -566,7 +575,9 @@ function classifyCommandError(error: unknown): CommandErrorState {
           ? 'halted'
           : code === 'STM_ERR_MISSING_ATTESTATION' || code === 'PRISM_HOLDER_APPROVAL_REQUIRED'
             ? 'quorum'
-            : code === 'SPHERE_ERR_AUTH_REQUIRED' ||
+            : error.status === 401 ||
+                error.status === 403 ||
+                code === 'SPHERE_ERR_AUTH_REQUIRED' ||
                 code === 'SPHERE_ERR_AUTH_INVALID' ||
                 code === 'SPHERE_ERR_INVALID_TOKEN' ||
                 code === 'SPHERE_ERR_TMA_DIRECT_FORBIDDEN' ||
@@ -596,9 +607,14 @@ function classifyCommandError(error: unknown): CommandErrorState {
 
 export default function EngineRoomPage({ defaultTab = 'status' }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>(defaultTab);
-  const [status, setStatus] = useState<any>(null);
+  const [status, setStatus] = useState<any>({});
   const [sphereStatus, setSphereStatus] = useState<SphereStatus | null>(null);
   const [sphereCapabilities, setSphereCapabilities] = useState<SphereCapabilities | null>(null);
+  const [runtimeHealth, setRuntimeHealth] = useState<RuntimeHealth | null>(null);
+  const [runtimeBridgeState, setRuntimeBridgeState] = useState<RuntimeBridgeState | null>(null);
+  const [runtimeComputeOptions, setRuntimeComputeOptions] = useState<RuntimeComputeOption[]>([]);
+  const [runtimeCommunicationStatus, setRuntimeCommunicationStatus] =
+    useState<Record<string, unknown> | null>(null);
   const [dbHealth, setDbHealth] = useState<any>(null);
   const [glossary, setGlossary] = useState<any[]>([]);
   const [constellations, setConstellations] = useState<any[]>([]);
@@ -618,6 +634,8 @@ export default function EngineRoomPage({ defaultTab = 'status' }: Props) {
   const [commandSelectionInitialized, setCommandSelectionInitialized] = useState(false);
   const [agentApiKeyInput, setAgentApiKeyInput] = useState('');
   const [agentApiKeySaved, setAgentApiKeySaved] = useState<boolean>(false);
+  const [controlApiKeyInput, setControlApiKeyInput] = useState('');
+  const [controlApiKeySaved, setControlApiKeySaved] = useState<boolean>(false);
 
   const selectedCommand = useMemo<CommandDefinition>(() => {
     return commandCatalogById[selectedCommandId] ?? commandCatalog[0];
@@ -673,6 +691,12 @@ export default function EngineRoomPage({ defaultTab = 'status' }: Props) {
   }, []);
 
   useEffect(() => {
+    const existing = readControlApiKey();
+    setControlApiKeyInput(existing ?? '');
+    setControlApiKeySaved(Boolean(existing));
+  }, []);
+
+  useEffect(() => {
     const draft = readCommandDrafts()[selectedCommand.id];
     setQueryEditor(draft?.query ?? toTemplateString(selectedCommand.queryTemplate));
     setBodyEditor(draft?.body ?? toTemplateString(selectedCommand.bodyTemplate));
@@ -716,9 +740,22 @@ export default function EngineRoomPage({ defaultTab = 'status' }: Props) {
         api.getStatusAll(),
         api.getDbHealth(),
         api.getSphereCapabilities(),
-        api.getSphereStatus()
+        api.getSphereStatus(),
+        api.getRuntimeHealth(),
+        api.getRuntimeBridgeState(),
+        api.getRuntimeComputeOptions(),
+        api.getRuntimeCommunicationStatus()
       ])
-        .then(([statusResult, dbResult, capabilitiesResult, sphereStatusResult]) => {
+        .then(([
+          statusResult,
+          dbResult,
+          capabilitiesResult,
+          sphereStatusResult,
+          runtimeHealthResult,
+          runtimeBridgeResult,
+          runtimeComputeOptionsResult,
+          runtimeCommunicationStatusResult
+        ]) => {
           if (statusResult.status === 'fulfilled') {
             setStatus((statusResult.value as any).status);
           }
@@ -727,6 +764,16 @@ export default function EngineRoomPage({ defaultTab = 'status' }: Props) {
           }
           setSphereCapabilities(capabilitiesResult.status === 'fulfilled' ? capabilitiesResult.value : null);
           setSphereStatus(sphereStatusResult.status === 'fulfilled' ? sphereStatusResult.value : null);
+          setRuntimeHealth(runtimeHealthResult.status === 'fulfilled' ? runtimeHealthResult.value : null);
+          setRuntimeBridgeState(runtimeBridgeResult.status === 'fulfilled' ? runtimeBridgeResult.value : null);
+          setRuntimeComputeOptions(
+            runtimeComputeOptionsResult.status === 'fulfilled' ? runtimeComputeOptionsResult.value : []
+          );
+          setRuntimeCommunicationStatus(
+            runtimeCommunicationStatusResult.status === 'fulfilled'
+              ? runtimeCommunicationStatusResult.value
+              : null
+          );
           setLoading(false);
         })
         .catch(() => setLoading(false));
@@ -848,6 +895,30 @@ export default function EngineRoomPage({ defaultTab = 'status' }: Props) {
     clearAgentApiKey();
     setAgentApiKeyInput('');
     setAgentApiKeySaved(false);
+    setCommandError(null);
+    triggerHaptic('selection');
+  }
+
+  function handleSaveControlApiKey() {
+    const saved = saveControlApiKey(controlApiKeyInput);
+    setControlApiKeyInput(saved ?? '');
+    setControlApiKeySaved(Boolean(saved));
+    if (!saved) {
+      setCommandError({
+        kind: 'auth',
+        message: 'Control API key is empty. Add a key to save it.'
+      });
+      return;
+    }
+
+    setCommandError(null);
+    triggerHaptic('notification_success');
+  }
+
+  function handleClearControlApiKey() {
+    clearControlApiKey();
+    setControlApiKeyInput('');
+    setControlApiKeySaved(false);
     setCommandError(null);
     triggerHaptic('selection');
   }
@@ -985,6 +1056,52 @@ export default function EngineRoomPage({ defaultTab = 'status' }: Props) {
                     )
                   )}
                 </div>
+              )}
+            </div>
+
+            <div className="territory-card lf-card border border-engine/20 bg-engine/[0.03] rounded-sm p-3">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-white/70 text-xs font-mono uppercase tracking-wider">MetaCanon Runtime</p>
+                <span
+                  className={`text-xs font-mono ${
+                    runtimeHealth?.bridge_ready ? 'text-engine' : 'text-white/45'
+                  }`}
+                >
+                  {runtimeHealth?.status?.toUpperCase() ?? 'UNAVAILABLE'}
+                </span>
+              </div>
+
+              {runtimeHealth ? (
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <p className="text-white/40">Bridge Ready</p>
+                    <p className={`font-mono ${runtimeHealth.bridge_ready ? 'text-engine' : 'text-red-400'}`}>
+                      {runtimeHealth.bridge_ready ? 'YES' : 'NO'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-white/40">Compute Providers</p>
+                    <p className="text-white font-mono">{runtimeComputeOptions.length}</p>
+                  </div>
+                  <div>
+                    <p className="text-white/40">Bridge Loaded</p>
+                    <p className="text-white font-mono">
+                      {runtimeBridgeState?.loaded ? 'YES' : 'NO'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-white/40">Agent Bindings</p>
+                    <p className="text-white font-mono">
+                      {Array.isArray(runtimeCommunicationStatus?.agent_bindings)
+                        ? runtimeCommunicationStatus.agent_bindings.length
+                        : 0}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-white/45 text-xs">
+                  Runtime control API unavailable. Set API base to metacanon-code-api and configure control key if enabled.
+                </p>
               )}
             </div>
 
@@ -1191,6 +1308,52 @@ export default function EngineRoomPage({ defaultTab = 'status' }: Props) {
                       Writes can be gated by key at the BFF boundary. Saved key is sent as
                       {' '}
                       <span className="font-mono">x-agent-api-key</span>.
+                    </p>
+                  </div>
+
+                  <div className="territory-card lf-card mt-3 border border-white/10 rounded-sm p-2.5 bg-void-light/60 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-white/55 text-[10px] font-mono uppercase tracking-wider">
+                        Control API Key
+                      </p>
+                      <span className={`text-[10px] font-mono ${controlApiKeySaved ? 'text-engine' : 'text-white/45'}`}>
+                        {controlApiKeySaved ? 'ATTACHED' : 'OPTIONAL'}
+                      </span>
+                    </div>
+                    <input
+                      type="password"
+                      value={controlApiKeyInput}
+                      onChange={(event) => {
+                        setControlApiKeyInput(event.target.value);
+                        setControlApiKeySaved(false);
+                      }}
+                      placeholder="x-metacanon-key"
+                      className="lf-input w-full bg-void border border-white/20 text-white text-xs px-2 py-1.5 rounded-sm font-mono outline-none focus:border-engine/60"
+                    />
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleSaveControlApiKey}
+                        className="lf-button lf-button--secondary text-[10px] font-mono border border-engine/40 text-engine px-2 py-1 rounded-sm"
+                      >
+                        SAVE KEY
+                      </button>
+                      <button
+                        onClick={handleClearControlApiKey}
+                        className="lf-button lf-button--secondary text-[10px] font-mono border border-white/20 text-white/55 px-2 py-1 rounded-sm"
+                      >
+                        CLEAR KEY
+                      </button>
+                    </div>
+                    <p className="text-white/35 text-[10px]">
+                      Required only when runtime control API enables auth. Saved key is sent as
+                      {' '}
+                      <span className="font-mono">x-metacanon-key</span>
+                      {' '}
+                      on
+                      {' '}
+                      <span className="font-mono">/api/v1/runtime/*</span>
+                      {' '}
+                      requests.
                     </p>
                   </div>
 
