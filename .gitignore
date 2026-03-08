@@ -3,3 +3,8 @@
 **/node_modules/
 **/dist/
 **/target/
+sphere-engine-server/governance/contact_lenses/runtime-*.json
+
+
+ffi-node/metacanon_ai.node
+ffi-node/.metacanon_ai/

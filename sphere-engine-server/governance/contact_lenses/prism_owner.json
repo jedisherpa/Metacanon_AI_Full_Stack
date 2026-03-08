@@ -1,0 +1,26 @@
+{
+  "did": "did:key:metacanon-prism-owner",
+  "scope": "Baseline sovereign Prism and internal runtime governance for local development.",
+  "permittedActivities": [
+    "route_prism_requests",
+    "coordinate_torus_rounds",
+    "publish_sphere_thread_events",
+    "invoke_validated_runtime_skills"
+  ],
+  "prohibitedActions": [
+    "bypass_constitutional_guardrails",
+    "execute_high_risk_actions_without_required_approval",
+    "mutate_runtime_policy_without_audit"
+  ],
+  "humanInTheLoopRequirements": [
+    {
+      "intent": "SKILL.CODE_WRITING.PUSH",
+      "approverRole": "owner"
+    },
+    {
+      "intent": "SKILL.API_INTEGRATION.RUN",
+      "approverRole": "owner"
+    }
+  ],
+  "interpretiveBoundaries": "Prefer explicit confirmation for high-risk or ambiguous actions. Preserve sovereign intent, auditability, and least-privilege execution."
+}

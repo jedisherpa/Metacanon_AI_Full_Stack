@@ -84,8 +84,11 @@ docker compose -f "$ROOT/docker-compose.fullstack.yml" up -d db
 echo "[fullstack] running engine migrations"
 docker compose -f "$ROOT/docker-compose.fullstack.yml" run --rm engine-migrate
 
+echo "[fullstack] syncing runtime contact lenses"
+node "$ROOT/scripts/dev/sync-runtime-contact-lenses.mjs"
+
 echo "[fullstack] starting sphere-engine services"
-docker compose -f "$ROOT/docker-compose.fullstack.yml" up -d engine-api engine-worker
+docker compose -f "$ROOT/docker-compose.fullstack.yml" up -d --build engine-api engine-worker
 wait_for_engine
 
 start_node_service sphere-bridge "$ROOT/sphere-bridge" "http://localhost:3013/health" npm run start
