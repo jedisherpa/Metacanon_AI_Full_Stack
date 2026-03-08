@@ -1,8 +1,10 @@
 import { promises as fs } from 'node:fs';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 
 export type GovernanceConfig = {
   configPath: string;
+  configHash: string;
   materialImpactIntents: Set<string>;
   quorumCount: number;
 };
@@ -116,6 +118,7 @@ export async function loadGovernanceConfig(options?: {
 
   return {
     configPath,
+    configHash: createHash('sha256').update(raw).digest('hex'),
     materialImpactIntents: new Set(parsed.materialImpactIntents),
     quorumCount: parsed.quorumCount
   };

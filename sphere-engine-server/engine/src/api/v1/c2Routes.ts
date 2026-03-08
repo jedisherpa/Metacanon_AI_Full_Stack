@@ -7,7 +7,10 @@ import type { DidRegistry } from '../../sphere/didRegistry.js';
 import { ConductorError, SphereConductor } from '../../sphere/conductor.js';
 import {
   CYCLE_EVENT_TYPES,
-  cycleEventTypeToIntent
+  allowedCycleTransitionsFrom,
+  cycleEventIntentToType,
+  cycleEventTypeToIntent,
+  isAllowedCycleTransition
 } from '../../sphere/cycleEventTaxonomy.js';
 import { generateMissionReport, MissionServiceError } from '../../agents/missionService.js';
 import { resolveTraceId, sendSphereError } from './sphereApi.js';
@@ -299,6 +302,72 @@ function parseCycleEventPayload(eventType: CycleEventType, payload: Record<strin
     default:
       return z.never().safeParse(undefined);
   }
+}
+
+function resolveLatestCycleEventType(entries: Array<Record<string, unknown>>): CycleEventType | null {
+  let latest: CycleEventType | null = null;
+  let latestSequence = Number.NEGATIVE_INFINITY;
+
+  for (const entry of entries) {
+    const ledgerEnvelope =
+      entry.ledgerEnvelope && typeof entry.ledgerEnvelope === 'object' && !Array.isArray(entry.ledgerEnvelope)
+        ? (entry.ledgerEnvelope as Record<string, unknown>)
+        : null;
+    const clientEnvelope =
+      entry.clientEnvelope && typeof entry.clientEnvelope === 'object' && !Array.isArray(entry.clientEnvelope)
+        ? (entry.clientEnvelope as Record<string, unknown>)
+        : null;
+    const intent = valueAsNonEmptyString(clientEnvelope?.intent);
+    if (!intent) {
+      continue;
+    }
+
+    const cycleType = cycleEventIntentToType(intent);
+    if (!cycleType) {
+      continue;
+    }
+
+    const sequence = Number(ledgerEnvelope?.sequence ?? Number.NEGATIVE_INFINITY);
+    if (Number.isNaN(sequence)) {
+      continue;
+    }
+
+    if (sequence >= latestSequence) {
+      latestSequence = sequence;
+      latest = cycleType;
+    }
+  }
+
+  return latest;
+}
+
+function validateCyclePhaseTransition(params: {
+  entries: Array<Record<string, unknown>>;
+  eventType: CycleEventType;
+}):
+  | { ok: true }
+  | { ok: false; message: string; details: Record<string, unknown> } {
+  const previousEventType = resolveLatestCycleEventType(params.entries);
+  const expectedNextEventTypes = [...allowedCycleTransitionsFrom(previousEventType)];
+
+  if (isAllowedCycleTransition(previousEventType, params.eventType)) {
+    return { ok: true };
+  }
+
+  const message =
+    previousEventType === null
+      ? 'Cycle thread must begin with seat_taken.'
+      : `Invalid cycle transition: ${previousEventType} -> ${params.eventType}.`;
+
+  return {
+    ok: false,
+    message,
+    details: {
+      previousEventType,
+      expectedNextEventTypes,
+      receivedEventType: params.eventType
+    }
+  };
 }
 
 function normalizeRuleId(value: string): string {
@@ -777,7 +846,14 @@ export function createSphereRoutes(options: SphereRouteOptions): Router {
           ackRequiredFields: ackWriteRequiredFields
         },
         cycleEventTaxonomy: {
-          eventTypes: CYCLE_EVENT_TYPES
+          eventTypes: CYCLE_EVENT_TYPES,
+          phaseTransitions: {
+            start: allowedCycleTransitionsFrom(null),
+            seat_taken: allowedCycleTransitionsFrom('seat_taken'),
+            perspective_submitted: allowedCycleTransitionsFrom('perspective_submitted'),
+            synthesis_returned: allowedCycleTransitionsFrom('synthesis_returned'),
+            lens_upgraded: allowedCycleTransitionsFrom('lens_upgraded')
+          }
         },
         cycleEventPayloadContracts: {
           schemaVersion: '3.0',
@@ -821,6 +897,7 @@ export function createSphereRoutes(options: SphereRouteOptions): Router {
       const threads = await options.conductor.listThreads();
       const degradedThreads = threads.filter((thread) => thread.state === 'DEGRADED_NO_LLM').length;
       const haltedThreads = threads.filter((thread) => thread.state === 'HALTED').length;
+      const governanceMetrics = options.conductor.getGovernanceMetricsSnapshot?.() ?? null;
 
       return res.json({
         systemState: options.conductor.getSystemState(),
@@ -828,6 +905,7 @@ export function createSphereRoutes(options: SphereRouteOptions): Router {
         threadCount: threads.length,
         degradedThreads,
         haltedThreads,
+        governanceMetrics,
         traceId: req.sphereTraceId
       });
     } catch (err) {
@@ -1004,6 +1082,38 @@ export function createSphereRoutes(options: SphereRouteOptions): Router {
             message: ruleBindingValidation.message,
             retryable: false,
             details: ruleBindingValidation.details
+          });
+        }
+      }
+
+      const thread = await options.conductor.getThread(input.threadId);
+      if (!thread) {
+        if (input.eventType !== 'seat_taken') {
+          return sendSphereError(req, res, 409, {
+            code: 'SPHERE_ERR_INVALID_CYCLE_PHASE',
+            message: 'Cycle thread must begin with seat_taken.',
+            retryable: false,
+            details: {
+              previousEventType: null,
+              expectedNextEventTypes: ['seat_taken'],
+              receivedEventType: input.eventType
+            }
+          });
+        }
+      } else {
+        const entries = Array.isArray(thread.entries)
+          ? (thread.entries as unknown as Array<Record<string, unknown>>)
+          : [];
+        const phaseValidation = validateCyclePhaseTransition({
+          entries,
+          eventType: input.eventType
+        });
+        if (!phaseValidation.ok) {
+          return sendSphereError(req, res, 409, {
+            code: 'SPHERE_ERR_INVALID_CYCLE_PHASE',
+            message: phaseValidation.message,
+            retryable: false,
+            details: phaseValidation.details
           });
         }
       }

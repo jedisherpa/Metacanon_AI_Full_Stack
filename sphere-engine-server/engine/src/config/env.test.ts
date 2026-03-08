@@ -88,4 +88,43 @@ describe('env boolean parsing', () => {
 
     await expect(import('./env.js')).rejects.toThrow();
   });
+
+  it('rejects production boot when conductor key is default', async () => {
+    applyEnv({
+      RUNTIME_ENV: 'production',
+      MISSION_STUB_FALLBACK_ENABLED: 'false',
+      CONDUCTOR_PRIVATE_KEY: 'dev-conductor-secret',
+      SPHERE_SIGNATURE_VERIFICATION: 'strict'
+    });
+
+    await expect(import('./env.js')).rejects.toThrow(
+      'CONDUCTOR_PRIVATE_KEY must be set to a non-default value in production.'
+    );
+  });
+
+  it('rejects production boot when signature verification mode is not strict', async () => {
+    applyEnv({
+      RUNTIME_ENV: 'production',
+      MISSION_STUB_FALLBACK_ENABLED: 'false',
+      CONDUCTOR_PRIVATE_KEY: 'prod-conductor-secret',
+      SPHERE_SIGNATURE_VERIFICATION: 'did_key'
+    });
+
+    await expect(import('./env.js')).rejects.toThrow(
+      'SPHERE_SIGNATURE_VERIFICATION must be strict in production.'
+    );
+  });
+
+  it('accepts production boot when required hardening guards are met', async () => {
+    applyEnv({
+      RUNTIME_ENV: 'production',
+      MISSION_STUB_FALLBACK_ENABLED: 'false',
+      CONDUCTOR_PRIVATE_KEY: 'prod-conductor-secret',
+      SPHERE_SIGNATURE_VERIFICATION: 'strict'
+    });
+
+    const env = await loadEnvModule();
+    expect(env.RUNTIME_ENV).toBe('production');
+    expect(env.SPHERE_SIGNATURE_VERIFICATION).toBe('strict');
+  });
 });

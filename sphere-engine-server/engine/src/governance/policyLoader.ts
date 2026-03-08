@@ -11,7 +11,7 @@ const humanInLoopRequirementSchema = z.object({
 const contactLensSchema = z.object({
   did: z.string().min(1),
   scope: z.string().min(1),
-  permittedActivities: z.array(z.string().min(1)),
+  permittedActivities: z.array(z.string().min(1)).min(1),
   prohibitedActions: z.array(z.string().min(1)),
   humanInTheLoopRequirements: z.array(humanInLoopRequirementSchema),
   interpretiveBoundaries: z.string().min(1)
@@ -87,11 +87,26 @@ export type GovernancePolicies = {
     highRiskRegistry: string;
     lensUpgradeRules: string;
     contactLenses: Record<string, string>;
+    contactLensPack: string;
   };
 };
 
 function hashText(value: string): string {
   return createHash('sha256').update(value).digest('hex');
+}
+
+function computeContactLensPackHash(input: {
+  contactLensSchemaHash: string;
+  contactLensesChecksums: Record<string, string>;
+}): string {
+  return hashText(
+    JSON.stringify({
+      contactLensSchemaHash: input.contactLensSchemaHash,
+      contactLenses: Object.entries(input.contactLensesChecksums).sort(([left], [right]) =>
+        left.localeCompare(right)
+      )
+    })
+  );
 }
 
 function normalizeIntent(value: string): string {
@@ -219,6 +234,12 @@ export async function loadGovernancePolicies(options?: { governanceDir?: string 
     .filter((entry) => entry.endsWith('.json'))
     .sort();
 
+  if (lensFiles.length === 0) {
+    throw new Error(
+      'Invalid governance policy: no contact lens files found. At least one contact lens is required.'
+    );
+  }
+
   const contactLensesByDid = new Map<string, ContactLens>();
   const contactLensesChecksums: Record<string, string> = {};
 
@@ -250,7 +271,11 @@ export async function loadGovernancePolicies(options?: { governanceDir?: string 
       contactLensSchema: hashText(schemaRaw),
       highRiskRegistry: hashText(highRiskRawText),
       lensUpgradeRules: hashText(lensUpgradeRawText),
-      contactLenses: contactLensesChecksums
+      contactLenses: contactLensesChecksums,
+      contactLensPack: computeContactLensPackHash({
+        contactLensSchemaHash: hashText(schemaRaw),
+        contactLensesChecksums
+      })
     }
   };
 }

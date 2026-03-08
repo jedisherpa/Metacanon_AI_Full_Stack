@@ -33,6 +33,11 @@ const envSchema = z.object({
   SPHERE_THREAD_ENABLED: strictBoolEnv.default(true),
   SPHERE_C2_ALIAS_ENABLED: strictBoolEnv.default(true),
   SPHERE_SIGNATURE_VERIFICATION: z.enum(['off', 'did_key', 'strict']).default('did_key'),
+  SPHERE_DB_ENFORCE_ROLE_SEPARATION: strictBoolEnv.default(false),
+  SPHERE_DB_APP_ROLE: z
+    .string()
+    .regex(/^[a-z_][a-z0-9_]*$/)
+    .optional(),
 
   // Morpheus (optional, kept for backward compat)
   MORPHEUS_BASE_URL: z.string().url().optional().default('https://api.openai.com/v1'),
@@ -89,6 +94,11 @@ const envSchema = z.object({
   TELEGRAM_BRIDGE_POLL_TIMEOUT_SECONDS: z.coerce.number().int().min(1).max(50).default(30),
   TELEGRAM_BRIDGE_ERROR_BACKOFF_MS: z.coerce.number().int().positive().default(3000),
 
+  // Agent skills (optional adapter wiring)
+  EMAIL_SKILL_ADAPTER_URL: z.string().url().optional(),
+  EMAIL_SKILL_ADAPTER_TOKEN: z.string().min(1).optional(),
+  EMAIL_SKILL_SECRET_MAP_JSON: z.string().optional(),
+
   SENTRY_DSN: z.string().optional()
 });
 
@@ -97,6 +107,24 @@ const parsedEnv = envSchema.parse(process.env);
 if (parsedEnv.RUNTIME_ENV === 'production' && parsedEnv.MISSION_STUB_FALLBACK_ENABLED) {
   throw new Error(
     'MISSION_STUB_FALLBACK_ENABLED must be false in production. Stub fallback is only permitted in local/staging.'
+  );
+}
+
+if (parsedEnv.RUNTIME_ENV === 'production' && parsedEnv.CONDUCTOR_PRIVATE_KEY === 'dev-conductor-secret') {
+  throw new Error('CONDUCTOR_PRIVATE_KEY must be set to a non-default value in production.');
+}
+
+if (parsedEnv.RUNTIME_ENV === 'production' && parsedEnv.SPHERE_SIGNATURE_VERIFICATION !== 'strict') {
+  throw new Error('SPHERE_SIGNATURE_VERIFICATION must be strict in production.');
+}
+
+if (
+  parsedEnv.RUNTIME_ENV === 'production' &&
+  parsedEnv.SPHERE_DB_ENFORCE_ROLE_SEPARATION &&
+  !parsedEnv.SPHERE_DB_APP_ROLE
+) {
+  throw new Error(
+    'SPHERE_DB_APP_ROLE must be set when SPHERE_DB_ENFORCE_ROLE_SEPARATION is true.'
   );
 }
 

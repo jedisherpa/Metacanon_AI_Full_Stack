@@ -17,6 +17,19 @@ services:
     depends_on:
       - db
 
+  email-adapter:
+    build: .
+    command: ["node", "engine/dist/index.emailAdapter.js"]
+    ports:
+      - "3310:3310"
+    environment:
+      - EMAIL_ADAPTER_PORT=3310
+      - EMAIL_ADAPTER_HOST=0.0.0.0
+      - EMAIL_ADAPTER_PROVIDER=stub
+      - EMAIL_ADAPTER_TOKEN=local-email-adapter-token
+    env_file:
+      - ./engine/.env
+
   engine-worker:
     build: .
     command: ["node", "engine/dist/index.worker.js"]

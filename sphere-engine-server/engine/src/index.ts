@@ -20,16 +20,20 @@ import { createSphereRoutes } from './api/v1/c2Routes.js';
 import { createC2StandaloneRoutes } from './api/v1/c2StandaloneRoutes.js';
 import { createSphereBffRoutes } from './api/v1/sphereBffRoutes.js';
 import { loadGovernancePolicies } from './governance/policyLoader.js';
+import { loadGovernanceConfig } from './governance/governanceConfig.js';
 import { createIntentValidator } from './governance/contactLensValidator.js';
 import { DidRegistry } from './sphere/didRegistry.js';
 import { SphereConductor } from './sphere/conductor.js';
 import { ThreadAccessRegistry } from './sphere/threadAccessRegistry.js';
+import { ensureSphereDbRoleSeparationOnStartup } from './db/client.js';
 import { WebSocketHub } from './ws/hub.js';
 import { authorizeSocketChannel } from './ws/auth.js';
 import { startWorkers } from './queue/worker.js';
 import { getBoss } from './queue/boss.js';
 import { sendApiError } from './lib/apiError.js';
 import { startTelegramMessageBridge } from './telegram/messageBridge.js';
+import { createDefaultSkillRuntime } from './agents/skillRuntime.js';
+import { createEnvSecretResolver, createHttpEmailFetcher } from './agents/emailSkillProviders.js';
 
 const logger = pino({
   transport: process.env.NODE_ENV !== 'production' ? { target: 'pino-pretty' } : undefined
@@ -66,18 +70,27 @@ app.use(
 );
 
 const lensPack = await loadLensPack(env.LENS_PACK);
+await ensureSphereDbRoleSeparationOnStartup();
 let liveConductor: SphereConductor | null = null;
 const sphereRoutes = env.SPHERE_THREAD_ENABLED
   ? await (async () => {
       const governancePolicies = await loadGovernancePolicies({
         governanceDir: env.GOVERNANCE_DIR
       });
+      const governanceConfig = await loadGovernanceConfig({
+        configPath: env.GOVERNANCE_CONFIG_PATH
+      });
       const validateIntent = createIntentValidator(governancePolicies);
       const didRegistry = await DidRegistry.create();
       const conductor = await SphereConductor.create({
         conductorSecret: env.CONDUCTOR_PRIVATE_KEY,
         validateIntent,
-        governanceConfigPath: env.GOVERNANCE_CONFIG_PATH,
+        governanceConfigPath: governanceConfig.configPath,
+        governanceHashes: {
+          highRiskRegistryHash: governancePolicies.checksums.highRiskRegistry,
+          contactLensPackHash: governancePolicies.checksums.contactLensPack,
+          governanceConfigHash: governanceConfig.configHash
+        },
         signatureVerificationMode: env.SPHERE_SIGNATURE_VERIFICATION,
         resolveDidPublicKey: async (did) => {
           const identity = await didRegistry.get(did);
@@ -89,6 +102,11 @@ const sphereRoutes = env.SPHERE_THREAD_ENABLED
         {
           governanceRoot: governancePolicies.governanceRoot,
           contactLensCount: governancePolicies.contactLensesByDid.size,
+          governanceHashSnapshot: {
+            highRiskRegistryHash: governancePolicies.checksums.highRiskRegistry,
+            contactLensPackHash: governancePolicies.checksums.contactLensPack,
+            governanceConfigHash: governanceConfig.configHash
+          },
           checksums: governancePolicies.checksums
         },
         'Loaded governance policies'
@@ -113,6 +131,27 @@ const sphereRoutes = env.SPHERE_THREAD_ENABLED
 const threadAccessRegistry = await ThreadAccessRegistry.create();
 const sphereBffRoutes = createSphereBffRoutes({ sphereRoutes, threadAccessRegistry });
 const server = http.createServer(app);
+let emailFetcher: ReturnType<typeof createHttpEmailFetcher> | undefined;
+if (env.EMAIL_SKILL_ADAPTER_URL) {
+  try {
+    const secretResolver = createEnvSecretResolver({
+      secretMapJson: env.EMAIL_SKILL_SECRET_MAP_JSON
+    });
+    emailFetcher = createHttpEmailFetcher({
+      adapterUrl: env.EMAIL_SKILL_ADAPTER_URL,
+      adapterToken: env.EMAIL_SKILL_ADAPTER_TOKEN,
+      secretResolver
+    });
+    logger.info('Email checking adapter configured.');
+  } catch (error) {
+    logger.warn({ error }, 'Email adapter configuration invalid. email_checking will remain blocked.');
+  }
+} else {
+  logger.info('Email adapter URL not configured. email_checking will remain blocked.');
+}
+const skillRuntime = createDefaultSkillRuntime({
+  emailFetcher
+});
 
 const wsHub = new WebSocketHub(({ channel, gameId, token }) =>
   authorizeSocketChannel({ channel, gameId, token })
@@ -151,7 +190,7 @@ app.use(createAtlasRoutes());
 app.use(createCitadelRoutes({ wsHub }));
 app.use(createForgeRoutes({ wsHub, lensPack }));
 app.use(createHubRoutes({ wsHub }));
-app.use(createEngineRoomRoutes({ lensPack }));
+app.use(createEngineRoomRoutes({ lensPack, skillRuntime }));
 app.use(sphereBffRoutes);
 app.use(sphereRoutes);
 

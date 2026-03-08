@@ -2,6 +2,7 @@ import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import type { PoolClient } from 'pg';
 import { pool } from '../db/client.js';
+import { env } from '../config/env.js';
 import {
   loadGovernanceConfig,
   type GovernanceConfig
@@ -18,6 +19,11 @@ import {
   SignatureVerificationError,
   verifyCompactJwsEdDsa
 } from './signatureVerification.js';
+import {
+  GovernanceTelemetry,
+  type GovernanceTelemetrySnapshot,
+  type SignatureVerificationMode
+} from './governanceTelemetry.js';
 
 export type C2Intent = string;
 
@@ -35,11 +41,18 @@ export type ClientEnvelope = {
   agentSignature: string;
 };
 
+export type GovernanceHashSnapshot = {
+  highRiskRegistryHash: string;
+  contactLensPackHash: string;
+  governanceConfigHash: string;
+};
+
 export type LedgerEnvelope = {
   schemaVersion: string;
   sequence: number;
   prevMessageHash: string;
   timestamp: string;
+  governance: GovernanceHashSnapshot;
   conductorSignature: string;
 };
 
@@ -135,6 +148,12 @@ function normalizeIntent(value: string): string {
   return value.trim().toUpperCase();
 }
 
+export function normalizeSetLikeStrings(values: string[] | undefined): string[] {
+  return [...new Set((values ?? []).map((value) => value.trim()).filter(Boolean))].sort((left, right) =>
+    left.localeCompare(right)
+  );
+}
+
 function deriveDeterministicMessageId(seed: string): string {
   const digest = sha256(seed);
   const versioned = `${digest.slice(0, 8)}${digest.slice(8, 12)}5${digest.slice(13, 16)}a${digest.slice(17, 20)}${digest.slice(20, 32)}`;
@@ -154,14 +173,32 @@ function toIsoString(value: unknown): string {
   return new Date(String(value)).toISOString();
 }
 
-type IntentValidator = (input: IntentValidationInput) => IntentValidationResult;
+const UNKNOWN_GOVERNANCE_HASH = createHash('sha256')
+  .update('governance-unavailable')
+  .digest('hex');
 
-type SignatureVerificationMode = 'off' | 'did_key' | 'strict';
+function normalizeGovernanceHash(value: string | undefined): string {
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : UNKNOWN_GOVERNANCE_HASH;
+}
+
+export function createGovernanceHashSnapshot(
+  value: Partial<GovernanceHashSnapshot> | undefined
+): GovernanceHashSnapshot {
+  return {
+    highRiskRegistryHash: normalizeGovernanceHash(value?.highRiskRegistryHash),
+    contactLensPackHash: normalizeGovernanceHash(value?.contactLensPackHash),
+    governanceConfigHash: normalizeGovernanceHash(value?.governanceConfigHash)
+  };
+}
+
+type IntentValidator = (input: IntentValidationInput) => IntentValidationResult;
 
 type ConductorOptions = {
   conductorSecret: string;
   validateIntent: IntentValidator;
   governanceConfigPath?: string;
+  governanceHashes?: Partial<GovernanceHashSnapshot>;
   signatureVerificationMode?: SignatureVerificationMode;
   resolveDidPublicKey?: (did: string) => Promise<string | null>;
 };
@@ -217,6 +254,7 @@ function statusForValidationCode(code: IntentValidationResult['code']): number {
   switch (code) {
     case 'THREAD_HALTED':
       return 412;
+    case 'LENS_NOT_FOUND':
     case 'PRISM_HOLDER_APPROVAL_REQUIRED':
     case 'LENS_PROHIBITED_ACTION':
     case 'LENS_ACTION_NOT_PERMITTED':
@@ -230,9 +268,11 @@ function statusForValidationCode(code: IntentValidationResult['code']): number {
 export class SphereConductor extends EventEmitter {
   private readonly conductorSecret: string;
   private readonly validateIntent: IntentValidator;
+  private readonly governanceHashes: GovernanceHashSnapshot;
   private readonly governanceConfigPath?: string;
   private readonly signatureVerificationMode: SignatureVerificationMode;
   private readonly resolveDidPublicKey?: (did: string) => Promise<string | null>;
+  private readonly governanceTelemetry: GovernanceTelemetry;
   private globalState: 'ACTIVE' | 'DEGRADED_NO_LLM' = 'ACTIVE';
   private degradedNoLlmReason: string | null = null;
   private governanceConfig!: GovernanceConfig;
@@ -242,9 +282,11 @@ export class SphereConductor extends EventEmitter {
     super();
     this.conductorSecret = options.conductorSecret;
     this.validateIntent = options.validateIntent;
+    this.governanceHashes = createGovernanceHashSnapshot(options.governanceHashes);
     this.governanceConfigPath = options.governanceConfigPath;
     this.signatureVerificationMode = options.signatureVerificationMode ?? 'did_key';
     this.resolveDidPublicKey = options.resolveDidPublicKey;
+    this.governanceTelemetry = new GovernanceTelemetry();
     this.ready = this.bootstrap();
   }
 
@@ -271,6 +313,10 @@ export class SphereConductor extends EventEmitter {
 
   getDegradedNoLlmReason(): string | null {
     return this.degradedNoLlmReason;
+  }
+
+  getGovernanceMetricsSnapshot(): GovernanceTelemetrySnapshot {
+    return this.governanceTelemetry.getSnapshot();
   }
 
   enterGlobalDegradedNoLlm(reason: string): void {
@@ -521,9 +567,22 @@ export class SphereConductor extends EventEmitter {
     const schemaVersion = input.schemaVersion ?? '3.0';
     const protocolVersion = input.protocolVersion ?? '3.0';
     const traceId = input.traceId ?? randomUUID();
-    const attestation = input.attestation ?? [];
+    const attestation = normalizeSetLikeStrings(input.attestation);
+    const normalizedIntent = normalizeIntent(input.intent);
+    const isBreakGlassAttempt = Boolean(input.breakGlass) || normalizedIntent === 'EMERGENCY_SHUTDOWN';
+    const dispatchStartedAt = Date.now();
+
+    this.governanceTelemetry.recordIntentAttempt({ isBreakGlassAttempt });
 
     const client = await pool.connect();
+    let effectiveThreadState: ThreadGovernanceState =
+      this.globalState === 'DEGRADED_NO_LLM' ? 'DEGRADED_NO_LLM' : 'ACTIVE';
+    let validation: IntentValidationResult | null = null;
+    let signatureVerified = false;
+    let sequence: number | null = null;
+    let prevMessageHash: string | null = null;
+    let timestamp: string | null = null;
+    let entryHash: string | null = null;
 
     try {
       await client.query('BEGIN');
@@ -541,7 +600,7 @@ export class SphereConductor extends EventEmitter {
             ? 'DEGRADED_NO_LLM'
             : thread.state;
 
-      const validation = this.validateIntent({
+      validation = this.validateIntent({
         intent: input.intent,
         agentDid: input.authorAgentId,
         threadState: effectiveThreadState,
@@ -558,12 +617,15 @@ export class SphereConductor extends EventEmitter {
       }
 
       if (this.isMaterialImpactIntent(input.intent)) {
-        await this.enforceCounselQuorum(client, attestation);
+        await this.enforceCounselQuorum(client, {
+          threadId,
+          approvalRefs: attestation
+        });
       }
 
-      const sequence = Number(thread.next_sequence);
-      const timestamp = new Date().toISOString();
-      const prevMessageHash = thread.last_entry_hash ?? 'GENESIS';
+      sequence = Number(thread.next_sequence);
+      timestamp = new Date().toISOString();
+      prevMessageHash = thread.last_entry_hash ?? 'GENESIS';
 
       const clientEnvelopeBase = {
         messageId,
@@ -596,6 +658,7 @@ export class SphereConductor extends EventEmitter {
         allowInternalFallback:
           Boolean(input.derivedFromVerifiedCommand) && input.authorAgentId === 'did:system:conductor'
       });
+      signatureVerified = true;
 
       const clientEnvelope: ClientEnvelope = {
         ...clientEnvelopeBase,
@@ -606,7 +669,8 @@ export class SphereConductor extends EventEmitter {
         schemaVersion,
         sequence,
         prevMessageHash,
-        timestamp
+        timestamp,
+        governance: this.governanceHashes
       };
 
       const conductorSignature = this.signPayload({
@@ -627,38 +691,20 @@ export class SphereConductor extends EventEmitter {
         payload: input.payload
       };
 
-      const entryHash = sha256(canonicalize(entry));
+      entryHash = sha256(canonicalize(entry));
       const nextState = this.deriveThreadStateAfterIntent(thread.state, input.intent);
-
-      await client.query(
-        `
-          INSERT INTO sphere_events (
-            thread_id,
-            sequence,
-            message_id,
-            author_did,
-            intent,
-            timestamp,
-            client_envelope,
-            ledger_envelope,
-            payload,
-            entry_hash
-          )
-          VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9::jsonb, $10)
-        `,
-        [
-          threadId,
-          sequence,
-          messageId,
-          input.authorAgentId,
-          input.intent,
-          timestamp,
-          JSON.stringify(clientEnvelope),
-          JSON.stringify(ledgerEnvelope),
-          JSON.stringify(input.payload),
-          entryHash
-        ]
-      );
+      await this.appendSphereEvent(client, {
+        threadId,
+        sequence,
+        messageId,
+        authorDid: input.authorAgentId,
+        intent: input.intent,
+        timestamp,
+        clientEnvelope,
+        ledgerEnvelope,
+        payload: input.payload,
+        entryHash
+      });
 
       await client.query(
         `
@@ -675,6 +721,34 @@ export class SphereConductor extends EventEmitter {
 
       await client.query('COMMIT');
 
+      this.governanceTelemetry.recordIntentCommitted({ isBreakGlassAttempt });
+      this.governanceTelemetry.recordDispatchLatency(Date.now() - dispatchStartedAt);
+
+      this.emit('governance_outcome', {
+        threadId,
+        messageId,
+        traceId,
+        actorDid: input.authorAgentId,
+        intentRaw: input.intent,
+        intentNormalized: normalizedIntent,
+        threadStateEffective: effectiveThreadState,
+        validationAllowed: true,
+        validationCode: validation.code ?? null,
+        validationMessage: validation.message ?? null,
+        highRisk: validation.highRisk,
+        requiresApproval: validation.requiresApproval,
+        prismHolderApproved: Boolean(input.prismHolderApproved),
+        lensMissing: false,
+        signatureVerificationMode: this.signatureVerificationMode,
+        signatureVerified,
+        governanceHashes: this.governanceHashes,
+        sequence,
+        entryHash,
+        prevHash: prevMessageHash,
+        timestamp,
+        outcome: 'committed'
+      });
+
       const event: ThreadLogEntryEvent = { threadId, entry };
       this.emit('log_entry', event);
       this.emit(`thread:${threadId}`, entry);
@@ -683,38 +757,92 @@ export class SphereConductor extends EventEmitter {
     } catch (error) {
       await client.query('ROLLBACK');
 
+      let normalizedError: ConductorError;
+
       if (error && typeof error === 'object' && 'code' in error) {
         const pgError = error as { code?: string; constraint?: string };
         if (
           pgError.code === '23505' &&
           pgError.constraint === 'sphere_events_thread_message_unique'
         ) {
-          throw new ConductorError(
+          normalizedError = new ConductorError(
             409,
             'STM_ERR_DUPLICATE_IDEMPOTENCY_KEY',
             'A message with this messageId has already been committed for this thread.'
           );
+        } else if (pgError.code === '23505') {
+          normalizedError = new ConductorError(
+            500,
+            'STM_ERR_INTERNAL',
+            'Concurrent write conflict while appending to thread.'
+          );
+        } else {
+          normalizedError =
+            error instanceof ConductorError
+              ? error
+              : new ConductorError(
+                  500,
+                  'STM_ERR_INTERNAL',
+                  'Unexpected internal error during dispatch.'
+                );
         }
+      } else {
+        normalizedError =
+          error instanceof ConductorError
+            ? error
+            : new ConductorError(500, 'STM_ERR_INTERNAL', 'Unexpected internal error during dispatch.');
+      }
+
+      this.governanceTelemetry.recordIntentRejected({
+        code: normalizedError.code,
+        isBreakGlassAttempt
+      });
+
+      if (normalizedError.code === 'STM_ERR_INVALID_SIGNATURE') {
+        this.governanceTelemetry.recordSignatureVerificationFailure();
       }
 
       if (
-        error &&
-        typeof error === 'object' &&
-        'code' in error &&
-        (error as { code?: string }).code === '23505'
+        normalizedError.code === 'STM_ERR_MISSING_ATTESTATION' &&
+        this.isMaterialImpactIntent(input.intent)
       ) {
-        throw new ConductorError(
-          500,
-          'STM_ERR_INTERNAL',
-          'Concurrent write conflict while appending to thread.'
-        );
+        this.governanceTelemetry.recordMaterialImpactQuorumFailure();
       }
 
-      if (error instanceof ConductorError) {
-        throw error;
+      if (normalizedError.status >= 500) {
+        this.governanceTelemetry.recordAuditFailure();
       }
 
-      throw new ConductorError(500, 'STM_ERR_INTERNAL', 'Unexpected internal error during dispatch.');
+      this.governanceTelemetry.recordDispatchLatency(Date.now() - dispatchStartedAt);
+
+      this.emit('governance_outcome', {
+        threadId,
+        messageId,
+        traceId,
+        actorDid: input.authorAgentId,
+        intentRaw: input.intent,
+        intentNormalized: normalizedIntent,
+        threadStateEffective: effectiveThreadState,
+        validationAllowed: false,
+        validationCode: validation?.code ?? normalizedError.code,
+        validationMessage: validation?.message ?? normalizedError.message,
+        highRisk: validation?.highRisk ?? false,
+        requiresApproval: validation?.requiresApproval ?? false,
+        prismHolderApproved: Boolean(input.prismHolderApproved),
+        lensMissing:
+          validation?.code === 'LENS_NOT_FOUND' || normalizedError.code === 'LENS_NOT_FOUND',
+        signatureVerificationMode: this.signatureVerificationMode,
+        signatureVerified,
+        governanceHashes: this.governanceHashes,
+        sequence: sequence ?? undefined,
+        entryHash: entryHash ?? undefined,
+        prevHash: prevMessageHash ?? undefined,
+        timestamp: timestamp ?? new Date().toISOString(),
+        outcome: normalizedError.status >= 500 ? 'error' : 'rejected',
+        errorCode: normalizedError.code
+      });
+
+      throw normalizedError;
     } finally {
       client.release();
     }
@@ -863,7 +991,7 @@ export class SphereConductor extends EventEmitter {
     const ackMessageId = input.ackMessageId ?? randomUUID();
     const traceId = input.traceId ?? randomUUID();
     const schemaVersion = input.schemaVersion ?? '3.0';
-    const attestation = input.attestation ?? [];
+    const attestation = normalizeSetLikeStrings(input.attestation);
     const receivedAt = input.receivedAt ? toIsoString(input.receivedAt) : null;
 
     const client = await pool.connect();
@@ -1124,7 +1252,19 @@ export class SphereConductor extends EventEmitter {
     return this.governanceConfig.materialImpactIntents.has(normalizeIntent(intent));
   }
 
-  private async enforceCounselQuorum(client: PoolClient, attestations: string[]): Promise<void> {
+  private async enforceCounselQuorum(
+    client: PoolClient,
+    params: { threadId: string; approvalRefs: string[] }
+  ): Promise<void> {
+    const approvalRefs = normalizeSetLikeStrings(params.approvalRefs);
+    if (approvalRefs.length === 0) {
+      throw new ConductorError(
+        412,
+        'STM_ERR_MISSING_ATTESTATION',
+        `Material-impact intent requires ${this.governanceConfig.quorumCount} signed counselor ACK approvals.`
+      );
+    }
+
     const activeCounselorsResult = await client.query<{ counselor_did: string }>(
       `
         SELECT counselor_did
@@ -1138,15 +1278,28 @@ export class SphereConductor extends EventEmitter {
       activeCounselorsResult.rows.map((row) => row.counselor_did.trim()).filter(Boolean)
     );
 
+    const signedApprovals = await client.query<{ actor_did: string }>(
+      `
+        SELECT DISTINCT actor_did
+        FROM sphere_acks
+        WHERE thread_id = $1
+          AND intent = 'ACK_ENTRY'
+          AND target_message_id::text = ANY($2::text[])
+      `,
+      [params.threadId, approvalRefs]
+    );
+
     const approvedCounselors = new Set(
-      attestations.map((value) => value.trim()).filter((did) => activeCounselors.has(did))
+      signedApprovals.rows
+        .map((row) => row.actor_did.trim())
+        .filter((did) => activeCounselors.has(did))
     );
 
     if (approvedCounselors.size < this.governanceConfig.quorumCount) {
       throw new ConductorError(
         412,
         'STM_ERR_MISSING_ATTESTATION',
-        `Material-impact intent requires ${this.governanceConfig.quorumCount} counselor attestations.`
+        `Material-impact intent requires ${this.governanceConfig.quorumCount} signed counselor ACK approvals.`
       );
     }
   }
@@ -1246,6 +1399,51 @@ export class SphereConductor extends EventEmitter {
     return createHmac('sha256', this.conductorSecret).update(canonical).digest('hex');
   }
 
+  private async appendSphereEvent(
+    client: PoolClient,
+    params: {
+      threadId: string;
+      sequence: number;
+      messageId: string;
+      authorDid: string;
+      intent: string;
+      timestamp: string;
+      clientEnvelope: ClientEnvelope;
+      ledgerEnvelope: LedgerEnvelope;
+      payload: Record<string, unknown>;
+      entryHash: string;
+    }
+  ): Promise<void> {
+    await client.query(
+      `
+        SELECT metacanon_append_sphere_event(
+          $1::uuid,
+          $2::bigint,
+          $3::uuid,
+          $4::text,
+          $5::text,
+          $6::timestamptz,
+          $7::jsonb,
+          $8::jsonb,
+          $9::jsonb,
+          $10::text
+        )
+      `,
+      [
+        params.threadId,
+        params.sequence,
+        params.messageId,
+        params.authorDid,
+        params.intent,
+        params.timestamp,
+        JSON.stringify(params.clientEnvelope),
+        JSON.stringify(params.ledgerEnvelope),
+        JSON.stringify(params.payload),
+        params.entryHash
+      ]
+    );
+  }
+
   private async ensureSchema(): Promise<void> {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS sphere_threads (
@@ -1284,6 +1482,144 @@ export class SphereConductor extends EventEmitter {
       CREATE INDEX IF NOT EXISTS idx_sphere_events_author ON sphere_events(author_did);
       CREATE INDEX IF NOT EXISTS idx_sphere_events_intent ON sphere_events(intent);
 
+      CREATE TABLE IF NOT EXISTS sphere_event_write_tokens (
+        txid BIGINT PRIMARY KEY,
+        issued_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      REVOKE ALL ON sphere_event_write_tokens FROM PUBLIC;
+
+      CREATE OR REPLACE FUNCTION metacanon_append_sphere_event(
+        p_thread_id UUID,
+        p_sequence BIGINT,
+        p_message_id UUID,
+        p_author_did TEXT,
+        p_intent TEXT,
+        p_timestamp TIMESTAMPTZ,
+        p_client_envelope JSONB,
+        p_ledger_envelope JSONB,
+        p_payload JSONB,
+        p_entry_hash TEXT
+      )
+      RETURNS VOID
+      LANGUAGE plpgsql
+      SECURITY DEFINER
+      SET search_path = public, pg_temp
+      AS $$
+      BEGIN
+        INSERT INTO sphere_event_write_tokens (txid)
+        VALUES (txid_current())
+        ON CONFLICT (txid) DO NOTHING;
+
+        INSERT INTO sphere_events (
+          thread_id,
+          sequence,
+          message_id,
+          author_did,
+          intent,
+          timestamp,
+          client_envelope,
+          ledger_envelope,
+          payload,
+          entry_hash
+        )
+        VALUES (
+          p_thread_id,
+          p_sequence,
+          p_message_id,
+          p_author_did,
+          p_intent,
+          p_timestamp,
+          p_client_envelope,
+          p_ledger_envelope,
+          p_payload,
+          p_entry_hash
+        );
+
+        DELETE FROM sphere_event_write_tokens
+        WHERE txid = txid_current();
+      END;
+      $$;
+
+      REVOKE ALL ON FUNCTION metacanon_append_sphere_event(
+        UUID,
+        BIGINT,
+        UUID,
+        TEXT,
+        TEXT,
+        TIMESTAMPTZ,
+        JSONB,
+        JSONB,
+        JSONB,
+        TEXT
+      ) FROM PUBLIC;
+
+      CREATE OR REPLACE FUNCTION metacanon_apply_sphere_app_role_grants(
+        p_role_name TEXT
+      )
+      RETURNS VOID
+      LANGUAGE plpgsql
+      SECURITY DEFINER
+      SET search_path = public, pg_temp
+      AS $$
+      DECLARE
+        target_role TEXT := btrim(COALESCE(p_role_name, ''));
+      BEGIN
+        IF target_role = '' THEN
+          RAISE EXCEPTION 'App role must be non-empty.'
+            USING ERRCODE = '22023';
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_roles
+          WHERE rolname = target_role
+        ) THEN
+          RAISE EXCEPTION 'App role "%" does not exist.', target_role
+            USING ERRCODE = '42704';
+        END IF;
+
+        EXECUTE format('REVOKE ALL ON TABLE sphere_events FROM %I', target_role);
+        EXECUTE format('GRANT SELECT ON TABLE sphere_events TO %I', target_role);
+
+        EXECUTE format(
+          'REVOKE ALL ON FUNCTION metacanon_append_sphere_event(UUID, BIGINT, UUID, TEXT, TEXT, TIMESTAMPTZ, JSONB, JSONB, JSONB, TEXT) FROM %I',
+          target_role
+        );
+        EXECUTE format(
+          'GRANT EXECUTE ON FUNCTION metacanon_append_sphere_event(UUID, BIGINT, UUID, TEXT, TEXT, TIMESTAMPTZ, JSONB, JSONB, JSONB, TEXT) TO %I',
+          target_role
+        );
+
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE ON TABLE sphere_threads TO %I', target_role);
+        EXECUTE format('GRANT SELECT ON TABLE counselors TO %I', target_role);
+        EXECUTE format('GRANT SELECT, INSERT ON TABLE sphere_acks TO %I', target_role);
+        EXECUTE format('GRANT USAGE, SELECT ON SEQUENCE sphere_acks_ack_id_seq TO %I', target_role);
+      END;
+      $$;
+
+      REVOKE ALL ON FUNCTION metacanon_apply_sphere_app_role_grants(TEXT) FROM PUBLIC;
+
+      CREATE OR REPLACE FUNCTION enforce_sphere_events_conductor_guard()
+      RETURNS trigger AS $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM sphere_event_write_tokens
+          WHERE txid = txid_current()
+        ) THEN
+          RAISE EXCEPTION 'Direct sphere_events writes are blocked; use conductor dispatch path.'
+            USING ERRCODE = '42501';
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+
+      DROP TRIGGER IF EXISTS trg_sphere_events_conductor_guard ON sphere_events;
+      CREATE TRIGGER trg_sphere_events_conductor_guard
+      BEFORE INSERT ON sphere_events
+      FOR EACH ROW
+      EXECUTE FUNCTION enforce_sphere_events_conductor_guard();
+
       CREATE TABLE IF NOT EXISTS counselors (
         id BIGSERIAL PRIMARY KEY,
         counselor_did TEXT NOT NULL,
@@ -1319,5 +1655,13 @@ export class SphereConductor extends EventEmitter {
       CREATE INDEX IF NOT EXISTS idx_sphere_acks_actor
         ON sphere_acks(actor_did);
     `);
+
+    if (env.SPHERE_DB_APP_ROLE) {
+      await this.applySphereDbRoleGrants(env.SPHERE_DB_APP_ROLE);
+    }
+  }
+
+  private async applySphereDbRoleGrants(appRole: string): Promise<void> {
+    await pool.query(`SELECT metacanon_apply_sphere_app_role_grants($1)`, [appRole]);
   }
 }

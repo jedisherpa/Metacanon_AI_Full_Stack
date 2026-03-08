@@ -9,6 +9,8 @@ function applyBaseEnv(overrides: Record<string, string> = {}): void {
     KIMI_API_KEY: 'test-kimi-key',
     TELEGRAM_BOT_TOKEN: 'test-telegram-token',
     WS_TOKEN_SECRET: '12345678901234567890123456789012',
+    CONDUCTOR_PRIVATE_KEY: 'test-conductor-secret',
+    SPHERE_SIGNATURE_VERIFICATION: 'strict',
     RUNTIME_ENV: 'local',
     MISSION_STUB_FALLBACK_ENABLED: 'true',
     HYBRID_EXEC_TIMEOUT_MS: '12000',

@@ -39,6 +39,7 @@ quorum_rules:
     expect(config.materialImpactIntents.has('FORCE_EVICT')).toBe(true);
     expect(config.materialImpactIntents.has('AMEND_CONSTITUTION')).toBe(true);
     expect(config.quorumCount).toBe(3);
+    expect(config.configHash).toHaveLength(64);
   });
 
   it('throws when quorum is missing', async () => {

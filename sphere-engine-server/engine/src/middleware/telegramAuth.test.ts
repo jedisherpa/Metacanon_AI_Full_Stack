@@ -12,6 +12,8 @@ const baseEnv: Record<string, string> = {
   KIMI_API_KEY: 'test-kimi-key',
   TELEGRAM_BOT_TOKEN: 'test-telegram-token',
   WS_TOKEN_SECRET: '12345678901234567890123456789012',
+  CONDUCTOR_PRIVATE_KEY: 'test-conductor-secret',
+  SPHERE_SIGNATURE_VERIFICATION: 'strict',
   RUNTIME_ENV: 'local',
   TELEGRAM_AUTH_DEV_BYPASS_ENABLED: 'false',
   TELEGRAM_AUTH_DEV_BYPASS_USER_ID: '900000001',

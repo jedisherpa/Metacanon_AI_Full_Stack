@@ -92,7 +92,18 @@ function baseLensUpgradeRegistry(): LensUpgradeRegistryShape {
 
 async function writeGovernanceDir(
   registry: HighRiskRegistryShape,
-  lensUpgradeRegistry: LensUpgradeRegistryShape = baseLensUpgradeRegistry()
+  lensUpgradeRegistry: LensUpgradeRegistryShape = baseLensUpgradeRegistry(),
+  options: {
+    writeDefaultLens?: boolean;
+    lensOverride?: {
+      did?: string;
+      scope?: string;
+      permittedActivities?: string[];
+      prohibitedActions?: string[];
+      humanInTheLoopRequirements?: Array<{ intent: string; approverRole: string }>;
+      interpretiveBoundaries?: string;
+    };
+  } = {}
 ): Promise<string> {
   const dir = await mkdtemp(path.join(tmpdir(), 'policy-loader-'));
   tempDirs.push(dir);
@@ -103,18 +114,21 @@ async function writeGovernanceDir(
   await writeFile(path.join(dir, 'contact_lens_schema.json'), JSON.stringify({ type: 'object' }), 'utf8');
   await writeFile(path.join(dir, 'high_risk_intent_registry.json'), JSON.stringify(registry), 'utf8');
   await writeFile(path.join(dir, 'lens_upgrade_rules.json'), JSON.stringify(lensUpgradeRegistry), 'utf8');
-  await writeFile(
-    path.join(contactLensesDir, 'alpha.json'),
-    JSON.stringify({
-      did: 'did:test:alpha',
-      scope: 'test',
-      permittedActivities: ['DISPATCH_MISSION', 'EMERGENCY_SHUTDOWN'],
-      prohibitedActions: [],
-      humanInTheLoopRequirements: [],
-      interpretiveBoundaries: 'none'
-    }),
-    'utf8'
-  );
+  if (options.writeDefaultLens !== false) {
+    await writeFile(
+      path.join(contactLensesDir, 'alpha.json'),
+      JSON.stringify({
+        did: options.lensOverride?.did ?? 'did:test:alpha',
+        scope: options.lensOverride?.scope ?? 'test',
+        permittedActivities:
+          options.lensOverride?.permittedActivities ?? ['DISPATCH_MISSION', 'EMERGENCY_SHUTDOWN'],
+        prohibitedActions: options.lensOverride?.prohibitedActions ?? [],
+        humanInTheLoopRequirements: options.lensOverride?.humanInTheLoopRequirements ?? [],
+        interpretiveBoundaries: options.lensOverride?.interpretiveBoundaries ?? 'none'
+      }),
+      'utf8'
+    );
+  }
 
   return dir;
 }
@@ -129,6 +143,7 @@ describe('loadGovernancePolicies', () => {
     expect(policies.highRiskByIntent.has('EMERGENCY_SHUTDOWN')).toBe(true);
     expect(policies.lensUpgradeRuleById.has('rule-lens-upgrade-v1')).toBe(true);
     expect(policies.checksums.lensUpgradeRules).toHaveLength(64);
+    expect(policies.checksums.contactLensPack).toHaveLength(64);
   });
 
   it('throws when breakGlass is not allowed in degraded consensus', async () => {
@@ -198,5 +213,25 @@ describe('loadGovernancePolicies', () => {
     await expect(loadGovernancePolicies({ governanceDir })).rejects.toThrow(
       'must advance version (1.1.0 -> 1.1.0)'
     );
+  });
+
+  it('throws when no contact lens files are present', async () => {
+    const governanceDir = await writeGovernanceDir(baseRegistry(), baseLensUpgradeRegistry(), {
+      writeDefaultLens: false
+    });
+
+    await expect(loadGovernancePolicies({ governanceDir })).rejects.toThrow(
+      'no contact lens files found'
+    );
+  });
+
+  it('throws when contact lens permittedActivities is empty', async () => {
+    const governanceDir = await writeGovernanceDir(baseRegistry(), baseLensUpgradeRegistry(), {
+      lensOverride: {
+        permittedActivities: []
+      }
+    });
+
+    await expect(loadGovernancePolicies({ governanceDir })).rejects.toThrow();
   });
 });

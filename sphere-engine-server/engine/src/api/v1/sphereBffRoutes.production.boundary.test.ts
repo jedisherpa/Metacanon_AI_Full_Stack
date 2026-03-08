@@ -24,11 +24,12 @@ function setProductionEnv(): void {
   process.env.KIMI_API_KEY = process.env.KIMI_API_KEY || 'test-kimi-key';
   process.env.TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || 'test-telegram-token';
   process.env.WS_TOKEN_SECRET = process.env.WS_TOKEN_SECRET || '12345678901234567890123456789012';
+  process.env.CONDUCTOR_PRIVATE_KEY = process.env.CONDUCTOR_PRIVATE_KEY || 'test-conductor-secret';
   process.env.SPHERE_BFF_SERVICE_TOKEN =
     process.env.SPHERE_BFF_SERVICE_TOKEN || 'test-sphere-service-token-123456';
   process.env.SPHERE_BFF_REQUIRE_AGENT_API_KEY_WRITES = 'true';
   process.env.SPHERE_BFF_AGENT_API_KEYS = 'alpha=test-agent-key-123456';
-  process.env.SPHERE_SIGNATURE_VERIFICATION = process.env.SPHERE_SIGNATURE_VERIFICATION || 'did_key';
+  process.env.SPHERE_SIGNATURE_VERIFICATION = process.env.SPHERE_SIGNATURE_VERIFICATION || 'strict';
   process.env.RUNTIME_ENV = 'production';
   process.env.MISSION_STUB_FALLBACK_ENABLED = 'false';
 }

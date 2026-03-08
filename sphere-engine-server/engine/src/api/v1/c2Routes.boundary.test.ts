@@ -42,6 +42,7 @@ describe('createSphereRoutes boundary hardening', () => {
     listThreads: ReturnType<typeof vi.fn>;
     getSystemState: ReturnType<typeof vi.fn>;
     getDegradedNoLlmReason: ReturnType<typeof vi.fn>;
+    getGovernanceMetricsSnapshot: ReturnType<typeof vi.fn>;
     dispatchIntent: ReturnType<typeof vi.fn>;
     createThread: ReturnType<typeof vi.fn>;
     getThread: ReturnType<typeof vi.fn>;
@@ -125,6 +126,31 @@ describe('createSphereRoutes boundary hardening', () => {
       listThreads: vi.fn(async () => []),
       getSystemState: vi.fn(() => 'ACTIVE'),
       getDegradedNoLlmReason: vi.fn(() => null),
+      getGovernanceMetricsSnapshot: vi.fn(() => ({
+        generatedAt: '2026-03-07T00:00:00.000Z',
+        counters: {
+          intentAttemptTotal: 0,
+          intentCommittedTotal: 0,
+          intentRejectedTotal: 0,
+          intentRejectedByCode: {},
+          lensMissingTotal: 0,
+          breakGlassFailedTotal: 0,
+          signatureVerificationFailureTotal: 0,
+          materialImpactQuorumFailureTotal: 0,
+          auditFailureTotal: 0,
+          breakGlassAttemptTotal: 0,
+          breakGlassAttemptAllowedTotal: 0,
+          breakGlassAttemptDeniedTotal: 0
+        },
+        latencyMs: {
+          sampleCount: 0,
+          min: null,
+          max: null,
+          avg: null,
+          p95: null
+        },
+        alerts: []
+      })),
       dispatchIntent: vi.fn(),
       createThread: vi.fn(),
       getThread: vi.fn(),
@@ -168,6 +194,7 @@ describe('createSphereRoutes boundary hardening', () => {
     conductor.listThreads.mockReset();
     conductor.getSystemState.mockReset();
     conductor.getDegradedNoLlmReason.mockReset();
+    conductor.getGovernanceMetricsSnapshot.mockReset();
     conductor.dispatchIntent.mockReset();
     conductor.createThread.mockReset();
     conductor.getThread.mockReset();
@@ -182,6 +209,25 @@ describe('createSphereRoutes boundary hardening', () => {
     conductor.listThreads.mockResolvedValue([]);
     conductor.getSystemState.mockReturnValue('ACTIVE');
     conductor.getDegradedNoLlmReason.mockReturnValue(null);
+    conductor.getGovernanceMetricsSnapshot.mockReturnValue({
+      generatedAt: '2026-03-07T00:00:00.000Z',
+      counters: {
+        intentAttemptTotal: 1,
+        intentCommittedTotal: 1,
+        intentRejectedTotal: 0,
+        intentRejectedByCode: {},
+        lensMissingTotal: 0,
+        breakGlassFailedTotal: 0,
+        signatureVerificationFailureTotal: 0,
+        materialImpactQuorumFailureTotal: 0,
+        auditFailureTotal: 0,
+        breakGlassAttemptTotal: 0,
+        breakGlassAttemptAllowedTotal: 0,
+        breakGlassAttemptDeniedTotal: 0
+      },
+      latencyMs: { sampleCount: 1, min: 4, max: 4, avg: 4, p95: 4 },
+      alerts: []
+    });
     conductor.getThreadAcks.mockResolvedValue({ acks: [], nextCursor: 0 });
     conductor.markThreadDegradedNoLlm.mockResolvedValue({
       threadId: '11111111-1111-4111-8111-111111111111',
@@ -268,6 +314,7 @@ describe('createSphereRoutes boundary hardening', () => {
     expect(response.status).toBe(200);
     expect(response.body.systemState).toBe('ACTIVE');
     expect(response.body.threadCount).toBe(0);
+    expect(response.body.governanceMetrics?.counters?.intentAttemptTotal).toBe(1);
     expect(response.headers['deprecation']).toBe('true');
     expect(response.headers['x-sphere-canonical-base']).toBe('/api/v1/sphere');
     expect(String(response.headers['link'] ?? '')).toContain('/api/v1/sphere');
@@ -578,6 +625,13 @@ describe('createSphereRoutes boundary hardening', () => {
       'synthesis_returned',
       'lens_upgraded'
     ]);
+    expect(response.body.protocol?.cycleEventTaxonomy?.phaseTransitions).toEqual({
+      start: ['seat_taken'],
+      seat_taken: ['perspective_submitted'],
+      perspective_submitted: ['synthesis_returned'],
+      synthesis_returned: ['lens_upgraded'],
+      lens_upgraded: ['seat_taken', 'perspective_submitted']
+    });
     expect(response.body.protocol?.cycleEventPayloadContracts?.schemaVersion).toBe('3.0');
     expect(response.body.protocol?.cycleEventPayloadContracts?.cycleEventTypeField).toBe('eventType');
     expect(response.body.protocol?.cycleEventPayloadContracts?.payloadCycleEventTypeField).toBe(
@@ -1053,6 +1107,76 @@ describe('createSphereRoutes boundary hardening', () => {
     );
   });
 
+  it('rejects non-seat cycle event when thread has no prior cycle phase', async () => {
+    conductor.getThread.mockResolvedValueOnce(null);
+
+    const response = await request
+      .post('/api/v1/sphere/cycle-events')
+      .set('authorization', `Bearer ${token}`)
+      .send({
+        threadId: '11111111-1111-4111-8111-111111111111',
+        messageId: '22222222-2222-4222-8222-222222222231',
+        traceId: '33333333-3333-4333-8333-333333333342',
+        authorAgentId: 'did:key:z6Mkr4R8NnqYv6Uqv8n3n2Vg7p7c1Xb2HqW5fW3r8jN8H1xQ',
+        eventType: 'perspective_submitted',
+        attestation: ['did:example:counselor-1'],
+        schemaVersion: '3.0',
+        protocolVersion: '3.0',
+        causationId: [],
+        agentSignature: 'caller-signature',
+        payload: {
+          content: 'First event cannot skip seat.'
+        }
+      });
+
+    expect(response.status).toBe(409);
+    expect(response.body.code).toBe('SPHERE_ERR_INVALID_CYCLE_PHASE');
+    expect(response.body.message).toBe('Cycle thread must begin with seat_taken.');
+    expect(response.body.details?.expectedNextEventTypes).toEqual(['seat_taken']);
+    expect(conductor.dispatchIntent).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid cycle phase transition order', async () => {
+    conductor.getThread.mockResolvedValueOnce({
+      threadId: '11111111-1111-4111-8111-111111111111',
+      missionId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      createdBy: 'did:key:zAgent',
+      state: 'ACTIVE',
+      entries: [
+        {
+          clientEnvelope: { intent: 'SEAT_TAKEN' },
+          ledgerEnvelope: { sequence: 1 }
+        }
+      ]
+    });
+
+    const response = await request
+      .post('/api/v1/sphere/cycle-events')
+      .set('authorization', `Bearer ${token}`)
+      .send({
+        threadId: '11111111-1111-4111-8111-111111111111',
+        messageId: '22222222-2222-4222-8222-222222222232',
+        traceId: '33333333-3333-4333-8333-333333333343',
+        authorAgentId: 'did:key:z6Mkr4R8NnqYv6Uqv8n3n2Vg7p7c1Xb2HqW5fW3r8jN8H1xQ',
+        eventType: 'synthesis_returned',
+        attestation: ['did:example:counselor-1'],
+        schemaVersion: '3.0',
+        protocolVersion: '3.0',
+        causationId: [],
+        agentSignature: 'caller-signature',
+        payload: {
+          summary: 'Cannot jump directly from seat to synthesis.'
+        }
+      });
+
+    expect(response.status).toBe(409);
+    expect(response.body.code).toBe('SPHERE_ERR_INVALID_CYCLE_PHASE');
+    expect(response.body.message).toBe('Invalid cycle transition: seat_taken -> synthesis_returned.');
+    expect(response.body.details?.expectedNextEventTypes).toEqual(['perspective_submitted']);
+    expect(conductor.dispatchIntent).not.toHaveBeenCalled();
+  });
+
   it('rejects cycle events outside frozen taxonomy', async () => {
     const response = await request
       .post('/api/v1/sphere/cycle-events')
@@ -1296,6 +1420,27 @@ describe('createSphereRoutes boundary hardening', () => {
   });
 
   it('accepts lens_upgraded rule tuple when governance rule matches', async () => {
+    conductor.getThread.mockResolvedValueOnce({
+      threadId: '11111111-1111-4111-8111-111111111111',
+      missionId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      createdBy: 'did:key:zAgent',
+      state: 'ACTIVE',
+      entries: [
+        {
+          clientEnvelope: { intent: 'SEAT_TAKEN' },
+          ledgerEnvelope: { sequence: 1 }
+        },
+        {
+          clientEnvelope: { intent: 'PERSPECTIVE_SUBMITTED' },
+          ledgerEnvelope: { sequence: 2 }
+        },
+        {
+          clientEnvelope: { intent: 'SYNTHESIS_RETURNED' },
+          ledgerEnvelope: { sequence: 3 }
+        }
+      ]
+    });
     conductor.dispatchIntent.mockResolvedValueOnce({
       ledgerEnvelope: {
         sequence: 11,

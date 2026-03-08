@@ -60,7 +60,8 @@ function makePolicies(): GovernancePolicies {
       contactLensSchema: 'x',
       highRiskRegistry: 'y',
       lensUpgradeRules: 'z',
-      contactLenses: {}
+      contactLenses: {},
+      contactLensPack: 'pack'
     },
     highRiskRegistry,
     highRiskByIntent,
@@ -90,6 +91,39 @@ function makePolicies(): GovernancePolicies {
 }
 
 describe('createIntentValidator', () => {
+  it('rejects non-breakglass intent when contact lens is missing', () => {
+    const validate = createIntentValidator(makePolicies());
+
+    const result = validate({
+      intent: 'MISSION_REPORT',
+      agentDid: 'did:test:missing',
+      threadState: 'ACTIVE',
+      prismHolderApproved: false
+    });
+
+    expect(result.allowed).toBe(false);
+    expect(result.code).toBe('LENS_NOT_FOUND');
+  });
+
+  it('rejects intent when permitted activities list is empty', () => {
+    const policies = makePolicies();
+    policies.contactLensesByDid.set('did:test:alpha', {
+      ...policies.contactLensesByDid.get('did:test:alpha')!,
+      permittedActivities: []
+    });
+    const validate = createIntentValidator(policies);
+
+    const result = validate({
+      intent: 'MISSION_REPORT',
+      agentDid: 'did:test:alpha',
+      threadState: 'ACTIVE',
+      prismHolderApproved: false
+    });
+
+    expect(result.allowed).toBe(false);
+    expect(result.code).toBe('LENS_ACTION_NOT_PERMITTED');
+  });
+
   it('rejects high-risk intent without prism holder approval', () => {
     const validate = createIntentValidator(makePolicies());
 
