@@ -6,8 +6,8 @@ use metacanon_ai::ui::{
     DiscordGatewayEventResult, DiscordGatewayProbeResult, DiscordGatewayState,
     DiscordInteractionCompletionResult, GenesisRiteResult, InAppThreadMessage,
     InstallReviewSummary, LocalBootstrapStatus, LocalModelPackInstallResult, ObservabilityStatus,
-    ProviderConfigUpdateResult, ProviderHealthStatus, RuntimeSnapshotResult,
-    SecurityPersistenceSettings, SetupComputeSelectionResult, SubSpherePrismBinding,
+    PrismRoundCommandResult, PrismRuntimeInitResult, ProviderConfigUpdateResult, ProviderHealthStatus,
+    RuntimeSnapshotResult, SecurityPersistenceSettings, SetupComputeSelectionResult, SubSpherePrismBinding,
     SystemCheckReport, TelegramInboundRecord, TelegramUpdatePullResult, TelegramWebhookConfigResult,
     TelegramWebhookResult, TypingIndicatorResult, UiCommandRuntime,
 };
@@ -269,33 +269,56 @@ fn start_telegram_deliberation_listener_inner(
             send_telegram_progress(&runtime, &format!("Running Task: {query}..."));
             send_telegram_progress(
                 &runtime,
-                "Step 1/4 Validate request and gather provider chain...",
+                "Step 1/5 Validate request and gather provider chain...",
             );
 
             if let Ok(review) = ui::get_install_review_summary(&runtime) {
                 send_telegram_progress(
                     &runtime,
                     &format!(
-                        "Step 2/4 Provider chain: {}",
+                        "Step 2/5 Provider chain: {}",
                         review.provider_chain.join(" -> ")
                     ),
                 );
             } else {
                 send_telegram_progress(
                     &runtime,
-                    "Step 2/4 Provider chain unavailable, continuing...",
+                    "Step 2/5 Provider chain unavailable, continuing...",
                 );
             }
 
-            send_telegram_progress(&runtime, "Step 3/4 Running deliberation torus...");
-            match ui::submit_deliberation(&runtime, query.clone(), None) {
+            send_telegram_progress(&runtime, "Step 3/5 Opening Prism/Torus round...");
+            match ui::run_prism_round(
+                &runtime,
+                ui::PrismRoundRequest {
+                    query: query.clone(),
+                    provider_override: None,
+                    channel: Some("telegram".to_string()),
+                    force_deliberation: true,
+                },
+            ) {
                 Ok(result) => {
-                    let routing = result
-                        .metadata
-                        .get("routing")
-                        .cloned()
-                        .unwrap_or_else(|| "unknown".to_string());
-                    let mut body = result.output_text.clone();
+                    if let Some(round_id) = result.round_id.as_deref() {
+                        send_telegram_progress(
+                            &runtime,
+                            &format!("Step 4/5 Round {round_id} converged across {} lanes.", result.lane_outputs.len()),
+                        );
+                    }
+                    for lane in &result.lane_outputs {
+                        let mut lane_body = lane.output_text.clone();
+                        if lane_body.len() > 1200 {
+                            lane_body.truncate(1200);
+                            lane_body.push_str("\n\n[truncated]");
+                        }
+                        send_telegram_progress(
+                            &runtime,
+                            &format!(
+                                "{} lane via {} / {}:\n\n{}",
+                                lane.lane, lane.provider_id, lane.model, lane_body
+                            ),
+                        );
+                    }
+                    let mut body = result.final_result.output_text.clone();
                     if body.len() > 2800 {
                         body.truncate(2800);
                         body.push_str("\n\n[truncated]");
@@ -303,8 +326,14 @@ fn start_telegram_deliberation_listener_inner(
                     send_telegram_progress(
                         &runtime,
                         &format!(
-                            "Step 4/4 Complete.\nProvider: {}\nModel: {}\nFallback: {}\nRouting: {}\n\n{}",
-                            result.provider_id, result.model, result.used_fallback, routing, body
+                            "Step 5/5 Complete.\nRoute: {}\nProvider: {}\nModel: {}\nFallback: {}\nSphere sync: {}/{}\n\n{}",
+                            result.route,
+                            result.final_result.provider_id,
+                            result.final_result.model,
+                            result.final_result.used_fallback,
+                            result.event_publish.succeeded,
+                            result.event_publish.attempted,
+                            body
                         ),
                     );
                 }
@@ -628,7 +657,6 @@ fn update_telegram_integration(
     bot_token: Option<String>,
     default_chat_id: Option<String>,
     orchestrator_chat_id: Option<String>,
-    live_api: bool,
     state: tauri::State<'_, InstallerState>,
 ) -> Result<CommunicationStatus, String> {
     ui::update_telegram_integration(
@@ -638,7 +666,6 @@ fn update_telegram_integration(
         bot_token,
         default_chat_id,
         orchestrator_chat_id,
-        live_api,
     )
     .map_err(map_error)
 }
@@ -652,7 +679,6 @@ fn update_discord_integration(
     default_channel_id: Option<String>,
     orchestrator_thread_id: Option<String>,
     auto_spawn_sub_sphere_threads: bool,
-    live_api: bool,
     state: tauri::State<'_, InstallerState>,
 ) -> Result<CommunicationStatus, String> {
     ui::update_discord_integration(
@@ -664,7 +690,6 @@ fn update_discord_integration(
         default_channel_id,
         orchestrator_thread_id,
         auto_spawn_sub_sphere_threads,
-        live_api,
     )
     .map_err(map_error)
 }
@@ -896,6 +921,9 @@ fn invoke_guided_genesis_rite(
     will_directives: Vec<String>,
     signing_secret: String,
     facet_vision: Option<String>,
+    constitution_source: Option<String>,
+    constitution_version: Option<String>,
+    constitution_upload_path: Option<String>,
     state: tauri::State<'_, InstallerState>,
 ) -> Result<GenesisRiteResult, String> {
     ui::invoke_guided_genesis_rite(
@@ -906,6 +934,9 @@ fn invoke_guided_genesis_rite(
             will_directives,
             signing_secret,
             facet_vision,
+            constitution_source,
+            constitution_version,
+            constitution_upload_path,
         },
     )
     .map_err(map_error)
@@ -936,6 +967,26 @@ fn bootstrap_three_agents(
             discord_thread_id_synthesis,
             discord_thread_id_auditor,
             prism_sub_sphere_id,
+        },
+    )
+    .map_err(map_error)
+}
+
+#[tauri::command]
+fn initialize_prism_runtime(
+    prism_display_name: Option<String>,
+    prism_sub_sphere_id: Option<String>,
+    telegram_chat_id: Option<String>,
+    discord_thread_id: Option<String>,
+    state: tauri::State<'_, InstallerState>,
+) -> Result<PrismRuntimeInitResult, String> {
+    ui::initialize_prism_runtime(
+        &state.runtime,
+        ui::PrismRuntimeInitRequest {
+            prism_display_name,
+            prism_sub_sphere_id,
+            telegram_chat_id,
+            discord_thread_id,
         },
     )
     .map_err(map_error)
@@ -998,6 +1049,26 @@ fn submit_deliberation(
     state: tauri::State<'_, InstallerState>,
 ) -> Result<DeliberationCommandResult, String> {
     ui::submit_deliberation(&state.runtime, query, provider_override).map_err(map_error)
+}
+
+#[tauri::command]
+fn run_prism_round(
+    query: String,
+    provider_override: Option<String>,
+    channel: Option<String>,
+    force_deliberation: bool,
+    state: tauri::State<'_, InstallerState>,
+) -> Result<PrismRoundCommandResult, String> {
+    ui::run_prism_round(
+        &state.runtime,
+        ui::PrismRoundRequest {
+            query,
+            provider_override,
+            channel,
+            force_deliberation,
+        },
+    )
+    .map_err(map_error)
 }
 
 #[tauri::command]
@@ -1105,12 +1176,14 @@ fn main() {
             get_model_download_status,
             invoke_guided_genesis_rite,
             bootstrap_three_agents,
+            initialize_prism_runtime,
             get_security_persistence_settings,
             update_security_persistence_settings,
             get_observability_status,
             update_observability_settings,
             get_install_review_summary,
             submit_deliberation,
+            run_prism_round,
             flush_runtime_auto_snapshot,
             create_task_sub_sphere,
             get_sub_sphere_list,

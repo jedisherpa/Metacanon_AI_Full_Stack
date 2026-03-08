@@ -1,17 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { installerApi } from './lib/api';
 import type {
   AgentRoutingMode,
   CommunicationStatus,
   ComputeOption,
-  DeliberationCommandResult,
   GenesisRiteResult,
   InstallReviewSummary,
   LocalBootstrapStatus,
   ModelDownloadStatus,
+  PrismLaneOutput,
+  PrismRoundCommandResult,
+  PrismRuntimeInitResult,
   ProviderHealthStatus,
   SystemCheckReport,
-  ThreeAgentBootstrapResult,
 } from './lib/types';
 
 type ThemeName = 'light' | 'void';
@@ -28,7 +29,6 @@ type CommunicationSubStepId =
   | 'telegram_pair'
   | 'discord_token'
   | 'discord_target'
-  | 'interfaces'
   | 'review';
 type PairingState = 'idle' | 'listening' | 'paired' | 'timed_out' | 'error';
 
@@ -46,6 +46,8 @@ type ProviderConfigField = {
   required?: boolean;
 };
 
+type NoticeTone = 'error' | 'success';
+
 const STEPS = [
   'Theme',
   'Welcome',
@@ -53,18 +55,11 @@ const STEPS = [
   'Provider Setup',
   'Communication',
   'Genesis Rite',
-  'Constitution',
   'Initialization',
   'Meet Prism',
   'First Tasks',
   'Done',
 ];
-
-const CORE_AGENT_IDS = {
-  monitor: 'agent-genesis',
-  synthesis: 'agent-synthesis',
-  auditor: 'agent-auditor',
-};
 
 const DEFAULT_GENESIS = {
   vision_core: 'Build a sovereign MetaCanon runtime aligned to my values.',
@@ -76,9 +71,9 @@ const SMOKE_QUERY = 'Return a one-line installer verification status.';
 const INIT_PHASES: Array<{ id: InitPhaseId; label: string; detail: string }> = [
   { id: 'crystal', label: 'Genesis Crystal', detail: 'Hashing values + constitution anchor.' },
   { id: 'tetrahedron', label: 'Tensegrity Tetrahedron', detail: 'Primary deliberation path online.' },
-  { id: 'agents', label: 'Core Agents', detail: 'Synthesis, Monitor, Auditor are activated.' },
-  { id: 'taurus', label: 'Taurus Protocol', detail: 'Cross-agent routing and persistence flush.' },
-  { id: 'sphere', label: 'Sphere Established', detail: 'System is coherent and ready for Prism.' },
+  { id: 'agents', label: 'Core Lanes', detail: 'Watcher, Synthesis, and Auditor are activated behind Prism.' },
+  { id: 'taurus', label: 'Torus Protocol', detail: 'Deliberation lanes and Sphere Thread publishing are online.' },
+  { id: 'sphere', label: 'Sphere Established', detail: 'Prism is ready as the user-facing interface.' },
 ];
 
 function emptyInitPhaseState(): Record<InitPhaseId, InitPhaseState> {
@@ -89,6 +84,56 @@ function emptyInitPhaseState(): Record<InitPhaseId, InitPhaseState> {
     taurus: 'pending',
     sphere: 'pending',
   };
+}
+
+function prettyLaneLabel(lane: string): string {
+  switch (lane) {
+    case 'watcher':
+      return 'Watcher';
+    case 'synthesis':
+      return 'Synthesis';
+    case 'auditor':
+      return 'Auditor';
+    default:
+      return lane;
+  }
+}
+
+function trimForMessage(text: string, maxLength: number): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= maxLength) {
+    return trimmed;
+  }
+  return `${trimmed.slice(0, maxLength)}...`;
+}
+
+function formatLaneSummary(lane: PrismLaneOutput): string {
+  return (
+    `${prettyLaneLabel(lane.lane)} (${lane.provider_id} / ${lane.model})\n` +
+    `${trimForMessage(lane.output_text, 700)}`
+  );
+}
+
+function formatPrismRoundMessage(result: PrismRoundCommandResult): string {
+  const laneSummary =
+    result.lane_outputs.length > 0
+      ? `Lane Deliberation:\n${result.lane_outputs.map(formatLaneSummary).join('\n\n')}\n\n`
+      : '';
+  const eventSummary = result.event_publish.enabled
+    ? `${result.event_publish.succeeded}/${result.event_publish.attempted} sphere events published`
+    : 'Sphere event publishing is disabled';
+
+  return (
+    `Task Complete\n\n` +
+    `Route: ${result.route}\n` +
+    `Round: ${result.round_id ?? 'n/a'}\n` +
+    `Final provider: ${result.final_result.provider_id}\n` +
+    `Model: ${result.final_result.model}\n` +
+    `Fallback used: ${result.final_result.used_fallback ? 'Yes' : 'No'}\n` +
+    `Sphere sync: ${eventSummary}\n\n` +
+    laneSummary +
+    `Final Response:\n${trimForMessage(result.final_result.output_text, 3000)}`
+  );
 }
 
 function configFieldsForProvider(providerId: string): ProviderConfigField[] {
@@ -137,7 +182,7 @@ function configFieldsForProvider(providerId: string): ProviderConfigField[] {
       ];
     case 'gemini':
       return [
-        { key: 'api_key', label: 'Gemini API Key', type: 'password', placeholder: 'AIza...' },
+        { key: 'api_key', label: 'Gemini API Key', type: 'password', placeholder: 'AIza...', required: true },
         { key: 'model', label: 'Model', placeholder: 'gemini-2.0-flash' },
       ];
     default:
@@ -173,7 +218,6 @@ function emptyCommunication(): CommunicationStatus {
   return {
     telegram: {
       enabled: false,
-      live_api: false,
       routing_mode: 'orchestrator',
       use_webhook: false,
       configured: false,
@@ -185,7 +229,6 @@ function emptyCommunication(): CommunicationStatus {
     },
     discord: {
       enabled: false,
-      live_api: false,
       routing_mode: 'orchestrator',
       configured: false,
       has_bot_token: false,
@@ -351,7 +394,7 @@ export default function App() {
   const [theme, setTheme] = useState<ThemeName>(resolveInitialTheme);
   const [stepIndex, setStepIndex] = useState(0);
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState('Preparing installer...');
+  const [notice, setNotice] = useState<{ tone: NoticeTone; message: string } | null>(null);
 
   const [computeOptions, setComputeOptions] = useState<ComputeOption[]>([]);
   const [providerHealth, setProviderHealth] = useState<ProviderHealthStatus[]>([]);
@@ -361,13 +404,12 @@ export default function App() {
 
   const [selectedProviders, setSelectedProviders] = useState<string[]>([]);
   const [fallbackOrder, setFallbackOrder] = useState<string[]>([]);
-  const [setupPath, setSetupPath] = useState<SetupPath | null>(null);
+  const [setupPath, setSetupPath] = useState<SetupPath>('quick');
   const [dragProviderId, setDragProviderId] = useState<string | null>(null);
   const [dragTargetProviderId, setDragTargetProviderId] = useState<string | null>(null);
   const [suppressCardClick, setSuppressCardClick] = useState(false);
 
   const [providerConfigDrafts, setProviderConfigDrafts] = useState<Record<string, Record<string, string>>>({});
-  const [showProviderAdvanced, setShowProviderAdvanced] = useState(false);
 
   const [localSourceMode, setLocalSourceMode] = useState<SourceMode>('bundled');
   const [localSourceInput, setLocalSourceInput] = useState('');
@@ -375,23 +417,18 @@ export default function App() {
   const [modelDownloadStatus, setModelDownloadStatus] = useState<ModelDownloadStatus>(
     emptyModelDownloadStatus(),
   );
-  const [providerSaveMessages, setProviderSaveMessages] = useState<Record<string, string>>({});
 
   const [telegramEnabled, setTelegramEnabled] = useState(false);
-  const [telegramLiveApi, setTelegramLiveApi] = useState(true);
   const [telegramRoutingMode, setTelegramRoutingMode] = useState<AgentRoutingMode>('orchestrator');
   const [telegramBotToken, setTelegramBotToken] = useState('');
   const [telegramDefaultChatId, setTelegramDefaultChatId] = useState('');
 
   const [discordEnabled, setDiscordEnabled] = useState(false);
-  const [discordLiveApi, setDiscordLiveApi] = useState(true);
   const [discordRoutingMode, setDiscordRoutingMode] = useState<AgentRoutingMode>('orchestrator');
   const [discordBotToken, setDiscordBotToken] = useState('');
   const [discordGuildId, setDiscordGuildId] = useState('');
   const [discordDefaultChannelId, setDiscordDefaultChannelId] = useState('');
 
-  const [dashboardEnabled, setDashboardEnabled] = useState(true);
-  const [miniAppEnabled, setMiniAppEnabled] = useState(true);
   const [communicationTestResult, setCommunicationTestResult] = useState('');
   const [communicationSubStepIndex, setCommunicationSubStepIndex] = useState(0);
   const [telegramPairCode, setTelegramPairCode] = useState('');
@@ -417,16 +454,15 @@ export default function App() {
   const [activeInitializationPhase, setActiveInitializationPhase] = useState<InitPhaseId | null>(
     null,
   );
-  const [cinematicSoundEnabled, setCinematicSoundEnabled] = useState(false);
   const [review, setReview] = useState<InstallReviewSummary | null>(null);
-  const [bootstrapResult, setBootstrapResult] = useState<ThreeAgentBootstrapResult | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
+  const [bootstrapResult, setBootstrapResult] = useState<PrismRuntimeInitResult | null>(null);
 
   const [prismName, setPrismName] = useState('Prism');
   const [prismTestResult, setPrismTestResult] = useState('');
 
   const [starterTask, setStarterTask] = useState('Create a short system health summary.');
   const [starterTaskResult, setStarterTaskResult] = useState('');
+
 
   const selectedProviderObjects = useMemo(
     () => fallbackOrder.map((id) => computeOptions.find((option) => option.provider_id === id)).filter(Boolean) as ComputeOption[],
@@ -437,41 +473,8 @@ export default function App() {
     setInitializationLog((previous) => [...previous, { id: Date.now() + Math.random(), text, phase }]);
   }
 
-  function playPhaseChime(phase: InitPhaseId) {
-    if (!cinematicSoundEnabled || typeof window === 'undefined') {
-      return;
-    }
-
-    const Ctx = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!Ctx) {
-      return;
-    }
-
-    if (!audioContextRef.current) {
-      audioContextRef.current = new Ctx();
-    }
-
-    const context = audioContextRef.current;
-    const now = context.currentTime;
-    const freqMap: Record<InitPhaseId, number> = {
-      crystal: 440,
-      tetrahedron: 523.25,
-      agents: 659.25,
-      taurus: 783.99,
-      sphere: 880,
-    };
-
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-    oscillator.type = 'sine';
-    oscillator.frequency.setValueAtTime(freqMap[phase], now);
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.045, now + 0.04);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.38);
-    oscillator.connect(gain);
-    gain.connect(context.destination);
-    oscillator.start(now);
-    oscillator.stop(now + 0.4);
+  function playPhaseChime(_phase: InitPhaseId) {
+    // Sound cues are intentionally disabled in the guided installer until they are a persisted preference.
   }
 
   function activateInitPhase(phase: InitPhaseId) {
@@ -490,14 +493,15 @@ export default function App() {
 
   async function runTask(label: string, task: () => Promise<void>) {
     setBusy(true);
-    setStatus(`${label}...`);
+    setNotice(null);
     try {
       await task();
-      setStatus(`${label} complete.`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      setStatus(`Error: ${message}`);
-      appendLog(`error: ${message}`);
+      setNotice({
+        tone: 'error',
+        message: `${label} failed. ${message}`,
+      });
     } finally {
       setBusy(false);
     }
@@ -519,12 +523,10 @@ export default function App() {
     setCommunication(comms);
 
     setTelegramEnabled(comms.telegram.enabled);
-    setTelegramLiveApi(comms.telegram.live_api);
     setTelegramRoutingMode(comms.telegram.routing_mode);
     setTelegramDefaultChatId(comms.telegram.default_chat_id ?? '');
 
     setDiscordEnabled(comms.discord.enabled);
-    setDiscordLiveApi(comms.discord.live_api);
     setDiscordRoutingMode(comms.discord.routing_mode);
     setDiscordGuildId(comms.discord.guild_id ?? '');
     setDiscordDefaultChannelId(comms.discord.default_channel_id ?? '');
@@ -535,6 +537,8 @@ export default function App() {
       setSelectedProviders(suggested);
       setFallbackOrder(suggested);
     }
+
+    return { options, health, checks, bootstrap, comms };
   }
 
   useEffect(() => {
@@ -544,11 +548,13 @@ export default function App() {
   useEffect(() => {
     void runTask('Loading installer state', async () => {
       await refreshCoreState();
-      await syncLocalComputeConfigFromUi(true);
-      await refreshCoreState();
       await installerApi.flushRuntimeAutoSnapshot();
     });
   }, []);
+
+  useEffect(() => {
+    setNotice(null);
+  }, [stepIndex]);
 
   useEffect(() => {
     if (modelDownloadStatus.status !== 'running') {
@@ -651,30 +657,87 @@ export default function App() {
     await refreshCoreState();
   }
 
-  async function saveProviderConfigWithFeedback(providerId: string) {
-    setBusy(true);
-    setProviderSaveMessages((previous) => ({
-      ...previous,
-      [providerId]: 'Saving...',
-    }));
-    try {
-      await saveProviderConfig(providerId);
-      setProviderSaveMessages((previous) => ({
-        ...previous,
-        [providerId]: 'Saved successfully.',
-      }));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setProviderSaveMessages((previous) => ({
-        ...previous,
-        [providerId]: `Save failed: ${message}`,
-      }));
-    } finally {
-      setBusy(false);
+  function isLocalProviderId(providerId: string): boolean {
+    return providerId === 'qwen_local' || providerId === 'ollama';
+  }
+
+  function requiredFieldsForProvider(providerId: string): ProviderConfigField[] {
+    return configFieldsForProvider(providerId).filter((field) => field.required);
+  }
+
+  function providerDraftHasRequiredValues(providerId: string): boolean {
+    const draft = providerConfigDrafts[providerId] ?? {};
+    return requiredFieldsForProvider(providerId).every((field) => Boolean((draft[field.key] ?? '').trim()));
+  }
+
+  function localQwenReady(bootstrap: LocalBootstrapStatus = localBootstrap): boolean {
+    return bootstrap.ollama_installed && bootstrap.ollama_reachable && bootstrap.qwen_model_hint_present;
+  }
+
+  function providerIsReady(
+    providerId: string,
+    healthList: ProviderHealthStatus[] = providerHealth,
+    bootstrap: LocalBootstrapStatus = localBootstrap,
+  ): boolean {
+    const health = healthList.find((entry) => entry.provider_id === providerId);
+    if (providerId === 'qwen_local') {
+      return Boolean(health?.is_healthy) && localQwenReady(bootstrap);
+    }
+    if (providerId === 'ollama') {
+      return Boolean(health?.is_healthy) && bootstrap.ollama_installed && bootstrap.ollama_reachable;
+    }
+    return Boolean(health?.is_healthy);
+  }
+
+  function providerCanContinue(providerId: string): boolean {
+    if (isLocalProviderId(providerId)) {
+      return providerIsReady(providerId);
+    }
+    const requiredFields = requiredFieldsForProvider(providerId);
+    if (requiredFields.length === 0) {
+      return providerIsReady(providerId);
+    }
+    return providerIsReady(providerId) || providerDraftHasRequiredValues(providerId);
+  }
+
+  async function persistProviderSetup() {
+    if (selectedProviders.some((providerId) => isLocalProviderId(providerId))) {
+      await syncLocalComputeConfigFromUi();
+    }
+
+    const remoteProviders = selectedProviderObjects.filter((provider) => !isLocalProviderId(provider.provider_id));
+    for (const provider of remoteProviders) {
+      if (providerIsReady(provider.provider_id)) {
+        continue;
+      }
+
+      if (!providerDraftHasRequiredValues(provider.provider_id)) {
+        const labels = requiredFieldsForProvider(provider.provider_id)
+          .map((field) => field.label)
+          .join(', ');
+        throw new Error(`Enter ${labels} for ${provider.display_name} before continuing.`);
+      }
+
+      await saveProviderConfig(provider.provider_id);
+    }
+
+    const { health, bootstrap } = await refreshCoreState();
+    const localSelected = selectedProviders.some((providerId) => isLocalProviderId(providerId));
+    if (localSelected && !localQwenReady(bootstrap)) {
+      throw new Error('Local Qwen is not ready yet. Install Ollama, start it, and download Qwen 3.5 35B before continuing.');
+    }
+
+    const pendingProviders = selectedProviderObjects.filter(
+      (provider) => !providerIsReady(provider.provider_id, health, bootstrap),
+    );
+    if (pendingProviders.length > 0) {
+      throw new Error(
+        `Finish setup for ${pendingProviders.map((provider) => provider.display_name).join(', ')} before continuing.`,
+      );
     }
   }
 
-  async function syncLocalComputeConfigFromUi(forceLiveApi = true) {
+  async function syncLocalComputeConfigFromUi() {
     const qwenDraft = providerConfigDrafts.qwen_local ?? {};
     const ollamaDraft = providerConfigDrafts.ollama ?? {};
 
@@ -689,12 +752,10 @@ export default function App() {
       runtime_backend: runtimeBackend,
       base_url: baseUrl,
       primary_model_id: primaryModelId,
-      live_api: forceLiveApi,
     });
     await installerApi.updateProviderConfig('ollama', {
       base_url: baseUrl,
       default_model: defaultModel,
-      live_api: forceLiveApi,
     });
   }
 
@@ -708,12 +769,12 @@ export default function App() {
       }
       const result = await installerApi.installLocalModelPack(localSourceInput.trim());
       setLocalSetupResult(
-        `model pack installed from ${result.source_kind}; files=${result.installed_files}; root=${result.model_root}`,
+        `Model assets were installed from ${result.source_kind}. ${result.installed_files} files were added to ${result.model_root}.`,
       );
       setLocalBootstrap(result.bootstrap);
     }
 
-    await syncLocalComputeConfigFromUi(true);
+    await syncLocalComputeConfigFromUi();
     const latestBootstrap = await installerApi.getLocalBootstrapStatus();
     setLocalBootstrap(latestBootstrap);
     if (!latestBootstrap.qwen_model_hint_present) {
@@ -733,11 +794,14 @@ export default function App() {
 
   async function runLocalActionWithFeedback(label: string, task: () => Promise<void>) {
     setBusy(true);
+    setNotice(null);
     setLocalSetupResult(`${label}...`);
     try {
       await task();
       setLocalSetupResult((previous) =>
-        previous.startsWith('Error:') ? previous : `${label} started.`,
+        previous === `${label}...`
+          ? `${label} started. You can stay on this screen while it finishes.`
+          : previous,
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -749,7 +813,7 @@ export default function App() {
 
   async function saveCommunicationChannels() {
     const normalizedTelegramToken = normalizeTelegramBotToken(telegramBotToken);
-    if (telegramEnabled && telegramLiveApi && normalizedTelegramToken && !isLikelyTelegramToken(normalizedTelegramToken)) {
+    if (telegramEnabled && normalizedTelegramToken && !isLikelyTelegramToken(normalizedTelegramToken)) {
       throw new Error('Telegram bot token format looks invalid. Use the exact token from BotFather (no leading "bot").');
     }
 
@@ -759,7 +823,6 @@ export default function App() {
       bot_token: normalizedTelegramToken || null,
       default_chat_id: telegramDefaultChatId || null,
       orchestrator_chat_id: telegramDefaultChatId || null,
-      live_api: telegramLiveApi,
     });
 
     await installerApi.updateDiscordIntegration({
@@ -770,10 +833,9 @@ export default function App() {
       default_channel_id: discordDefaultChannelId || null,
       orchestrator_thread_id: null,
       auto_spawn_sub_sphere_threads: true,
-      live_api: discordLiveApi,
     });
 
-    if (telegramEnabled && telegramLiveApi) {
+    if (telegramEnabled) {
       await installerApi.startTelegramDeliberationListener();
     }
 
@@ -784,6 +846,12 @@ export default function App() {
     if (!genesisSigningSecret.trim()) {
       throw new Error('Genesis signing secret is required.');
     }
+    if (!constitutionVersion.trim()) {
+      throw new Error('Choose a constitution version label before running the genesis rite.');
+    }
+    if (constitutionSource === 'upload' && !constitutionUploadPath.trim()) {
+      throw new Error('Enter the path to your custom constitution before running the genesis rite.');
+    }
 
     const payload =
       genesisMode === 'default'
@@ -793,6 +861,10 @@ export default function App() {
             will_directives: DEFAULT_GENESIS.will_directives,
             signing_secret: genesisSigningSecret,
             facet_vision: 'Constitutional synthesis and values stewardship.',
+            constitution_source: constitutionSource,
+            constitution_version: constitutionVersion.trim(),
+            constitution_upload_path:
+              constitutionSource === 'upload' ? constitutionUploadPath.trim() : null,
           }
         : {
             vision_core: visionCore,
@@ -800,6 +872,10 @@ export default function App() {
             will_directives: toQuestionList(willDirectives),
             signing_secret: genesisSigningSecret,
             facet_vision: 'Constitutional synthesis and values stewardship.',
+            constitution_source: constitutionSource,
+            constitution_version: constitutionVersion.trim(),
+            constitution_upload_path:
+              constitutionSource === 'upload' ? constitutionUploadPath.trim() : null,
           };
 
     const result = await installerApi.invokeGuidedGenesisRite(payload);
@@ -808,10 +884,11 @@ export default function App() {
 
   async function runGenesisWithFeedback() {
     setBusy(true);
+    setNotice(null);
     setGenesisStatusMessage('Running genesis rite...');
     try {
       await runGenesis();
-      setGenesisStatusMessage('Genesis rite complete.');
+      setGenesisStatusMessage('Genesis rite complete. Values and constitution reference have been sealed into the genesis record.');
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setGenesisStatusMessage(`Genesis rite failed: ${message}`);
@@ -838,35 +915,55 @@ export default function App() {
       appendLog('Genesis crystal initiated.', 'crystal');
       const reviewState = await installerApi.getInstallReviewSummary();
       setReview(reviewState);
-      appendLog(`System review: can_install=${String(reviewState.can_install)}.`, 'crystal');
+      appendLog(
+        reviewState.can_install
+          ? 'System review passed. Initialization can continue.'
+          : 'System review found open issues, but initialization is continuing for inspection.',
+        'crystal',
+      );
       completeInitPhase('crystal');
 
       activePhase = 'tetrahedron';
       activateInitPhase('tetrahedron');
       appendLog('Building tensegrity tetrahedron...', 'tetrahedron');
-      const smoke = await installerApi.submitDeliberation(SMOKE_QUERY, fallbackOrder[0]);
-      appendLog(`Primary compute response: ${smoke.provider_id} (${smoke.model}).`, 'tetrahedron');
+      const smoke = await installerApi.runPrismRound({
+        query: SMOKE_QUERY,
+        provider_override: fallbackOrder[0] ?? null,
+        channel: 'installer',
+        force_deliberation: false,
+      });
+      appendLog(
+        `Primary compute responded through ${smoke.final_result.provider_id} using ${smoke.final_result.model} (${smoke.route}).`,
+        'tetrahedron',
+      );
+      if (smoke.round_id) {
+        appendLog(`Round ${smoke.round_id} reached synthesis across ${smoke.lane_outputs.length} lanes.`, 'tetrahedron');
+      }
       completeInitPhase('tetrahedron');
 
       activePhase = 'agents';
       activateInitPhase('agents');
-      appendLog('Spinning up core agents: synthesis, monitor, auditor...', 'agents');
-      const bootstrap = await installerApi.bootstrapThreeAgents({
-        orchestrator_agent_id: CORE_AGENT_IDS.synthesis,
-        prism_agent_id: CORE_AGENT_IDS.synthesis,
+      appendLog('Initializing Prism runtime and internal lanes: watcher, synthesis, auditor...', 'agents');
+      const bootstrap = await installerApi.initializePrismRuntime({
+        prism_display_name: prismName,
         prism_sub_sphere_id: 'meta-prism',
-        telegram_chat_id_genesis: telegramDefaultChatId || null,
-        telegram_chat_id_synthesis: telegramDefaultChatId || null,
-        telegram_chat_id_auditor: telegramDefaultChatId || null,
+        telegram_chat_id: telegramDefaultChatId || null,
+        discord_thread_id: discordDefaultChannelId || null,
       });
       setBootstrapResult(bootstrap);
+      appendLog(
+        bootstrap.sphere_signer_did
+          ? `Sphere signer ready: ${bootstrap.sphere_signer_did}.`
+          : 'Sphere signer unavailable. Engine publishing will stay local-only until the signer is ready.',
+        'agents',
+      );
       completeInitPhase('agents');
 
       activePhase = 'taurus';
       activateInitPhase('taurus');
-      appendLog('Initiating Taurus protocol...', 'taurus');
+      appendLog('Initiating Torus protocol...', 'taurus');
       await installerApi.flushRuntimeAutoSnapshot();
-      appendLog('Persistence and routing loop synchronized.', 'taurus');
+      appendLog('Persistence, Prism routing, and Sphere Thread publishing synchronized.', 'taurus');
       completeInitPhase('taurus');
 
       activePhase = 'sphere';
@@ -881,6 +978,17 @@ export default function App() {
         failInitPhase(activePhase);
       }
       throw error;
+    }
+  }
+
+  function platformLabel(platform: 'telegram' | 'discord' | 'in_app'): string {
+    switch (platform) {
+      case 'telegram':
+        return 'Telegram';
+      case 'discord':
+        return 'Discord';
+      default:
+        return 'In-app';
     }
   }
 
@@ -909,12 +1017,15 @@ export default function App() {
         agent_id: bootstrapResult.orchestrator_agent_id,
         message,
       });
-      lines.push(
-        `sent via ${dispatch.platform}; thread=${dispatch.thread_id}; delivered_live=${String(dispatch.delivered_live)}; simulated=${String(dispatch.simulated)}`,
-      );
+      const label = platformLabel(dispatch.platform);
+      if (dispatch.delivered_live) {
+        lines.push(`${label}: live test message sent successfully.`);
+      } else {
+        lines.push(`${label}: test message was queued for delivery.`);
+      }
     }
 
-    setPrismTestResult(lines.join('\n'));
+    setPrismTestResult(lines.join(' '));
   }
 
   async function runStarterTask() {
@@ -933,17 +1044,13 @@ export default function App() {
       platforms.push('in_app');
     }
 
-    const lines: string[] = [];
     const runningMessage = `Running Task: ${starterTask}...`;
     for (const platform of platforms) {
-      const dispatch = await installerApi.sendAgentMessage({
+      await installerApi.sendAgentMessage({
         platform,
         agent_id: bootstrapResult.orchestrator_agent_id,
         message: runningMessage,
       });
-      lines.push(
-        `started via ${dispatch.platform}; thread=${dispatch.thread_id}; message_id=${dispatch.message_id}; delivered_live=${String(dispatch.delivered_live)}; simulated=${String(dispatch.simulated)}`,
-      );
     }
 
     let completionMessage = '';
@@ -968,78 +1075,36 @@ export default function App() {
         .map((provider) => `- ${provider.provider_id}: ${provider.detail ?? 'unhealthy'}`);
 
       completionMessage =
-        `Task Complete\n` +
-        `System Health Summary\n` +
-        `fails=${checks.fail_count}, warns=${checks.warn_count}, blocking=${String(checks.has_blocking_failures)}\n` +
-        `local_ollama_installed=${String(bootstrap.ollama_installed)}, local_ollama_running=${String(bootstrap.ollama_reachable)}, qwen_ready=${String(bootstrap.qwen_model_hint_present)}\n\n` +
+        `System Health Summary\n\n` +
+        `Blocking issues: ${checks.fail_count}\n` +
+        `Warnings: ${checks.warn_count}\n` +
+        `Ollama installed: ${bootstrap.ollama_installed ? 'Yes' : 'No'}\n` +
+        `Ollama running: ${bootstrap.ollama_reachable ? 'Yes' : 'No'}\n` +
+        `Qwen 3.5 35B ready: ${bootstrap.qwen_model_hint_present ? 'Yes' : 'No'}\n\n` +
         `Top Issues:\n${topIssues.length > 0 ? topIssues.join('\n') : '- none'}\n\n` +
         `Unhealthy Providers:\n${unhealthyProviders.length > 0 ? unhealthyProviders.join('\n') : '- none'}`;
     } else {
-      const candidateProviders = Array.from(
-        new Set(
-          fallbackOrder.length > 0 ? fallbackOrder : ['qwen_local', 'ollama'],
-        ),
-      );
-      const attemptNotes: string[] = [];
-      let deliberation: DeliberationCommandResult | null = null;
-      let routing = 'unknown';
-
-      for (const requestedProvider of candidateProviders) {
-        if (requestedProvider === 'qwen_local' || requestedProvider === 'ollama') {
-          await syncLocalComputeConfigFromUi(true);
-        }
-
-        try {
-          const candidate = await installerApi.submitDeliberation(
-            starterTask,
-            requestedProvider,
-          );
-          const candidateRouting = candidate.metadata?.routing ?? 'unknown';
-          if (!candidateRouting.includes('simulated')) {
-            deliberation = candidate;
-            routing = candidateRouting;
-            break;
-          }
-          attemptNotes.push(
-            `${requestedProvider}: simulated (${candidateRouting})`,
-          );
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          attemptNotes.push(`${requestedProvider}: error (${message})`);
-        }
+      if (fallbackOrder.some((providerId) => providerId === 'qwen_local' || providerId === 'ollama')) {
+        await syncLocalComputeConfigFromUi();
       }
-
-      if (!deliberation) {
-        throw new Error(
-          `No live provider response available. Attempts: ${attemptNotes.join('; ')}`,
-        );
-      }
-
-      const output =
-        deliberation.output_text.length > 3000
-          ? `${deliberation.output_text.slice(0, 3000)}\n\n[truncated]`
-          : deliberation.output_text;
-      completionMessage =
-        `Task Complete\n` +
-        `Provider: ${deliberation.provider_id}\n` +
-        `Model: ${deliberation.model}\n` +
-        `Fallback used: ${String(deliberation.used_fallback)}\n` +
-        `Routing: ${routing}\n\n` +
-        `${output}`;
+      const prismRound = await installerApi.runPrismRound({
+        query: starterTask,
+        provider_override: fallbackOrder[0] ?? null,
+        channel: platforms[0],
+        force_deliberation: true,
+      });
+      completionMessage = formatPrismRoundMessage(prismRound);
     }
 
     for (const platform of platforms) {
-      const dispatch = await installerApi.sendAgentMessage({
+      await installerApi.sendAgentMessage({
         platform,
         agent_id: bootstrapResult.orchestrator_agent_id,
         message: completionMessage,
       });
-      lines.push(
-        `result via ${dispatch.platform}; thread=${dispatch.thread_id}; message_id=${dispatch.message_id}; delivered_live=${String(dispatch.delivered_live)}; simulated=${String(dispatch.simulated)}`,
-      );
     }
 
-    setStarterTaskResult(lines.join('\n'));
+    setStarterTaskResult(completionMessage);
   }
 
   function communicationSubSteps(): CommunicationSubStepId[] {
@@ -1050,7 +1115,7 @@ export default function App() {
     if (discordEnabled) {
       steps.push('discord_token', 'discord_target');
     }
-    steps.push('interfaces', 'review');
+    steps.push('review');
     return steps;
   }
 
@@ -1076,8 +1141,6 @@ export default function App() {
         return 'Discord Bot';
       case 'discord_target':
         return 'Discord Target';
-      case 'interfaces':
-        return 'Interfaces';
       case 'review':
         return 'Review';
       default:
@@ -1155,7 +1218,6 @@ export default function App() {
           bot_token: normalizedTelegramToken,
           default_chat_id: telegramDefaultChatId.trim() || null,
           orchestrator_chat_id: telegramDefaultChatId.trim() || null,
-          live_api: true,
         }),
         12000,
         'Telegram integration setup',
@@ -1207,7 +1269,6 @@ export default function App() {
             bot_token: normalizeTelegramBotToken(telegramBotToken),
             default_chat_id: match.chat_id,
             orchestrator_chat_id: match.chat_id,
-            live_api: telegramLiveApi,
           });
           setCommunication(await installerApi.getCommunicationStatus());
         } catch (error) {
@@ -1237,35 +1298,26 @@ export default function App() {
       window.clearInterval(intervalId);
       window.clearTimeout(timeoutId);
     };
-  }, [telegramPairCode, telegramPairState, telegramBotToken, telegramLiveApi, telegramRoutingMode]);
+  }, [telegramPairCode, telegramPairState, telegramBotToken, telegramRoutingMode]);
 
   function canContinue(): boolean {
-    const selectedHealth = selectedProviderObjects
-      .map((provider) => providerHealth.find((entry) => entry.provider_id === provider.provider_id))
-      .filter((entry): entry is ProviderHealthStatus => Boolean(entry));
-    const allSelectedProvidersHealthy =
-      selectedProviderObjects.length > 0 &&
-      selectedHealth.length === selectedProviderObjects.length &&
-      selectedHealth.every((entry) => entry.is_healthy);
-    const localSelected =
-      selectedProviders.includes('qwen_local') || selectedProviders.includes('ollama');
-    const localReady =
-      localBootstrap.ollama_installed &&
-      localBootstrap.ollama_reachable &&
-      localBootstrap.qwen_model_hint_present;
+    const localSelected = selectedProviders.some((providerId) => isLocalProviderId(providerId));
+    const remoteReady = selectedProviderObjects
+      .filter((provider) => !isLocalProviderId(provider.provider_id))
+      .every((provider) => providerCanContinue(provider.provider_id));
 
     switch (stepIndex) {
       case 1:
-        return setupPath !== null;
+        return setupPath === 'quick';
       case 2:
         return fallbackOrder.length > 0;
       case 3:
-        return localSelected ? allSelectedProvidersHealthy && localReady : allSelectedProvidersHealthy;
+        return selectedProviderObjects.length > 0 && remoteReady && (!localSelected || localQwenReady());
       case 4:
         return isCommunicationFlowComplete();
       case 5:
         return Boolean(genesisResult);
-      case 7:
+      case 6:
         return initializationComplete;
       default:
         return true;
@@ -1273,25 +1325,32 @@ export default function App() {
   }
 
   async function onContinue() {
-    if (stepIndex === 2) {
-      await runTask('Saving compute selection', persistComputeSelection);
-    }
+    setBusy(true);
+    setNotice(null);
 
-    if (stepIndex === 4) {
-      await runTask('Saving communication channels', saveCommunicationChannels);
-    }
-
-    if (stepIndex === 3) {
-      setBusy(true);
-      try {
-        await syncLocalComputeConfigFromUi(true);
-        await refreshCoreState();
-      } finally {
-        setBusy(false);
+    try {
+      if (stepIndex === 2) {
+        await persistComputeSelection();
       }
-    }
 
-    setStepIndex((previous) => Math.min(STEPS.length - 1, previous + 1));
+      if (stepIndex === 3) {
+        await persistProviderSetup();
+      }
+
+      if (stepIndex === 4) {
+        await saveCommunicationChannels();
+      }
+
+      setStepIndex((previous) => Math.min(STEPS.length - 1, previous + 1));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setNotice({
+        tone: 'error',
+        message,
+      });
+    } finally {
+      setBusy(false);
+    }
   }
 
   function renderThemeStep() {
@@ -1318,7 +1377,7 @@ export default function App() {
     return (
       <section className="wizard-panel">
         <h2>Welcome to MetaCanon</h2>
-        <p className="muted">This setup will guide you one decision at a time. Most settings are prefilled with safe defaults.</p>
+        <p className="muted">This setup guides you one decision at a time. Quick Path is the current guided install flow.</p>
         <div className="card-grid two-up">
           <button
             className={`setup-card path-card ${setupPath === 'quick' ? 'selected' : ''}`}
@@ -1328,11 +1387,12 @@ export default function App() {
             <p>Recommended settings, local-first compute, and secure defaults.</p>
           </button>
           <button
-            className={`setup-card path-card ${setupPath === 'custom' ? 'selected' : ''}`}
-            onClick={() => setSetupPath('custom')}
+            className="setup-card path-card disabled"
+            type="button"
+            disabled
           >
             <h3>Custom Path</h3>
-            <p>You can still tune providers, fallback ordering, and communication channels in the next screens.</p>
+            <p>Coming soon. Advanced branching and deeper setup controls will live here.</p>
           </button>
         </div>
       </section>
@@ -1343,7 +1403,7 @@ export default function App() {
     return (
       <section className="wizard-panel">
         <h2>Choose Compute + Fallback Order</h2>
-        <p className="muted">Select one or more providers. Their order becomes fallback priority.</p>
+        <p className="muted">Select one or more providers, then drag the selected cards into the order you want the installer to try them.</p>
 
         <div className="card-grid compute-grid">
           {computeOptions.map((option) => {
@@ -1414,15 +1474,18 @@ export default function App() {
   }
 
   function renderProviderSetupStep() {
+    const localSelected = selectedProviders.some((providerId) => isLocalProviderId(providerId));
+    const remoteProviders = selectedProviderObjects.filter((provider) => !isLocalProviderId(provider.provider_id));
+
     return (
       <section className="wizard-panel">
         <h2>Provider Setup</h2>
-        <p className="muted">For local compute, we prepare Ollama + Qwen 3.5 35B if your machine supports it.</p>
+        <p className="muted">Finish the setup work for the providers you chose. The installer keeps this screen focused on only what still needs action.</p>
 
-        {selectedProviders.includes('qwen_local') || selectedProviders.includes('ollama') ? (
+        {localSelected ? (
           <article className="setup-card">
             <h3>Local Qwen/Ollama Setup</h3>
-            <p className="muted">Choose how to source local runtime assets.</p>
+            <p className="muted">Prepare the local runtime first, then download Qwen 3.5 35B if it is not already present.</p>
             <div className="radio-stack">
               <label className="radio-pill">
                 <input
@@ -1498,22 +1561,11 @@ export default function App() {
                 Refresh Capability
               </button>
             </div>
-            {!localBootstrap.ollama_installed ? (
-              <p className="muted">
-                Ollama is not installed yet. Install Ollama first, then download Qwen 3.5 35B.
-              </p>
-            ) : null}
-            <div className="row gap wrap">
-              <span className={`chip ${localBootstrap.ollama_installed ? 'pass' : 'warn'}`}>
-                Ollama Installed: {localBootstrap.ollama_installed ? 'Yes' : 'No'}
-              </span>
-              <span className={`chip ${localBootstrap.ollama_reachable ? 'pass' : 'warn'}`}>
-                Ollama Running: {localBootstrap.ollama_reachable ? 'Yes' : 'No'}
-              </span>
-              <span className={`chip ${localBootstrap.qwen_model_hint_present ? 'pass' : 'warn'}`}>
-                Qwen 3.5 35B Ready: {localBootstrap.qwen_model_hint_present ? 'Yes' : 'No'}
-              </span>
-            </div>
+            <ul className="summary-list">
+              <li>Ollama installed: {localBootstrap.ollama_installed ? 'Yes' : 'No'}</li>
+              <li>Ollama running: {localBootstrap.ollama_reachable ? 'Yes' : 'No'}</li>
+              <li>Qwen 3.5 35B ready: {localBootstrap.qwen_model_hint_present ? 'Yes' : 'No'}</li>
+            </ul>
             {modelDownloadStatus.status !== 'idle' ? (
               <div className="download-status-card">
                 <div className="row between">
@@ -1552,58 +1604,40 @@ export default function App() {
                 ) : null}
               </div>
             ) : null}
-            {localSetupResult ? <pre className="console">{localSetupResult}</pre> : null}
+            {localSetupResult ? (
+              <div className="result-card">
+                <p className="result-text">{localSetupResult}</p>
+              </div>
+            ) : null}
           </article>
         ) : null}
 
-        {selectedProviderObjects.map((provider) => {
-          const isLocalProvider =
-            provider.provider_id === 'qwen_local' || provider.provider_id === 'ollama';
-          const fields = configFieldsForProvider(provider.provider_id);
-          const requiredFields = isLocalProvider
-            ? []
-            : fields.filter((field) => field.required);
-          const advancedFields = isLocalProvider
-            ? []
-            : fields.filter((field) => !field.required);
+        {remoteProviders.map((provider) => {
+          const requiredFields = requiredFieldsForProvider(provider.provider_id);
           const providerDraft = providerConfigDrafts[provider.provider_id] ?? {};
           const health = providerHealth.find((entry) => entry.provider_id === provider.provider_id);
-          const localStackReady = localBootstrap.ollama_installed && localBootstrap.ollama_reachable;
-          const qwenRuntimeReady = localStackReady && localBootstrap.qwen_model_hint_present;
-          const effectiveHealthy =
-            provider.provider_id === 'qwen_local'
-              ? Boolean(health?.is_healthy) && qwenRuntimeReady
-              : provider.provider_id === 'ollama'
-                ? Boolean(health?.is_healthy) && localStackReady
-                : Boolean(health?.is_healthy);
-          const statusLabel = effectiveHealthy ? 'Ready' : 'Needs Setup';
+          const ready = providerIsReady(provider.provider_id);
+          const missingRequiredValues = requiredFields.some((field) => !(providerDraft[field.key] ?? '').trim());
+          const statusLabel = ready ? 'Ready' : 'Needs Setup';
+          const guidance = ready
+            ? 'Saved credentials are already healthy.'
+            : health?.detail ??
+              (missingRequiredValues
+                ? 'Enter the required credential below. The installer will save it when you continue.'
+                : 'The installer will validate this provider when you continue.');
 
           return (
             <article className="setup-card" key={provider.provider_id}>
               <div className="row between wrap">
                 <h3>{provider.display_name}</h3>
-                <span className={`chip ${effectiveHealthy ? 'pass' : 'warn'}`}>
+                <span className={`chip ${ready ? 'pass' : 'warn'}`}>
                   {statusLabel}
                 </span>
               </div>
-              <p className="muted mono">{provider.provider_id}</p>
-              {isLocalProvider ? (
-                <p className="muted">
-                  This provider is auto-managed by the installer based on local runtime readiness.
-                </p>
-              ) : null}
-              {provider.provider_id === 'qwen_local' ? (
-                <p className="muted">
-                  Config validation and local runtime readiness are both required for Qwen Local.
-                </p>
-              ) : null}
-              {provider.provider_id === 'ollama' ? (
-                <p className="muted">
-                  Ollama must be installed and running to be marked ready.
-                </p>
-              ) : null}
+              <p className="muted">{providerDescription(provider.provider_id)}</p>
+              <p className="muted">{guidance}</p>
 
-              {requiredFields.length > 0 ? (
+              {requiredFields.length > 0 && !ready ? (
                 <div className="field-stack">
                   {requiredFields.map((field) => (
                     <div className="field" key={`${provider.provider_id}-${field.key}`}>
@@ -1619,57 +1653,30 @@ export default function App() {
                     </div>
                   ))}
                 </div>
+              ) : requiredFields.length > 0 ? (
+                <p className="muted">Saved credentials are already working for this provider.</p>
               ) : (
-                <p className="muted">No required credentials for this provider.</p>
+                <p className="muted">No extra credentials are needed here.</p>
               )}
-
-              {showProviderAdvanced && advancedFields.length > 0 ? (
-                <div className="field-stack" style={{ marginTop: 12 }}>
-                  {advancedFields.map((field) => (
-                    <div className="field" key={`${provider.provider_id}-${field.key}`}>
-                      <label>{field.label}</label>
-                      <input
-                        type={field.type === 'password' ? 'password' : 'text'}
-                        value={providerDraft[field.key] ?? ''}
-                        onChange={(event) =>
-                          setProviderDraftValue(provider.provider_id, field.key, event.target.value)
-                        }
-                        placeholder={field.placeholder ?? ''}
-                      />
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-
-              {!isLocalProvider ? (
-                <div className="row gap wrap" style={{ marginTop: 12 }}>
-                  <button
-                    className="btn primary"
-                    onClick={() => void saveProviderConfigWithFeedback(provider.provider_id)}
-                    disabled={busy}
-                  >
-                    Save {provider.display_name}
-                  </button>
-                </div>
-              ) : null}
-              {!isLocalProvider && providerSaveMessages[provider.provider_id] ? (
-                <p className="muted">{providerSaveMessages[provider.provider_id]}</p>
-              ) : null}
             </article>
           );
         })}
 
-        <button className="btn ghost" onClick={() => setShowProviderAdvanced((value) => !value)}>
-          {showProviderAdvanced ? 'Hide' : 'Show'} advanced provider fields
-        </button>
-
-        <button className="btn secondary" onClick={() => runTask('Refreshing provider health', refreshCoreState)} disabled={busy}>
+        <button
+          className="btn secondary"
+          onClick={() =>
+            runTask('Refreshing provider health', async () => {
+              await refreshCoreState();
+            })
+          }
+          disabled={busy}
+        >
           Refresh Health
         </button>
 
         {stepIndex === 3 && !canContinue() ? (
           <p className="muted">
-            Complete provider setup before continuing. Local setup requires Ollama installed/running and Qwen 3.5 35B ready.
+            Complete the items above before continuing. Local setup requires Ollama installed and running, plus Qwen 3.5 35B downloaded.
           </p>
         ) : null}
       </section>
@@ -1686,7 +1693,7 @@ export default function App() {
           return (
             <article className="setup-card">
               <h3>Select Channels</h3>
-              <p className="muted">Choose one or both channels. You can add more later.</p>
+              <p className="muted">Choose where Prism should reach you first. You can add more channels later.</p>
               <div className="card-grid two-up">
                 <button
                   className={`setup-card path-card ${telegramEnabled ? 'selected' : ''}`}
@@ -1727,14 +1734,6 @@ export default function App() {
                     placeholder="123456:bot-token"
                   />
                 </div>
-                <label className="toggle">
-                  <input
-                    type="checkbox"
-                    checked={telegramLiveApi}
-                    onChange={(event) => setTelegramLiveApi(event.target.checked)}
-                  />
-                  Use live Telegram API
-                </label>
               </div>
             </article>
           );
@@ -1784,14 +1783,6 @@ export default function App() {
                     placeholder="discord-bot-token"
                   />
                 </div>
-                <label className="toggle">
-                  <input
-                    type="checkbox"
-                    checked={discordLiveApi}
-                    onChange={(event) => setDiscordLiveApi(event.target.checked)}
-                  />
-                  Use live Discord API
-                </label>
               </div>
             </article>
           );
@@ -1820,40 +1811,17 @@ export default function App() {
               </div>
             </article>
           );
-        case 'interfaces':
-          return (
-            <article className="setup-card">
-              <h3>Additional Interfaces</h3>
-              <p className="muted">Enable secondary communication surfaces.</p>
-              <label className="toggle">
-                <input
-                  type="checkbox"
-                  checked={miniAppEnabled}
-                  onChange={(event) => setMiniAppEnabled(event.target.checked)}
-                />
-                Telegram Mini App
-              </label>
-              <label className="toggle">
-                <input
-                  type="checkbox"
-                  checked={dashboardEnabled}
-                  onChange={(event) => setDashboardEnabled(event.target.checked)}
-                />
-                Local Dashboard (Sphere Thread Engine)
-              </label>
-            </article>
-          );
         case 'review':
         default:
           return (
             <>
               <article className="setup-card">
-                <h3>Routing Mode</h3>
+                <h3>How Messages Route</h3>
                 <p className="muted">
-                  <strong>orchestrator</strong>: all inbound messages go to Prism/orchestrator first, then route internally.
+                  <strong>orchestrator</strong> sends everything to Prism first, then routes internally. This is the simplest path and the recommended default.
                 </p>
                 <p className="muted">
-                  <strong>per_agent</strong>: messages route directly to agent-specific threads/chats you map later.
+                  <strong>per_agent</strong> sends messages straight to agent-specific threads or chats. Use it only if you already know you want separate lanes.
                 </p>
                 {telegramEnabled ? (
                   <div className="field">
@@ -1883,46 +1851,35 @@ export default function App() {
 
               <article className="setup-card">
                 <h3>Channel Summary</h3>
-                <p className="muted mono">
-                  telegram_enabled={String(telegramEnabled)} chat_id={telegramDefaultChatId || 'not linked'}
-                </p>
-                <p className="muted mono">
-                  discord_enabled={String(discordEnabled)} channel_id={discordDefaultChannelId || 'not set'}
-                </p>
-                <p className="muted mono">
-                  telegram_configured={String(communication.telegram.configured)} discord_configured={String(communication.discord.configured)}
-                </p>
+                <ul className="summary-list">
+                  <li>Telegram: {telegramEnabled ? (telegramDefaultChatId ? `paired with chat ${telegramDefaultChatId}` : 'selected, but not paired yet') : 'not selected'}</li>
+                  <li>Discord: {discordEnabled ? (discordDefaultChannelId ? `ready for channel ${discordDefaultChannelId}` : 'selected, but no target channel is set yet') : 'not selected'}</li>
+                  <li>Channels are saved when you press Continue.</li>
+                </ul>
               </article>
 
               <div className="row gap wrap">
-                <button className="btn primary" onClick={() => runTask('Saving communication channels', saveCommunicationChannels)} disabled={busy}>
-                  Save Channels
-                </button>
                 <button
                   className="btn secondary"
                   onClick={() =>
                     runTask('Testing channels', async () => {
                       const lines: string[] = [];
-                      if (telegramEnabled && telegramLiveApi) {
+                      if (telegramEnabled) {
                         const pull = await installerApi.pollTelegramUpdatesOnce(1);
                         lines.push(
-                          `Telegram: ok (fetched=${pull.fetched_updates}, processed=${pull.processed_updates}, dispatched=${pull.dispatched_messages})`,
+                          pull.fetched_updates > 0 || pull.processed_updates > 0
+                            ? 'Telegram is connected and the bot can read updates.'
+                            : 'Telegram is connected. There were no new updates waiting.',
                         );
-                      } else if (telegramEnabled) {
-                        lines.push('Telegram: enabled but live API is off');
                       }
-                      if (discordEnabled && discordLiveApi) {
+                      if (discordEnabled) {
                         const probe = await installerApi.probeDiscordGateway();
-                        lines.push(
-                          `Discord: ${probe.lifecycle} (live_probe=${String(probe.live_probe)})`,
-                        );
-                      } else if (discordEnabled) {
-                        lines.push('Discord: enabled but live API is off');
+                        lines.push(`Discord gateway responded successfully (${probe.lifecycle}).`);
                       }
                       if (!telegramEnabled && !discordEnabled) {
-                        lines.push('No channel selected.');
+                        lines.push('Select a channel before testing.');
                       }
-                      setCommunicationTestResult(lines.join('\n'));
+                      setCommunicationTestResult(lines.join(' '));
                       setCommunication(await installerApi.getCommunicationStatus());
                     })
                   }
@@ -1931,7 +1888,11 @@ export default function App() {
                   Test Channels
                 </button>
               </div>
-              {communicationTestResult ? <pre className="console">{communicationTestResult}</pre> : null}
+              {communicationTestResult ? (
+                <div className="result-card">
+                  <p className="result-text">{communicationTestResult}</p>
+                </div>
+              ) : null}
             </>
           );
       }
@@ -1940,7 +1901,7 @@ export default function App() {
     return (
       <section className="wizard-panel">
         <h2>Communication Channels</h2>
-        <p className="muted">Guided setup in small steps. Configure channels now, then continue.</p>
+        <p className="muted">Guided setup in small steps. Configure the channels you want now, then continue.</p>
         <p className="mono muted">
           Sub-step {communicationSubStepIndex + 1}/{communicationSteps.length}: {communicationStepLabel(communicationSubStep)}
         </p>
@@ -1967,7 +1928,7 @@ export default function App() {
     return (
       <section className="wizard-panel">
         <h2>Begin Genesis Rite</h2>
-        <p className="muted">Choose default values or personalize your values profile.</p>
+        <p className="muted">Choose default values or personalize your values profile, then confirm which constitution reference this install should anchor to.</p>
 
         <div className="row gap wrap">
           <label className="radio-pill">
@@ -2005,6 +1966,38 @@ export default function App() {
           </p>
         )}
 
+        <article className="setup-card">
+          <h3>Constitution Reference</h3>
+          <p className="muted">Pick the constitution version for this install. The reference is recorded in the genesis metadata.</p>
+
+          <div className="row gap wrap">
+            <label className="radio-pill">
+              <input type="radio" checked={constitutionSource === 'latest'} onChange={() => setConstitutionSource('latest')} />
+              Use Latest
+            </label>
+            <label className="radio-pill">
+              <input type="radio" checked={constitutionSource === 'upload'} onChange={() => setConstitutionSource('upload')} />
+              Use Custom File
+            </label>
+          </div>
+
+          <div className="field" style={{ marginTop: 12 }}>
+            <label>Constitution Version</label>
+            <input value={constitutionVersion} onChange={(event) => setConstitutionVersion(event.target.value)} />
+          </div>
+
+          {constitutionSource === 'upload' ? (
+            <div className="field">
+              <label>Custom Constitution Path</label>
+              <input
+                value={constitutionUploadPath}
+                onChange={(event) => setConstitutionUploadPath(event.target.value)}
+                placeholder="/path/to/constitution.json"
+              />
+            </div>
+          ) : null}
+        </article>
+
         <div className="field" style={{ marginTop: 12 }}>
           <label>Genesis Signing Secret</label>
           <input
@@ -2021,42 +2014,14 @@ export default function App() {
         {genesisStatusMessage ? <p className="muted">{genesisStatusMessage}</p> : null}
 
         {genesisResult ? (
-          <pre className="console">{`genesis_hash=${genesisResult.genesis_hash}\nsignature=${genesisResult.signature}`}</pre>
-        ) : null}
-      </section>
-    );
-  }
-
-  function renderConstitutionStep() {
-    return (
-      <section className="wizard-panel">
-        <h2>Constitution</h2>
-        <p className="muted">Confirm the constitution version before initialization.</p>
-
-        <div className="row gap wrap">
-          <label className="radio-pill">
-            <input type="radio" checked={constitutionSource === 'latest'} onChange={() => setConstitutionSource('latest')} />
-            Use Latest
-          </label>
-          <label className="radio-pill">
-            <input type="radio" checked={constitutionSource === 'upload'} onChange={() => setConstitutionSource('upload')} />
-            Upload Custom
-          </label>
-        </div>
-
-        <div className="field" style={{ marginTop: 12 }}>
-          <label>Constitution Version</label>
-          <input value={constitutionVersion} onChange={(event) => setConstitutionVersion(event.target.value)} />
-        </div>
-
-        {constitutionSource === 'upload' ? (
-          <div className="field">
-            <label>Custom Constitution Path</label>
-            <input
-              value={constitutionUploadPath}
-              onChange={(event) => setConstitutionUploadPath(event.target.value)}
-              placeholder="/path/to/constitution.json"
-            />
+          <div className="result-card">
+            <p className="result-text">
+              Genesis hash: {genesisResult.genesis_hash}
+              {'\n'}
+              Signature: {genesisResult.signature}
+              {'\n'}
+              Schema version: {genesisResult.schema_version}
+            </p>
           </div>
         ) : null}
       </section>
@@ -2098,7 +2063,7 @@ export default function App() {
           <div className="tetra-line line-three" />
           <div className="tetra-line line-four" />
           <div className="agent-dot dot-synthesis">S</div>
-          <div className="agent-dot dot-monitor">M</div>
+          <div className="agent-dot dot-genesis">G</div>
           <div className="agent-dot dot-auditor">A</div>
           <div className="core-crystal-node" />
           <div className="pulse-halo" />
@@ -2123,15 +2088,6 @@ export default function App() {
             );
           })}
         </div>
-
-        <label className="toggle">
-          <input
-            type="checkbox"
-            checked={cinematicSoundEnabled}
-            onChange={(event) => setCinematicSoundEnabled(event.target.checked)}
-          />
-          Enable cinematic sound cues (muted chime per phase)
-        </label>
 
         <button className="btn primary" onClick={() => runTask('Running initialization sequence', runInitializationSequence)} disabled={busy}>
           Start Initialization
@@ -2160,7 +2116,7 @@ export default function App() {
     return (
       <section className="wizard-panel">
         <h2>Meet Your Prism Agent</h2>
-        <p className="muted">Prism is your user-facing guide for communication with the sphere.</p>
+        <p className="muted">Prism is the only user-facing interface for your sphere. Watcher, Synthesis, and Auditor run behind it as internal Torus lanes.</p>
 
         <div className="field">
           <label>Prism Name</label>
@@ -2169,16 +2125,16 @@ export default function App() {
 
         <div className="card-grid three-up">
           <article className="setup-card">
-            <h3>Synthesis</h3>
-            <p>Integrates perspectives and proposes actions.</p>
+            <h3>Watcher</h3>
+            <p>Reviews requests for constitutional, sovereignty, and operational risk concerns.</p>
           </article>
           <article className="setup-card">
-            <h3>Monitor</h3>
-            <p>Watches system state, health, and consistency.</p>
+            <h3>Synthesis</h3>
+            <p>Builds the constructive reasoning path and draft answer inside the Torus round.</p>
           </article>
           <article className="setup-card">
             <h3>Auditor</h3>
-            <p>Checks policy, safety, and constitutional alignment.</p>
+            <p>Tracks what should be recorded, verified, and attested before Prism replies.</p>
           </article>
         </div>
 
@@ -2186,7 +2142,11 @@ export default function App() {
           Test Prism Communication
         </button>
 
-        {prismTestResult ? <pre className="console">{prismTestResult}</pre> : null}
+        {prismTestResult ? (
+          <div className="result-card">
+            <p className="result-text">{prismTestResult}</p>
+          </div>
+        ) : null}
       </section>
     );
   }
@@ -2212,7 +2172,11 @@ export default function App() {
           Run Task
         </button>
 
-        {starterTaskResult ? <pre className="console">{starterTaskResult}</pre> : null}
+        {starterTaskResult ? (
+          <div className="result-card">
+            <p className="result-text">{starterTaskResult}</p>
+          </div>
+        ) : null}
       </section>
     );
   }
@@ -2223,24 +2187,18 @@ export default function App() {
         <h2>Setup Complete</h2>
         <p className="muted">Your MetaCanon sphere is established and ready.</p>
 
-        <div className="card-grid three-up">
-          <article className="setup-card">
-            <h3>Open Dashboard</h3>
-            <p>View live agent activity and system health.</p>
-          </article>
-          <article className="setup-card">
-            <h3>Open Communications</h3>
-            <p>Use Telegram, Discord, Mini App, or local in-app channel.</p>
-          </article>
-          <article className="setup-card">
-            <h3>Review Activity</h3>
-            <p>Inspect initialization summary and first task dispatch.</p>
-          </article>
-        </div>
+        <article className="setup-card">
+          <h3>What Is Ready</h3>
+          <ul className="summary-list">
+            <li>Provider order: {fallbackOrder.join(' -> ')}</li>
+            <li>Constitution reference: {constitutionVersion}</li>
+            <li>Prism name: {prismName}</li>
+            <li>Install review passed: {review?.can_install ? 'Yes' : 'Not confirmed'}</li>
+            <li>Prism runtime initialized: {bootstrapResult ? 'Yes' : 'No'}</li>
+          </ul>
+        </article>
 
-        <pre className="console">
-          {`providers=${fallbackOrder.join(' -> ')}\nconstitution=${constitutionVersion}\nprism=${prismName}\nreview_can_install=${String(review?.can_install ?? false)}\nbootstrap_ready=${String(Boolean(bootstrapResult))}`}
-        </pre>
+        <p className="muted">You can keep using the connected channels and return to deeper dashboard tooling later.</p>
       </section>
     );
   }
@@ -2260,14 +2218,12 @@ export default function App() {
       case 5:
         return renderGenesisStep();
       case 6:
-        return renderConstitutionStep();
-      case 7:
         return renderInitializationStep();
-      case 8:
+      case 7:
         return renderMeetPrismStep();
-      case 9:
+      case 8:
         return renderStarterTasksStep();
-      case 10:
+      case 9:
       default:
         return renderDoneStep();
     }
@@ -2292,15 +2248,27 @@ export default function App() {
           {STEPS.map((label, index) => (
             <button
               key={label}
-              className={`dot ${index <= stepIndex ? 'active' : ''}`}
-              onClick={() => setStepIndex(index)}
+              className={`dot ${index <= stepIndex ? 'active' : ''} ${index > stepIndex ? 'locked' : ''}`}
+              onClick={() => {
+                if (index <= stepIndex) {
+                  setStepIndex(index);
+                }
+              }}
               aria-label={`Go to ${label}`}
+              disabled={index > stepIndex}
             />
           ))}
         </div>
       </header>
 
-      <main className="wizard-content">{renderCurrentStep()}</main>
+      <main className="wizard-content">
+        {notice ? (
+          <div className={`notice-banner ${notice.tone}`}>
+            <p>{notice.message}</p>
+          </div>
+        ) : null}
+        {renderCurrentStep()}
+      </main>
 
       <footer className="wizard-footer panel compact glass-surface">
         <div className="row between wrap gap">

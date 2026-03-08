@@ -148,11 +148,40 @@ export type DeliberationCommandResult = {
   metadata: Record<string, string>;
 };
 
+export type PrismLaneOutput = {
+  lane: string;
+  requested_provider_id: string;
+  provider_id: string;
+  provider_chain: string[];
+  used_fallback: boolean;
+  model: string;
+  output_text: string;
+  finish_reason?: string | null;
+  metadata: Record<string, string>;
+};
+
+export type PrismEventPublishStatus = {
+  enabled: boolean;
+  attempted: number;
+  succeeded: number;
+  failed: number;
+  errors: string[];
+};
+
+export type PrismRoundCommandResult = {
+  route: 'direct' | 'deliberate';
+  decision_summary: string;
+  required_lanes: string[];
+  round_id?: string | null;
+  lane_outputs: PrismLaneOutput[];
+  final_result: DeliberationCommandResult;
+  event_publish: PrismEventPublishStatus;
+};
+
 export type AgentRoutingMode = 'per_agent' | 'orchestrator';
 
 export type TelegramIntegrationStatus = {
   enabled: boolean;
-  live_api: boolean;
   routing_mode: AgentRoutingMode;
   use_webhook: boolean;
   configured: boolean;
@@ -165,7 +194,6 @@ export type TelegramIntegrationStatus = {
 
 export type DiscordIntegrationStatus = {
   enabled: boolean;
-  live_api: boolean;
   routing_mode: AgentRoutingMode;
   configured: boolean;
   has_bot_token: boolean;
@@ -211,6 +239,18 @@ export type ThreeAgentBootstrapResult = {
   communication: CommunicationStatus;
 };
 
+export type PrismRuntimeInitResult = {
+  agent_ids: string[];
+  orchestrator_agent_id: string;
+  prism_agent_id: string;
+  watcher_agent_id: string;
+  synthesis_agent_id: string;
+  auditor_agent_id: string;
+  prism_sub_sphere_id: string;
+  sphere_signer_did?: string | null;
+  communication: CommunicationStatus;
+};
+
 export type CommunicationDispatchResult = {
   platform: 'telegram' | 'discord' | 'in_app';
   agent_id: string;
@@ -218,7 +258,6 @@ export type CommunicationDispatchResult = {
   thread_id: string;
   message_id: string;
   delivered_live: boolean;
-  simulated: boolean;
   note?: string | null;
 };
 
@@ -247,7 +286,6 @@ export type TelegramUpdatePullResult = {
   processed_updates: number;
   dispatched_messages: number;
   next_offset?: number | null;
-  simulated: boolean;
   note?: string | null;
 };
 
@@ -259,8 +297,7 @@ export type TelegramWebhookResult = {
 };
 
 export type TelegramWebhookConfigResult = {
-  applied_live: boolean;
-  simulated: boolean;
+  applied: boolean;
   webhook_url?: string | null;
   allowed_updates: string[];
 };
@@ -322,7 +359,6 @@ export type DiscordInteractionCompletionResult = {
   interaction_id: string;
   message_id: string;
   delivered_live: boolean;
-  simulated: boolean;
   routed_thread_id: string;
 };
 
@@ -330,5 +366,4 @@ export type TypingIndicatorResult = {
   platform: 'telegram' | 'discord' | 'in_app';
   target_id: string;
   delivered_live: boolean;
-  simulated: boolean;
 };

@@ -19,6 +19,8 @@ import type {
   LocalModelPackInstallResult,
   ModelDownloadStatus,
   ObservabilityStatus,
+  PrismRoundCommandResult,
+  PrismRuntimeInitResult,
   ProviderHealthStatus,
   SecurityPersistenceSettings,
   ThreeAgentBootstrapResult,
@@ -120,6 +122,9 @@ export const installerApi = {
     will_directives: string[];
     signing_secret: string;
     facet_vision?: string | null;
+    constitution_source?: string | null;
+    constitution_version?: string | null;
+    constitution_upload_path?: string | null;
   }) =>
     call<GenesisRiteResult>('invoke_guided_genesis_rite', {
       ...payload,
@@ -128,6 +133,9 @@ export const installerApi = {
       willDirectives: payload.will_directives,
       signingSecret: payload.signing_secret,
       facetVision: payload.facet_vision ?? null,
+      constitutionSource: payload.constitution_source ?? null,
+      constitutionVersion: payload.constitution_version ?? null,
+      constitutionUploadPath: payload.constitution_upload_path ?? null,
     }),
   bootstrapThreeAgents: (payload: {
     orchestrator_agent_id: string;
@@ -140,6 +148,19 @@ export const installerApi = {
     discord_thread_id_auditor?: string | null;
     prism_sub_sphere_id?: string | null;
   }) => call<ThreeAgentBootstrapResult>('bootstrap_three_agents', payload),
+  initializePrismRuntime: (payload: {
+    prism_display_name?: string | null;
+    prism_sub_sphere_id?: string | null;
+    telegram_chat_id?: string | null;
+    discord_thread_id?: string | null;
+  }) =>
+    call<PrismRuntimeInitResult>('initialize_prism_runtime', {
+      ...payload,
+      prismDisplayName: payload.prism_display_name ?? null,
+      prismSubSphereId: payload.prism_sub_sphere_id ?? null,
+      telegramChatId: payload.telegram_chat_id ?? null,
+      discordThreadId: payload.discord_thread_id ?? null,
+    }),
   getSecuritySettings: () =>
     call<SecurityPersistenceSettings>('get_security_persistence_settings'),
   updateSecuritySettings: (payload: {
@@ -163,6 +184,17 @@ export const installerApi = {
       query,
       provider_override: providerOverride ?? null,
     }),
+  runPrismRound: (payload: {
+    query: string;
+    provider_override?: string | null;
+    channel?: string | null;
+    force_deliberation?: boolean;
+  }) =>
+    call<PrismRoundCommandResult>('run_prism_round', {
+      ...payload,
+      providerOverride: payload.provider_override ?? null,
+      forceDeliberation: payload.force_deliberation ?? false,
+    }),
   getCommunicationStatus: () =>
     call<CommunicationStatus>('get_communication_status'),
   startTelegramDeliberationListener: () =>
@@ -173,7 +205,6 @@ export const installerApi = {
     bot_token?: string | null;
     default_chat_id?: string | null;
     orchestrator_chat_id?: string | null;
-    live_api: boolean;
   }) =>
     call<CommunicationStatus>('update_telegram_integration', {
       ...payload,
@@ -181,7 +212,6 @@ export const installerApi = {
       botToken: payload.bot_token ?? null,
       defaultChatId: payload.default_chat_id ?? null,
       orchestratorChatId: payload.orchestrator_chat_id ?? null,
-      liveApi: payload.live_api,
     }),
   updateDiscordIntegration: (payload: {
     enabled: boolean;
@@ -191,7 +221,6 @@ export const installerApi = {
     default_channel_id?: string | null;
     orchestrator_thread_id?: string | null;
     auto_spawn_sub_sphere_threads: boolean;
-    live_api: boolean;
   }) =>
     call<CommunicationStatus>('update_discord_integration', {
       ...payload,
@@ -201,7 +230,6 @@ export const installerApi = {
       defaultChannelId: payload.default_channel_id ?? null,
       orchestratorThreadId: payload.orchestrator_thread_id ?? null,
       autoSpawnSubSphereThreads: payload.auto_spawn_sub_sphere_threads,
-      liveApi: payload.live_api,
     }),
   bindAgentCommunicationRoute: (payload: {
     agent_id: string;
