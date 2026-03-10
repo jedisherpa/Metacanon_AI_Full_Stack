@@ -165,6 +165,7 @@ This overlay is now a first-class track and gates release readiness. Feature wor
 23. `DONE`: New Postgres integration coverage for key custody resilience: legacy `TEXT/base64 -> BYTEA` migration integrity checks, concurrent-rotation single-active invariant checks, and corrupted encrypted-private-key row tolerance checks (loader remains fail-safe and dispatch/verifier stay operational).
 24. `DONE`: Material-impact quorum now supports strict verified counselor ACK mode with rollout controls. New env gates (`SPHERE_ACK_REQUIRE_VERIFIED_SIGNATURES`, activation timestamp, grace days) enforce that quorum counts only counselor ACKs with verifiable Ed25519 signatures (did:key or registered key), surfaced via capabilities metadata and covered by unit + Postgres integration tests.
 25. `DONE`: Bypass elimination expanded to ACK writes. `sphere_acks` now uses a security-definer append function (`metacanon_append_sphere_ack`) plus transaction-token trigger guards that block direct `INSERT/UPDATE` paths, with app-role grants tightened to function execution + read-only table access and adversarial integration tests proving direct DB writes are rejected.
+26. `DONE`: Added operational load baselines in Postgres integration suite: 100-concurrent ACK throughput benchmark (single target event, unique actors) and 10k-key conductor registry benchmark (`listConductorKeys` + registry reload path), both with correctness assertions and regression thresholds.
 
 ### 8.3 Enterprise Readiness Work Packages
 

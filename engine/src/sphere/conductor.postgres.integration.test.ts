@@ -740,6 +740,113 @@ describe.runIf(runPgIntegration)('SphereConductor Postgres integration', () => {
     expect(durationMs).toBeLessThan(15_000)
   })
 
+  it('benchmarks concurrent ACK throughput with 100 simultaneous acknowledge calls', async () => {
+    const threadId = randomUUID()
+    const missionId = randomUUID()
+
+    await conductor.createThread({
+      threadId,
+      missionId,
+      createdBy: 'did:example:ack-benchmark'
+    })
+
+    const targetEntry = await conductor.dispatchIntent({
+      threadId,
+      missionId,
+      authorAgentId: 'did:example:ack-benchmark',
+      intent: 'MISSION_REPORT',
+      payload: { body: 'ack benchmark target' },
+      prismHolderApproved: true
+    })
+
+    const startedAt = Date.now()
+    const ackResults = await Promise.all(
+      Array.from({ length: 100 }, (_, index) =>
+        conductor.acknowledgeEntry({
+          threadId,
+          actorDid: `did:example:ack-bench-${index}`,
+          targetMessageId: targetEntry.clientEnvelope.messageId,
+          attestation: [`bench-${index}`]
+        })
+      )
+    )
+    const durationMs = Date.now() - startedAt
+
+    expect(ackResults).toHaveLength(100)
+    expect(new Set(ackResults.map((ack: { ackId: number }) => ack.ackId)).size).toBe(100)
+
+    const storedCount = await pool.query(
+      `
+        SELECT COUNT(*)::int AS count
+        FROM sphere_acks
+        WHERE thread_id = $1
+          AND target_message_id = $2
+      `,
+      [threadId, targetEntry.clientEnvelope.messageId]
+    )
+    expect(storedCount.rows[0]?.count).toBe(100)
+    // Generous threshold to catch severe regressions while avoiding flaky CI.
+    expect(durationMs).toBeLessThan(20_000)
+  })
+
+  it('benchmarks conductor key registry read path with 10k historical keys', async () => {
+    await pool.query(
+      `
+        WITH active_key AS (
+          SELECT public_key
+          FROM conductor_keys
+          WHERE status = 'ACTIVE'
+          ORDER BY activation_date DESC
+          LIMIT 1
+        )
+        INSERT INTO conductor_keys (
+          key_id,
+          public_key,
+          status,
+          activation_date,
+          retirement_date,
+          verification_grace_days,
+          private_key_ciphertext,
+          private_key_iv,
+          private_key_tag,
+          created_at,
+          updated_at
+        )
+        SELECT
+          'bench-registry-' || gs::text,
+          active_key.public_key,
+          'RETIRED',
+          NOW() - (gs || ' minutes')::interval,
+          NOW() - (gs || ' minutes')::interval,
+          0,
+          NULL,
+          NULL,
+          NULL,
+          NOW(),
+          NOW()
+        FROM generate_series(1, 9999) AS gs
+        CROSS JOIN active_key
+      `
+    )
+
+    const listStartedAt = Date.now()
+    const listedKeys = await conductor.listConductorKeys()
+    const listDurationMs = Date.now() - listStartedAt
+
+    expect(listedKeys.length).toBeGreaterThanOrEqual(10_000)
+
+    const loadStartedAt = Date.now()
+    await conductor['loadConductorKeyRegistryFromDb']()
+    const loadDurationMs = Date.now() - loadStartedAt
+
+    const materialCount = conductor['conductorEd25519PublicKeys'].size as number
+    expect(materialCount).toBeGreaterThanOrEqual(10_000)
+
+    // Thresholds are intentionally broad to avoid CI flakiness while still flagging regressions.
+    expect(listDurationMs).toBeLessThan(30_000)
+    expect(loadDurationMs).toBeLessThan(30_000)
+  })
+
   it('requires signed counselor ACK quorum for material-impact intents', async () => {
     const threadId = randomUUID()
     const missionId = randomUUID()
