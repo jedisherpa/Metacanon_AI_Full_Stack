@@ -615,7 +615,7 @@ export const commandCatalog: CommandDefinition[] = [
     queryTemplate: { gameId: 'game-id' }
   },
 
-  // Engine Room (16)
+  // Engine Room (19)
   {
     id: 'engine_status_all',
     label: 'Status All',
@@ -759,8 +759,38 @@ export const commandCatalog: CommandDefinition[] = [
       positionRevealSeconds: 30
     }
   },
+  {
+    id: 'engine_skills',
+    label: 'List Skills',
+    scope: 'engine-room',
+    method: 'GET',
+    path: '/api/v1/engine-room/skills',
+    description: 'List runtime skill execution states.'
+  },
+  {
+    id: 'engine_skill_status',
+    label: 'Skill Status',
+    scope: 'engine-room',
+    method: 'GET',
+    path: '/api/v1/engine-room/skills/:skillId/status',
+    pathParams: ['skillId'],
+    description: 'Fetch the status of one runtime skill.',
+    queryTemplate: { skillId: 'email_checking' }
+  },
+  {
+    id: 'engine_skill_run',
+    label: 'Run Skill',
+    scope: 'engine-room',
+    method: 'POST',
+    path: '/api/v1/engine-room/skills/run',
+    description: 'Execute one runtime skill with payload input.',
+    bodyTemplate: {
+      skillId: 'email_checking',
+      payload: {}
+    }
+  },
 
-  // MetaCanon Runtime Control (18)
+  // MetaCanon Runtime Control (19)
   {
     id: 'runtime_health',
     label: 'Runtime Health',

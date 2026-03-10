@@ -17,9 +17,15 @@ const routeFiles = [
 const commandCatalogFile = path.join(repoRoot, 'tma/src/lib/commands.ts');
 
 const routeEndpointRegex = /router\.(get|post|patch|put|delete)\('\/api\/v1\/(.*?)'/g;
-const commandMethodRegex = /method:\s*'(GET|POST|PATCH|PUT|DELETE)'/g;
-const commandPathRegex = /path:\s*'([^']+)'/g;
-const commandIdRegex = /id:\s*'([^']+)'/g;
+const commandEntryRegex =
+  /\{\s*id:\s*'([^']+)'.*?method:\s*'(GET|POST|PATCH|PUT|DELETE)'.*?path:\s*'([^']+)'/gs;
+const trackedPathPrefixes = [
+  '/api/v1/atlas/',
+  '/api/v1/citadel/',
+  '/api/v1/forge/',
+  '/api/v1/hub/',
+  '/api/v1/engine-room/'
+];
 
 function readText(filePath) {
   return fs.readFileSync(filePath, 'utf8');
@@ -42,13 +48,18 @@ function collectRouteEndpoints() {
 function collectCommandData() {
   const text = readText(commandCatalogFile);
 
-  const commandIds = [...text.matchAll(commandIdRegex)].map((match) => match[1]);
-  const methods = [...text.matchAll(commandMethodRegex)].map((match) => match[1]);
-  const paths = [...text.matchAll(commandPathRegex)].map((match) => match[1]);
-
+  const commandIds = [];
   const endpoints = new Set();
-  for (let index = 0; index < Math.min(methods.length, paths.length); index += 1) {
-    endpoints.add(`${methods[index]} ${paths[index]}`);
+
+  for (const match of text.matchAll(commandEntryRegex)) {
+    const id = match[1];
+    const method = match[2];
+    const path = match[3];
+    if (!trackedPathPrefixes.some((prefix) => path.startsWith(prefix))) {
+      continue;
+    }
+    commandIds.push(id);
+    endpoints.add(`${method} ${path}`);
   }
 
   return { commandIds, endpoints };
@@ -65,8 +76,8 @@ function main() {
   const missing = sort([...routeEndpoints].filter((endpoint) => !commandEndpoints.has(endpoint)));
   const unexpected = sort([...commandEndpoints].filter((endpoint) => !routeEndpoints.has(endpoint)));
 
-  const expectedRouteCount = 49;
-  const expectedCommandIdCount = 50;
+  const expectedRouteCount = 52;
+  const expectedCommandIdCount = 53;
 
   const routeCountOk = routeEndpoints.size === expectedRouteCount;
   const commandIdCountOk = commandIds.length === expectedCommandIdCount;

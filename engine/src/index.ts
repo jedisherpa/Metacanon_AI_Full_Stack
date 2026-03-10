@@ -16,6 +16,7 @@ import { createCitadelRoutes } from './api/v1/citadelRoutes.js';
 import { createForgeRoutes } from './api/v1/forgeRoutes.js';
 import { createHubRoutes } from './api/v1/hubRoutes.js';
 import { createEngineRoomRoutes } from './api/v1/engineRoomRoutes.js';
+import { createRuntimeRoutes } from './api/v1/runtimeRoutes.js';
 import { createSphereRoutes } from './api/v1/c2Routes.js';
 import { createC2StandaloneRoutes } from './api/v1/c2StandaloneRoutes.js';
 import { createSphereBffRoutes } from './api/v1/sphereBffRoutes.js';
@@ -234,6 +235,7 @@ app.use(createCitadelRoutes({ wsHub }));
 app.use(createForgeRoutes({ wsHub, lensPack }));
 app.use(createHubRoutes({ wsHub }));
 app.use(createEngineRoomRoutes({ lensPack, skillRuntime }));
+app.use(createRuntimeRoutes());
 app.use(sphereBffRoutes);
 app.use(sphereRoutes);
 
