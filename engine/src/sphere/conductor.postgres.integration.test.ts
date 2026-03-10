@@ -1,4 +1,4 @@
-import { createCipheriv, createHash, generateKeyPairSync, randomBytes, randomUUID } from 'node:crypto'
+import { createCipheriv, createHash, generateKeyPairSync, randomBytes, randomUUID, sign } from 'node:crypto'
 import { mkdtemp, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { tmpdir } from 'node:os'
@@ -66,6 +66,80 @@ function encryptPrivateKeyForLegacyTextRow(params: {
 
 function quoteIdentifier(value: string): string {
   return `"${value.replace(/"/g, '""')}"`
+}
+
+const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+
+function base58Encode(input: Buffer): string {
+  if (input.length === 0) {
+    return ''
+  }
+
+  let value = BigInt(`0x${input.toString('hex')}`)
+  let encoded = ''
+
+  while (value > 0n) {
+    const remainder = Number(value % 58n)
+    encoded = BASE58_ALPHABET[remainder] + encoded
+    value /= 58n
+  }
+
+  let leadingZeros = 0
+  for (const byte of input) {
+    if (byte === 0) {
+      leadingZeros += 1
+    } else {
+      break
+    }
+  }
+
+  return `${'1'.repeat(leadingZeros)}${encoded}`
+}
+
+function toDidKeyFromPublicKeyDer(spkiDer: Buffer): string {
+  const rawPublicKey = spkiDer.subarray(spkiDer.length - 32)
+  const multicodec = Buffer.concat([Buffer.from([0xed, 0x01]), rawPublicKey])
+  return `did:key:z${base58Encode(multicodec)}`
+}
+
+function createEdDsaCompactJws(payload: string, privateKey: ReturnType<typeof generateKeyPairSync>['privateKey']): string {
+  const headerSegment = Buffer.from(JSON.stringify({ alg: 'EdDSA', typ: 'JWT' }), 'utf8').toString('base64url')
+  const payloadSegment = Buffer.from(payload, 'utf8').toString('base64url')
+  const signingInput = `${headerSegment}.${payloadSegment}`
+  const signature = sign(null, Buffer.from(signingInput, 'utf8'), privateKey).toString('base64url')
+  return `${headerSegment}.${payloadSegment}.${signature}`
+}
+
+function normalizeSetLikeStrings(values: string[] | undefined): string[] {
+  return [...new Set((values ?? []).map((value) => value.trim()).filter(Boolean))].sort((left, right) =>
+    left.localeCompare(right)
+  )
+}
+
+function buildCanonicalAckPayload(params: {
+  threadId: string
+  actorDid: string
+  targetSequence: number
+  targetMessageId: string
+  ackMessageId: string
+  traceId: string
+  intent: string
+  schemaVersion: string
+  attestation: string[]
+  receivedAt: string | null
+}): string {
+  return canonicalize({
+    threadId: params.threadId,
+    actorDid: params.actorDid,
+    targetSequence: params.targetSequence,
+    targetMessageId: params.targetMessageId,
+    ackMessageId: params.ackMessageId,
+    traceId: params.traceId,
+    intent: params.intent.toUpperCase(),
+    schemaVersion: params.schemaVersion,
+    attestation: normalizeSetLikeStrings(params.attestation),
+    receivedAt: params.receivedAt
+  })
 }
 
 describe.runIf(runPgIntegration)('SphereConductor Postgres integration', () => {
@@ -734,6 +808,140 @@ describe.runIf(runPgIntegration)('SphereConductor Postgres integration', () => {
 
     expect(committed.clientEnvelope.intent).toBe('FORCE_EVICT')
     expect(committed.ledgerEnvelope.sequence).toBe(2)
+  })
+
+  it('enforces verified counselor ACK signatures for quorum after activation grace', async () => {
+    const priorRequire = conductor['requireVerifiedCounselorAckSignatures']
+    const priorActivationAt = conductor['counselorAckSignatureActivationAt']
+    const priorGraceDays = conductor['counselorAckSignatureGraceDays']
+
+    conductor['requireVerifiedCounselorAckSignatures'] = true
+    conductor['counselorAckSignatureActivationAt'] = new Date(Date.now() - 60_000).toISOString()
+    conductor['counselorAckSignatureGraceDays'] = 0
+
+    try {
+      const counselorOne = generateKeyPairSync('ed25519')
+      const counselorTwo = generateKeyPairSync('ed25519')
+      const counselorOneDid = toDidKeyFromPublicKeyDer(
+        counselorOne.publicKey.export({ format: 'der', type: 'spki' }) as Buffer
+      )
+      const counselorTwoDid = toDidKeyFromPublicKeyDer(
+        counselorTwo.publicKey.export({ format: 'der', type: 'spki' }) as Buffer
+      )
+
+      await pool.query(
+        `
+          INSERT INTO counselors (counselor_did, counselor_set, is_active)
+          VALUES
+            ($1, 'security_council', TRUE),
+            ($2, 'security_council', TRUE)
+        `,
+        [counselorOneDid, counselorTwoDid]
+      )
+
+      const threadId = randomUUID()
+      const missionId = randomUUID()
+      await conductor.createThread({
+        threadId,
+        missionId,
+        createdBy: 'did:example:agent-verified-quorum'
+      })
+
+      const targetEntry = await conductor.dispatchIntent({
+        threadId,
+        missionId,
+        authorAgentId: 'did:example:agent-verified-quorum',
+        intent: 'MISSION_REPORT',
+        payload: { body: 'target for verified quorum' },
+        prismHolderApproved: true
+      })
+
+      const ackTwoMessageId = randomUUID()
+      const ackTwoTraceId = randomUUID()
+      const ackTwoCanonical = buildCanonicalAckPayload({
+        threadId,
+        actorDid: counselorTwoDid,
+        targetSequence: targetEntry.ledgerEnvelope.sequence,
+        targetMessageId: targetEntry.clientEnvelope.messageId,
+        ackMessageId: ackTwoMessageId,
+        traceId: ackTwoTraceId,
+        intent: 'ACK_ENTRY',
+        schemaVersion: '3.0',
+        attestation: ['approve-force-evict'],
+        receivedAt: null
+      })
+
+      await conductor.acknowledgeEntry({
+        threadId,
+        actorDid: counselorOneDid,
+        targetMessageId: targetEntry.clientEnvelope.messageId,
+        attestation: ['approve-force-evict']
+      })
+
+      await conductor.acknowledgeEntry({
+        threadId,
+        actorDid: counselorTwoDid,
+        targetMessageId: targetEntry.clientEnvelope.messageId,
+        ackMessageId: ackTwoMessageId,
+        traceId: ackTwoTraceId,
+        attestation: ['approve-force-evict'],
+        agentSignature: createEdDsaCompactJws(ackTwoCanonical, counselorTwo.privateKey)
+      })
+
+      await expect(
+        conductor.dispatchIntent({
+          threadId,
+          missionId,
+          authorAgentId: 'did:example:agent-verified-quorum',
+          intent: 'FORCE_EVICT',
+          payload: { reason: 'one ack is not verifiable and should fail quorum' },
+          attestation: [targetEntry.clientEnvelope.messageId],
+          prismHolderApproved: true
+        })
+      ).rejects.toMatchObject({
+        code: 'STM_ERR_MISSING_ATTESTATION'
+      })
+
+      const ackOneMessageId = randomUUID()
+      const ackOneTraceId = randomUUID()
+      const ackOneCanonical = buildCanonicalAckPayload({
+        threadId,
+        actorDid: counselorOneDid,
+        targetSequence: targetEntry.ledgerEnvelope.sequence,
+        targetMessageId: targetEntry.clientEnvelope.messageId,
+        ackMessageId: ackOneMessageId,
+        traceId: ackOneTraceId,
+        intent: 'ACK_ENTRY',
+        schemaVersion: '3.0',
+        attestation: ['approve-force-evict'],
+        receivedAt: null
+      })
+
+      await conductor.acknowledgeEntry({
+        threadId,
+        actorDid: counselorOneDid,
+        targetMessageId: targetEntry.clientEnvelope.messageId,
+        ackMessageId: ackOneMessageId,
+        traceId: ackOneTraceId,
+        attestation: ['approve-force-evict'],
+        agentSignature: createEdDsaCompactJws(ackOneCanonical, counselorOne.privateKey)
+      })
+
+      const committed = await conductor.dispatchIntent({
+        threadId,
+        missionId,
+        authorAgentId: 'did:example:agent-verified-quorum',
+        intent: 'FORCE_EVICT',
+        payload: { reason: 'both counselor ACK signatures now verifiable' },
+        attestation: [targetEntry.clientEnvelope.messageId],
+        prismHolderApproved: true
+      })
+      expect(committed.clientEnvelope.intent).toBe('FORCE_EVICT')
+    } finally {
+      conductor['requireVerifiedCounselorAckSignatures'] = priorRequire
+      conductor['counselorAckSignatureActivationAt'] = priorActivationAt
+      conductor['counselorAckSignatureGraceDays'] = priorGraceDays
+    }
   })
 
   it('rejects direct sphere_events insert outside conductor-owned write path', async () => {

@@ -128,6 +128,9 @@ const sphereRoutes = env.SPHERE_THREAD_ENABLED
         requireConductorSignatureV2: env.SPHERE_LEDGER_REQUIRE_V2_SIGNATURE,
         conductorSignatureV2ActivationAt: env.SPHERE_LEDGER_V2_ACTIVATION_AT,
         conductorSignatureV2GraceDays: env.SPHERE_LEDGER_V2_GRACE_DAYS,
+        requireVerifiedCounselorAckSignatures: env.SPHERE_ACK_REQUIRE_VERIFIED_SIGNATURES,
+        counselorAckSignatureActivationAt: env.SPHERE_ACK_VERIFIED_SIGNATURES_ACTIVATION_AT,
+        counselorAckSignatureGraceDays: env.SPHERE_ACK_VERIFIED_SIGNATURES_GRACE_DAYS,
         validateIntent,
         governanceConfigPath: governanceConfig.configPath,
         governanceHashes: {

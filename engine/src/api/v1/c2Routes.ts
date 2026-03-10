@@ -930,6 +930,12 @@ export function createSphereRoutes(options: SphereRouteOptions): Router {
       activationAt: env.SPHERE_LEDGER_V2_ACTIVATION_AT ?? null,
       graceDays: env.SPHERE_LEDGER_V2_GRACE_DAYS
     };
+    const counselorAckSignaturePolicy =
+      options.conductor.getCounselorAckSignatureVerificationPolicy?.() ?? {
+        requireVerifiedSignatures: env.SPHERE_ACK_REQUIRE_VERIFIED_SIGNATURES,
+        activationAt: env.SPHERE_ACK_VERIFIED_SIGNATURES_ACTIVATION_AT ?? null,
+        graceDays: env.SPHERE_ACK_VERIFIED_SIGNATURES_GRACE_DAYS
+      };
 
     return res.json({
       apiVersion: 'v1',
@@ -1028,6 +1034,7 @@ export function createSphereRoutes(options: SphereRouteOptions): Router {
         conductorAlgorithms: conductorSignatureProfile.algorithms,
         conductorEd25519KeyId: conductorSignatureProfile.ed25519KeyId,
         conductorV2Verification: conductorSignaturePolicy,
+        counselorAckVerification: counselorAckSignaturePolicy,
         targetPublicVerificationMode: 'ed25519_did_key_or_registered_key',
         nonDidKeyRequiresRegisteredPublicKey: env.SPHERE_SIGNATURE_VERIFICATION !== 'off'
       },

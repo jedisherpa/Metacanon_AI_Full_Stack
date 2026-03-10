@@ -790,6 +790,11 @@ describe('createSphereRoutes boundary hardening', () => {
       activationAt: null,
       graceDays: 0
     });
+    expect(response.body.signatures?.counselorAckVerification).toEqual({
+      requireVerifiedSignatures: false,
+      activationAt: null,
+      graceDays: 0
+    });
     expect(response.body.signatures?.targetPublicVerificationMode).toBe(
       'ed25519_did_key_or_registered_key'
     );

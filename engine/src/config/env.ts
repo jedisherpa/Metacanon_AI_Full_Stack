@@ -55,6 +55,9 @@ const envSchema = z.object({
   SPHERE_LEDGER_REQUIRE_V2_SIGNATURE: strictBoolEnv.default(false),
   SPHERE_LEDGER_V2_ACTIVATION_AT: optionalIsoDatetimeString,
   SPHERE_LEDGER_V2_GRACE_DAYS: z.coerce.number().int().min(0).default(0),
+  SPHERE_ACK_REQUIRE_VERIFIED_SIGNATURES: strictBoolEnv.default(false),
+  SPHERE_ACK_VERIFIED_SIGNATURES_ACTIVATION_AT: optionalIsoDatetimeString,
+  SPHERE_ACK_VERIFIED_SIGNATURES_GRACE_DAYS: z.coerce.number().int().min(0).default(0),
   SPHERE_DB_ENFORCE_ROLE_SEPARATION: strictBoolEnv.default(false),
   SPHERE_DB_APP_ROLE: z
     .string()

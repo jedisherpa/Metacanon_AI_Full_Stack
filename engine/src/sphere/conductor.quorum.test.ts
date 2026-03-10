@@ -21,6 +21,9 @@ function makeConductor(quorumCount = 2): any {
     materialImpactIntents: new Set(['FORCE_EVICT', 'AMEND_CONSTITUTION']),
     quorumCount
   };
+  conductor.requireVerifiedCounselorAckSignatures = false;
+  conductor.counselorAckSignatureActivationAt = null;
+  conductor.counselorAckSignatureGraceDays = 0;
   return conductor;
 }
 
@@ -114,5 +117,81 @@ describe('SphereConductor material-impact quorum enforcement', () => {
     ).rejects.toMatchObject({
       code: 'STM_ERR_MISSING_ATTESTATION'
     });
+  });
+
+  it('counts only verified ACK signatures when verified-quorum policy is enforced', async () => {
+    const conductor = makeConductor(2);
+    conductor.requireVerifiedCounselorAckSignatures = true;
+    conductor.counselorAckSignatureActivationAt = null;
+    conductor.counselorAckSignatureGraceDays = 0;
+    conductor.verifyCounselorAckSignatureForQuorum = vi
+      .fn()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(true);
+
+    const client = {
+      query: vi
+        .fn()
+        .mockResolvedValueOnce({
+          rows: [
+            { counselor_did: 'did:example:counselor-1' },
+            { counselor_did: 'did:example:counselor-2' },
+            { counselor_did: 'did:example:counselor-3' }
+          ]
+        })
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              actor_did: 'did:example:counselor-1',
+              target_sequence: 1,
+              target_message_id: '22222222-2222-4222-8222-222222222222',
+              ack_message_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+              trace_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+              intent: 'ACK_ENTRY',
+              schema_version: '3.0',
+              attestation: ['approve'],
+              agent_signature: 'sig:1',
+              client_received_at: null
+            },
+            {
+              actor_did: 'did:example:counselor-2',
+              target_sequence: 1,
+              target_message_id: '22222222-2222-4222-8222-222222222222',
+              ack_message_id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+              trace_id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+              intent: 'ACK_ENTRY',
+              schema_version: '3.0',
+              attestation: ['approve'],
+              agent_signature: 'sig:2',
+              client_received_at: null
+            },
+            {
+              actor_did: 'did:example:counselor-3',
+              target_sequence: 2,
+              target_message_id: '33333333-3333-4333-8333-333333333333',
+              ack_message_id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+              trace_id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+              intent: 'ACK_ENTRY',
+              schema_version: '3.0',
+              attestation: ['approve'],
+              agent_signature: 'sig:3',
+              client_received_at: null
+            }
+          ]
+        })
+    };
+
+    await expect(
+      conductor.enforceCounselQuorum(client as any, {
+        threadId: '11111111-1111-4111-8111-111111111111',
+        approvalRefs: [
+          '22222222-2222-4222-8222-222222222222',
+          '33333333-3333-4333-8333-333333333333'
+        ]
+      })
+    ).resolves.toBeUndefined();
+
+    expect(conductor.verifyCounselorAckSignatureForQuorum).toHaveBeenCalledTimes(3);
   });
 });

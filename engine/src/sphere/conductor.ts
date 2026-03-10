@@ -302,6 +302,9 @@ type ConductorOptions = {
   requireConductorSignatureV2?: boolean;
   conductorSignatureV2ActivationAt?: string;
   conductorSignatureV2GraceDays?: number;
+  requireVerifiedCounselorAckSignatures?: boolean;
+  counselorAckSignatureActivationAt?: string;
+  counselorAckSignatureGraceDays?: number;
   validateIntent: IntentValidator;
   governanceConfigPath?: string;
   governanceHashes?: Partial<GovernanceHashSnapshot>;
@@ -319,6 +322,12 @@ export type ConductorSignatureProfile = {
 
 export type ConductorSignatureVerificationPolicy = {
   requireV2: boolean;
+  activationAt: string | null;
+  graceDays: number;
+};
+
+export type CounselorAckSignatureVerificationPolicy = {
+  requireVerifiedSignatures: boolean;
   activationAt: string | null;
   graceDays: number;
 };
@@ -392,6 +401,19 @@ type AckRow = {
   acknowledged_at: string | Date;
 };
 
+type CounselorAckApprovalRow = {
+  actor_did: string;
+  target_sequence: number;
+  target_message_id: string;
+  ack_message_id: string;
+  trace_id: string;
+  intent: string;
+  schema_version: string;
+  attestation: string[];
+  agent_signature: string;
+  client_received_at: string | Date | null;
+};
+
 type ConductorKeyMaterial = {
   keyId: string;
   publicKeyRef: string;
@@ -429,6 +451,9 @@ export class SphereConductor extends EventEmitter {
   private readonly requireConductorSignatureV2: boolean;
   private readonly conductorSignatureV2ActivationAt: string | null;
   private readonly conductorSignatureV2GraceDays: number;
+  private readonly requireVerifiedCounselorAckSignatures: boolean;
+  private readonly counselorAckSignatureActivationAt: string | null;
+  private readonly counselorAckSignatureGraceDays: number;
   private readonly validateIntent: IntentValidator;
   private readonly governanceHashes: GovernanceHashSnapshot;
   private readonly governanceConfigPath?: string;
@@ -447,6 +472,10 @@ export class SphereConductor extends EventEmitter {
     this.requireConductorSignatureV2 = options.requireConductorSignatureV2 ?? false;
     this.conductorSignatureV2ActivationAt = options.conductorSignatureV2ActivationAt ?? null;
     this.conductorSignatureV2GraceDays = Math.max(0, options.conductorSignatureV2GraceDays ?? 0);
+    this.requireVerifiedCounselorAckSignatures =
+      options.requireVerifiedCounselorAckSignatures ?? false;
+    this.counselorAckSignatureActivationAt = options.counselorAckSignatureActivationAt ?? null;
+    this.counselorAckSignatureGraceDays = Math.max(0, options.counselorAckSignatureGraceDays ?? 0);
     this.conductorRotationGraceDaysDefault = Math.max(
       0,
       options.conductorRotationGraceDaysDefault ?? this.conductorSignatureV2GraceDays
@@ -841,6 +870,14 @@ export class SphereConductor extends EventEmitter {
       requireV2: this.requireConductorSignatureV2,
       activationAt: this.conductorSignatureV2ActivationAt,
       graceDays: this.conductorSignatureV2GraceDays
+    };
+  }
+
+  getCounselorAckSignatureVerificationPolicy(): CounselorAckSignatureVerificationPolicy {
+    return {
+      requireVerifiedSignatures: this.requireVerifiedCounselorAckSignatures,
+      activationAt: this.counselorAckSignatureActivationAt,
+      graceDays: this.counselorAckSignatureGraceDays
     };
   }
 
@@ -2207,11 +2244,18 @@ export class SphereConductor extends EventEmitter {
     params: { threadId: string; approvalRefs: string[] }
   ): Promise<void> {
     const approvalRefs = normalizeSetLikeStrings(params.approvalRefs);
+    const requireVerifiedAckSignatures = this.requiresVerifiedCounselorAckSignatures({
+      timestamp: new Date().toISOString()
+    });
+    const quorumErrorMessage = requireVerifiedAckSignatures
+      ? `Material-impact intent requires ${this.governanceConfig.quorumCount} verified signed counselor ACK approvals.`
+      : `Material-impact intent requires ${this.governanceConfig.quorumCount} signed counselor ACK approvals.`;
+
     if (approvalRefs.length === 0) {
       throw new ConductorError(
         412,
         'STM_ERR_MISSING_ATTESTATION',
-        `Material-impact intent requires ${this.governanceConfig.quorumCount} signed counselor ACK approvals.`
+        quorumErrorMessage
       );
     }
 
@@ -2228,28 +2272,58 @@ export class SphereConductor extends EventEmitter {
       activeCounselorsResult.rows.map((row) => row.counselor_did.trim()).filter(Boolean)
     );
 
-    const signedApprovals = await client.query<{ actor_did: string }>(
+    const signedApprovals = await client.query<CounselorAckApprovalRow>(
       `
-        SELECT DISTINCT actor_did
+        SELECT
+          actor_did,
+          target_sequence,
+          target_message_id,
+          ack_message_id,
+          trace_id,
+          intent,
+          schema_version,
+          attestation,
+          agent_signature,
+          client_received_at
         FROM sphere_acks
         WHERE thread_id = $1
           AND intent = 'ACK_ENTRY'
           AND target_message_id::text = ANY($2::text[])
+        ORDER BY acknowledged_at DESC
       `,
       [params.threadId, approvalRefs]
     );
 
-    const approvedCounselors = new Set(
-      signedApprovals.rows
-        .map((row) => row.actor_did.trim())
-        .filter((did) => activeCounselors.has(did))
-    );
+    const approvedCounselors = new Set<string>();
+    const verifiedPublicKeyCache = new Map<string, string | null>();
+    for (const row of signedApprovals.rows) {
+      const actorDid = row.actor_did.trim();
+      if (!activeCounselors.has(actorDid) || approvedCounselors.has(actorDid)) {
+        continue;
+      }
+
+      if (requireVerifiedAckSignatures) {
+        const isVerified = await this.verifyCounselorAckSignatureForQuorum({
+          threadId: params.threadId,
+          row,
+          verifiedPublicKeyCache
+        });
+        if (!isVerified) {
+          continue;
+        }
+      }
+
+      approvedCounselors.add(actorDid);
+      if (approvedCounselors.size >= this.governanceConfig.quorumCount) {
+        break;
+      }
+    }
 
     if (approvedCounselors.size < this.governanceConfig.quorumCount) {
       throw new ConductorError(
         412,
         'STM_ERR_MISSING_ATTESTATION',
-        `Material-impact intent requires ${this.governanceConfig.quorumCount} signed counselor ACK approvals.`
+        quorumErrorMessage
       );
     }
   }
@@ -2344,26 +2418,114 @@ export class SphereConductor extends EventEmitter {
     }
   }
 
-  private requiresConductorSignatureV2(params: { timestamp: string }): boolean {
-    if (!this.requireConductorSignatureV2) {
+  private isActivationPolicyEnforced(params: {
+    required: boolean;
+    activationAt: string | null;
+    graceDays: number;
+    timestamp: string;
+  }): boolean {
+    if (!params.required) {
       return false;
     }
-    if (!this.conductorSignatureV2ActivationAt) {
+    if (!params.activationAt) {
       return true;
     }
 
-    const activationMs = Date.parse(this.conductorSignatureV2ActivationAt);
+    const activationMs = Date.parse(params.activationAt);
     if (Number.isNaN(activationMs)) {
       return true;
     }
 
-    const entryTimestampMs = Date.parse(params.timestamp);
-    if (Number.isNaN(entryTimestampMs)) {
+    const eventTimestampMs = Date.parse(params.timestamp);
+    if (Number.isNaN(eventTimestampMs)) {
       return true;
     }
 
-    const graceMs = this.conductorSignatureV2GraceDays * 24 * 60 * 60 * 1000;
-    return entryTimestampMs >= activationMs + graceMs;
+    const graceMs = Math.max(0, params.graceDays) * 24 * 60 * 60 * 1000;
+    return eventTimestampMs >= activationMs + graceMs;
+  }
+
+  private requiresConductorSignatureV2(params: { timestamp: string }): boolean {
+    return this.isActivationPolicyEnforced({
+      required: this.requireConductorSignatureV2,
+      activationAt: this.conductorSignatureV2ActivationAt,
+      graceDays: this.conductorSignatureV2GraceDays,
+      timestamp: params.timestamp
+    });
+  }
+
+  private requiresVerifiedCounselorAckSignatures(params: { timestamp: string }): boolean {
+    return this.isActivationPolicyEnforced({
+      required: this.requireVerifiedCounselorAckSignatures,
+      activationAt: this.counselorAckSignatureActivationAt,
+      graceDays: this.counselorAckSignatureGraceDays,
+      timestamp: params.timestamp
+    });
+  }
+
+  private async verifyCounselorAckSignatureForQuorum(params: {
+    threadId: string;
+    row: CounselorAckApprovalRow;
+    verifiedPublicKeyCache: Map<string, string | null>;
+  }): Promise<boolean> {
+    const actorDid = params.row.actor_did.trim();
+    const compactJws = params.row.agent_signature?.trim();
+    if (!compactJws) {
+      return false;
+    }
+
+    const receivedAt = params.row.client_received_at ? toIsoString(params.row.client_received_at) : null;
+    const canonicalAckPayload = canonicalize({
+      threadId: params.threadId,
+      actorDid,
+      targetSequence: Number(params.row.target_sequence),
+      targetMessageId: params.row.target_message_id,
+      ackMessageId: params.row.ack_message_id,
+      traceId: params.row.trace_id,
+      intent: normalizeIntent(params.row.intent),
+      schemaVersion: params.row.schema_version,
+      attestation: normalizeSetLikeStrings(params.row.attestation),
+      receivedAt
+    });
+
+    if (isDidKey(actorDid)) {
+      try {
+        this.verifyJwsSignatureWithKey({
+          signerDid: actorDid,
+          compactJws,
+          canonicalPayload: canonicalAckPayload,
+          publicKeyRef: actorDid
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    let publicKeyRef: string | null = null;
+    if (params.verifiedPublicKeyCache.has(actorDid)) {
+      publicKeyRef = params.verifiedPublicKeyCache.get(actorDid) ?? null;
+    } else if (this.resolveDidPublicKey) {
+      publicKeyRef = await this.resolveDidPublicKey(actorDid);
+      params.verifiedPublicKeyCache.set(actorDid, publicKeyRef);
+    }
+
+    const normalizedPublicKeyRef = publicKeyRef?.trim() ? publicKeyRef.trim() : null;
+    if (!normalizedPublicKeyRef) {
+      return false;
+    }
+
+    try {
+      this.verifyJwsSignatureWithKey({
+        signerDid: actorDid,
+        compactJws,
+        canonicalPayload: canonicalAckPayload,
+        publicKeyRef: normalizedPublicKeyRef
+      });
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   private buildConductorSignablePayload(params: {

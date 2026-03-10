@@ -43,6 +43,7 @@ describe('env boolean parsing', () => {
       SPHERE_BFF_REQUIRE_AGENT_API_KEY_WRITES: 'false',
       SPHERE_THREAD_ENABLED: 'false',
       SPHERE_C2_ALIAS_ENABLED: 'false',
+      SPHERE_ACK_REQUIRE_VERIFIED_SIGNATURES: 'false',
       SESSION_SECURE_COOKIES: 'false',
       INLINE_WORKER_ENABLED: 'false',
       TELEGRAM_AUTH_DEV_BYPASS_ENABLED: 'false'
@@ -54,6 +55,7 @@ describe('env boolean parsing', () => {
     expect(env.SPHERE_BFF_REQUIRE_AGENT_API_KEY_WRITES).toBe(false);
     expect(env.SPHERE_THREAD_ENABLED).toBe(false);
     expect(env.SPHERE_C2_ALIAS_ENABLED).toBe(false);
+    expect(env.SPHERE_ACK_REQUIRE_VERIFIED_SIGNATURES).toBe(false);
     expect(env.SESSION_SECURE_COOKIES).toBe(false);
     expect(env.INLINE_WORKER_ENABLED).toBe(false);
     expect(env.TELEGRAM_AUTH_DEV_BYPASS_ENABLED).toBe(false);
@@ -65,6 +67,7 @@ describe('env boolean parsing', () => {
       SPHERE_BFF_REQUIRE_AGENT_API_KEY_WRITES: '1',
       SPHERE_THREAD_ENABLED: '1',
       SPHERE_C2_ALIAS_ENABLED: '1',
+      SPHERE_ACK_REQUIRE_VERIFIED_SIGNATURES: '1',
       SESSION_SECURE_COOKIES: '0',
       INLINE_WORKER_ENABLED: '0',
       TELEGRAM_AUTH_DEV_BYPASS_ENABLED: '1'
@@ -76,6 +79,7 @@ describe('env boolean parsing', () => {
     expect(env.SPHERE_BFF_REQUIRE_AGENT_API_KEY_WRITES).toBe(true);
     expect(env.SPHERE_THREAD_ENABLED).toBe(true);
     expect(env.SPHERE_C2_ALIAS_ENABLED).toBe(true);
+    expect(env.SPHERE_ACK_REQUIRE_VERIFIED_SIGNATURES).toBe(true);
     expect(env.SESSION_SECURE_COOKIES).toBe(false);
     expect(env.INLINE_WORKER_ENABLED).toBe(false);
     expect(env.TELEGRAM_AUTH_DEV_BYPASS_ENABLED).toBe(true);
@@ -171,4 +175,5 @@ describe('env boolean parsing', () => {
     expect(env.SPHERE_LEDGER_V2_ACTIVATION_AT).toBe('2026-03-10T00:00:00.000Z');
     expect(env.SPHERE_LEDGER_V2_GRACE_DAYS).toBe(7);
   });
+
 });

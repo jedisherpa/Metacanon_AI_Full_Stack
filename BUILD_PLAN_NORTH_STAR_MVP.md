@@ -163,6 +163,7 @@ This overlay is now a first-class track and gates release readiness. Feature wor
 21. `DONE`: Conductor key material persistence now uses binary storage (`BYTEA`) for `public_key`, `private_key_ciphertext`, `private_key_iv`, and `private_key_tag`, with migration guards that convert legacy text/base64 rows in-place and runtime decoding that remains backward compatible during roll-forward.
 22. `DONE`: Rotation concurrency hardening added in conductor runtime. `rotateConductorKey` now executes on a single DB client transaction and takes a transaction-scoped advisory lock (`metacanon_conductor_keys_rotation`) so concurrent rotations cannot leave multiple `ACTIVE` keys.
 23. `DONE`: New Postgres integration coverage for key custody resilience: legacy `TEXT/base64 -> BYTEA` migration integrity checks, concurrent-rotation single-active invariant checks, and corrupted encrypted-private-key row tolerance checks (loader remains fail-safe and dispatch/verifier stay operational).
+24. `DONE`: Material-impact quorum now supports strict verified counselor ACK mode with rollout controls. New env gates (`SPHERE_ACK_REQUIRE_VERIFIED_SIGNATURES`, activation timestamp, grace days) enforce that quorum counts only counselor ACKs with verifiable Ed25519 signatures (did:key or registered key), surfaced via capabilities metadata and covered by unit + Postgres integration tests.
 
 ### 8.3 Enterprise Readiness Work Packages
 
