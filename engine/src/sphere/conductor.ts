@@ -132,6 +132,8 @@ export type LedgerVerificationIssueCode =
   | 'MISSING_GOVERNANCE_HASHES'
   | 'MISSING_CONDUCTOR_SIGNATURE_V2'
   | 'INVALID_CONDUCTOR_SIGNATURE_V2'
+  | 'MALFORMED_CONDUCTOR_SIGNATURE_V2'
+  | 'EXPIRED_CONDUCTOR_SIGNATURE_V2_KEY'
   | 'UNKNOWN_CONDUCTOR_SIGNATURE_V2_KEY'
   | 'THREAD_TAIL_HASH_MISMATCH';
 
@@ -2259,12 +2261,29 @@ export class SphereConductor extends EventEmitter {
         const graceMs = Math.max(0, keyMaterial.verificationGraceDays) * 24 * 60 * 60 * 1000;
         if (entryTimestampMs > retirementMs + graceMs) {
           return {
-            code: 'INVALID_CONDUCTOR_SIGNATURE_V2',
+            code: 'EXPIRED_CONDUCTOR_SIGNATURE_V2_KEY',
             message: `conductorSignatureV2 keyId (${keyId}) is expired for sequence ${params.sequence}.`,
-            sequence: params.sequence
+            sequence: params.sequence,
+            actual: keyId
           };
         }
       }
+    }
+
+    const signatureValue = signatureV2.signature;
+    if (typeof signatureValue !== 'string' || signatureValue.trim().length === 0) {
+      return {
+        code: 'MALFORMED_CONDUCTOR_SIGNATURE_V2',
+        message: `Missing conductorSignatureV2 signature payload at sequence ${params.sequence}.`,
+        sequence: params.sequence
+      };
+    }
+    if (!/^[A-Za-z0-9_-]+$/.test(signatureValue)) {
+      return {
+        code: 'MALFORMED_CONDUCTOR_SIGNATURE_V2',
+        message: `Malformed conductorSignatureV2 encoding at sequence ${params.sequence}.`,
+        sequence: params.sequence
+      };
     }
 
     const signablePayload = this.buildConductorSignablePayload({
@@ -2278,7 +2297,7 @@ export class SphereConductor extends EventEmitter {
         null,
         Buffer.from(canonicalize(signablePayload), 'utf8'),
         keyMaterial.publicKey,
-        Buffer.from(signatureV2.signature, 'base64url')
+        Buffer.from(signatureValue, 'base64url')
       );
 
       if (!isValid) {
@@ -2290,8 +2309,8 @@ export class SphereConductor extends EventEmitter {
       }
     } catch {
       return {
-        code: 'INVALID_CONDUCTOR_SIGNATURE_V2',
-        message: `Invalid conductorSignatureV2 encoding at sequence ${params.sequence}.`,
+        code: 'MALFORMED_CONDUCTOR_SIGNATURE_V2',
+        message: `Malformed conductorSignatureV2 encoding at sequence ${params.sequence}.`,
         sequence: params.sequence
       };
     }

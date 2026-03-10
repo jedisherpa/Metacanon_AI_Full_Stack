@@ -267,6 +267,46 @@ describe.runIf(runPgIntegration)('SphereConductor Postgres integration', () => {
     expect(issueCodes.has('INVALID_CONDUCTOR_SIGNATURE_V2')).toBe(true)
   })
 
+  it('detects malformed conductorSignatureV2 values in ledger verification report', async () => {
+    const threadId = randomUUID()
+    const missionId = randomUUID()
+
+    await conductor.createThread({
+      threadId,
+      missionId,
+      createdBy: 'did:example:agent-signature-malformed'
+    })
+
+    await conductor.dispatchIntent({
+      threadId,
+      missionId,
+      authorAgentId: 'did:example:agent-signature-malformed',
+      intent: 'MISSION_REPORT',
+      payload: { body: 'entry 1' },
+      prismHolderApproved: true
+    })
+
+    await pool.query(
+      `
+        UPDATE sphere_events
+        SET ledger_envelope = jsonb_set(
+          ledger_envelope,
+          '{conductorSignatureV2,signature}',
+          '\"invalid$$$signature\"',
+          true
+        )
+        WHERE thread_id = $1 AND sequence = 1
+      `,
+      [threadId]
+    )
+
+    const report = await conductor.verifyThreadLedger(threadId)
+    expect(report).not.toBeNull()
+    expect(report.verified).toBe(false)
+    const issueCodes = new Set(report.issues.map((issue: { code: string }) => issue.code))
+    expect(issueCodes.has('MALFORMED_CONDUCTOR_SIGNATURE_V2')).toBe(true)
+  })
+
   it('detects unknown conductorSignatureV2 key ids in ledger verification report', async () => {
     const threadId = randomUUID()
     const missionId = randomUUID()
@@ -398,7 +438,7 @@ describe.runIf(runPgIntegration)('SphereConductor Postgres integration', () => {
     expect(afterGrace).not.toBeNull()
     expect(afterGrace.verified).toBe(false)
     const issueCodes = new Set(afterGrace.issues.map((issue: { code: string }) => issue.code))
-    expect(issueCodes.has('INVALID_CONDUCTOR_SIGNATURE_V2')).toBe(true)
+    expect(issueCodes.has('EXPIRED_CONDUCTOR_SIGNATURE_V2_KEY')).toBe(true)
   })
 
   it('benchmarks verifyThreadLedger throughput on a 120-entry thread', async () => {
