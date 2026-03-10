@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+
+echo "[pre-commit] running bridge/interface parity checks"
+npm run check:command-parity
+npm run check:bridge-parity

@@ -21,6 +21,7 @@ This monorepo contains a queue-backed synchronous deliberation engine with:
 2. Fill required values (`ADMIN_PANEL_PASSWORD`, LLM keys, DB URL).
 3. Install deps:
    - `npm install`
+   - optional local guardrails: `npm run hooks:install` (enables parity checks on each commit)
 4. Start Postgres:
    - `docker compose up -d db`
    - optional (with skill adapter): `docker compose up -d db email-adapter`
@@ -61,6 +62,10 @@ Frontend:
 Telegram Mini App (tma):
 - `npm --prefix tma run dev`
 - optional deep-link invite support: set `VITE_TMA_BOT_USERNAME=<your_bot_username>` before build/dev
+
+Parity checks:
+- `npm run check:command-parity` (TMA command catalog vs backend route mapping)
+- `npm run check:bridge-parity` (runtime bridge contract vs `ffi-node` command surface)
 
 Email adapter (for `email_checking` skill):
 - in one terminal: `./scripts/run-email-adapter-local.sh`

@@ -8,6 +8,21 @@ Run:
 npm test -w engine
 ```
 
+## Interface parity gates
+
+Run:
+
+```bash
+npm run check:command-parity
+npm run check:bridge-parity
+```
+
+`check:bridge-parity` validates runtime bridge method/arity parity between:
+
+1. `engine/src/api/v1/runtimeRoutes.ts` (`RuntimeBridgeCommands`)
+2. `../ffi-node/commands.js` when present (full-stack workspace)
+3. fallback contract mirror `contracts/runtime-bridge/commands.contract.js` (CI-safe fallback)
+
 ## Postgres integration suite (conductor + API replay/quorum/write-guard + break-glass/signature red-team + alert sink)
 
 Run:

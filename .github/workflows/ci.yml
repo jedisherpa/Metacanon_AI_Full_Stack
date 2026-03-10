@@ -47,6 +47,8 @@ jobs:
           cache: "npm"
       - name: Install Dependencies
         run: npm install
+      - name: Bridge Parity
+        run: npm run check:bridge-parity
       - name: Lint
         run: npm run lint -w engine
       - name: Build
