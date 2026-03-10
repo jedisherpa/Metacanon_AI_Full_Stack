@@ -243,6 +243,23 @@ function normalizeMultilineKey(value: string): string {
   return value.includes('\\n') ? value.replace(/\\n/g, '\n') : value;
 }
 
+function dbByteaToBuffer(value: Buffer | string, legacyEncoding: 'utf8' | 'base64'): Buffer {
+  if (Buffer.isBuffer(value)) {
+    return value;
+  }
+
+  const normalized = value.trim();
+  if (normalized.startsWith('\\x')) {
+    return Buffer.from(normalized.slice(2), 'hex');
+  }
+
+  return Buffer.from(normalized, legacyEncoding);
+}
+
+function dbByteaToUtf8(value: Buffer | string): string {
+  return dbByteaToBuffer(value, 'utf8').toString('utf8');
+}
+
 function toIsoString(value: unknown): string {
   if (typeof value === 'string') {
     return value;
@@ -318,14 +335,14 @@ type ThreadAckEntryEvent = {
 
 type ConductorDbKeyRow = {
   key_id: string;
-  public_key: string;
+  public_key: Buffer | string;
   status: ConductorKeyStatus;
   activation_date: string | Date;
   retirement_date: string | Date | null;
   verification_grace_days: number;
-  private_key_ciphertext: string | null;
-  private_key_iv: string | null;
-  private_key_tag: string | null;
+  private_key_ciphertext: Buffer | string | null;
+  private_key_iv: Buffer | string | null;
+  private_key_tag: Buffer | string | null;
   created_at: string | Date;
   updated_at: string | Date;
 };
@@ -498,9 +515,9 @@ export class SphereConductor extends EventEmitter {
   }
 
   private encryptPrivateKeyPem(privateKeyPem: string): {
-    ciphertext: string;
-    iv: string;
-    tag: string;
+    ciphertext: Buffer;
+    iv: Buffer;
+    tag: Buffer;
   } {
     const iv = randomBytes(12);
     const cipher = createCipheriv('aes-256-gcm', this.encryptionKeyBuffer(), iv);
@@ -508,23 +525,16 @@ export class SphereConductor extends EventEmitter {
     const tag = cipher.getAuthTag();
 
     return {
-      ciphertext: encrypted.toString('base64'),
-      iv: iv.toString('base64'),
-      tag: tag.toString('base64')
+      ciphertext: encrypted,
+      iv,
+      tag
     };
   }
 
-  private decryptPrivateKeyPem(params: { ciphertext: string; iv: string; tag: string }): string {
-    const decipher = createDecipheriv(
-      'aes-256-gcm',
-      this.encryptionKeyBuffer(),
-      Buffer.from(params.iv, 'base64')
-    );
-    decipher.setAuthTag(Buffer.from(params.tag, 'base64'));
-    const decrypted = Buffer.concat([
-      decipher.update(Buffer.from(params.ciphertext, 'base64')),
-      decipher.final()
-    ]);
+  private decryptPrivateKeyPem(params: { ciphertext: Buffer; iv: Buffer; tag: Buffer }): string {
+    const decipher = createDecipheriv('aes-256-gcm', this.encryptionKeyBuffer(), params.iv);
+    decipher.setAuthTag(params.tag);
+    const decrypted = Buffer.concat([decipher.update(params.ciphertext), decipher.final()]);
     return decrypted.toString('utf8');
   }
 
@@ -546,7 +556,7 @@ export class SphereConductor extends EventEmitter {
 
     return {
       keyId: row.key_id,
-      publicKey: row.public_key,
+      publicKey: normalizeMultilineKey(dbByteaToUtf8(row.public_key)),
       status: row.status,
       activationDate: toIsoString(row.activation_date),
       retirementDate,
@@ -562,10 +572,12 @@ export class SphereConductor extends EventEmitter {
   }
 
   private rowToConductorKeyMaterial(row: ConductorDbKeyRow): ConductorKeyMaterial {
+    const publicKeyPem = normalizeMultilineKey(dbByteaToUtf8(row.public_key));
+
     return {
       keyId: row.key_id,
-      publicKeyRef: row.public_key,
-      publicKey: createPublicKey(normalizeMultilineKey(row.public_key)),
+      publicKeyRef: publicKeyPem,
+      publicKey: createPublicKey(publicKeyPem),
       status: row.status,
       activationDate: toIsoString(row.activation_date),
       retirementDate: row.retirement_date ? toIsoString(row.retirement_date) : null,
@@ -601,7 +613,7 @@ export class SphereConductor extends EventEmitter {
             public_key = EXCLUDED.public_key,
             updated_at = NOW()
         `,
-        [keyId, normalizeMultilineKey(publicKeyPem)]
+        [keyId, Buffer.from(normalizeMultilineKey(publicKeyPem), 'utf8')]
       );
     }
 
@@ -671,7 +683,7 @@ export class SphereConductor extends EventEmitter {
         `,
         [
           this.bootstrapConductorEd25519KeyId,
-          publicKeyPem,
+          Buffer.from(normalizeMultilineKey(publicKeyPem), 'utf8'),
           encryptedPrivateKey.ciphertext,
           encryptedPrivateKey.iv,
           encryptedPrivateKey.tag
@@ -717,9 +729,9 @@ export class SphereConductor extends EventEmitter {
     if (activeRow?.private_key_ciphertext && activeRow.private_key_iv && activeRow.private_key_tag) {
       try {
         const privateKeyPem = this.decryptPrivateKeyPem({
-          ciphertext: activeRow.private_key_ciphertext,
-          iv: activeRow.private_key_iv,
-          tag: activeRow.private_key_tag
+          ciphertext: dbByteaToBuffer(activeRow.private_key_ciphertext, 'base64'),
+          iv: dbByteaToBuffer(activeRow.private_key_iv, 'base64'),
+          tag: dbByteaToBuffer(activeRow.private_key_tag, 'base64')
         });
         this.conductorEd25519PrivateKey = createPrivateKey(privateKeyPem);
         this.conductorEd25519KeyId = activeRow.key_id;
@@ -788,7 +800,7 @@ export class SphereConductor extends EventEmitter {
       `,
       [
         this.conductorEd25519KeyId,
-        publicKeyPem,
+        Buffer.from(normalizeMultilineKey(publicKeyPem), 'utf8'),
         encryptedPrivateKey.ciphertext,
         encryptedPrivateKey.iv,
         encryptedPrivateKey.tag
@@ -967,7 +979,7 @@ export class SphereConductor extends EventEmitter {
         `,
         [
           keyId,
-          publicKeyPem,
+          Buffer.from(normalizeMultilineKey(publicKeyPem), 'utf8'),
           encryptedPrivateKey.ciphertext,
           encryptedPrivateKey.iv,
           encryptedPrivateKey.tag
@@ -2767,29 +2779,102 @@ export class SphereConductor extends EventEmitter {
 
       CREATE TABLE IF NOT EXISTS conductor_keys (
         key_id TEXT PRIMARY KEY,
-        public_key TEXT NOT NULL,
+        public_key BYTEA NOT NULL,
         status TEXT NOT NULL CHECK (status IN ('ACTIVE', 'RETIRED')),
         activation_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         retirement_date TIMESTAMPTZ,
         verification_grace_days INTEGER NOT NULL DEFAULT 0,
-        private_key_ciphertext TEXT,
-        private_key_iv TEXT,
-        private_key_tag TEXT,
+        private_key_ciphertext BYTEA,
+        private_key_iv BYTEA,
+        private_key_tag BYTEA,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
       ALTER TABLE conductor_keys
         ADD COLUMN IF NOT EXISTS verification_grace_days INTEGER NOT NULL DEFAULT 0;
       ALTER TABLE conductor_keys
-        ADD COLUMN IF NOT EXISTS private_key_ciphertext TEXT;
+        ADD COLUMN IF NOT EXISTS private_key_ciphertext BYTEA;
       ALTER TABLE conductor_keys
-        ADD COLUMN IF NOT EXISTS private_key_iv TEXT;
+        ADD COLUMN IF NOT EXISTS private_key_iv BYTEA;
       ALTER TABLE conductor_keys
-        ADD COLUMN IF NOT EXISTS private_key_tag TEXT;
+        ADD COLUMN IF NOT EXISTS private_key_tag BYTEA;
       ALTER TABLE conductor_keys
         ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
       ALTER TABLE conductor_keys
         ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_name = 'conductor_keys'
+            AND column_name = 'public_key'
+            AND udt_name = 'text'
+        ) THEN
+          ALTER TABLE conductor_keys
+            ALTER COLUMN public_key TYPE BYTEA
+            USING convert_to(public_key, 'UTF8');
+        END IF;
+      END;
+      $$ LANGUAGE plpgsql;
+
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_name = 'conductor_keys'
+            AND column_name = 'private_key_ciphertext'
+            AND udt_name = 'text'
+        ) THEN
+          ALTER TABLE conductor_keys
+            ALTER COLUMN private_key_ciphertext TYPE BYTEA
+            USING CASE
+              WHEN private_key_ciphertext IS NULL THEN NULL
+              ELSE decode(private_key_ciphertext, 'base64')
+            END;
+        END IF;
+      END;
+      $$ LANGUAGE plpgsql;
+
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_name = 'conductor_keys'
+            AND column_name = 'private_key_iv'
+            AND udt_name = 'text'
+        ) THEN
+          ALTER TABLE conductor_keys
+            ALTER COLUMN private_key_iv TYPE BYTEA
+            USING CASE
+              WHEN private_key_iv IS NULL THEN NULL
+              ELSE decode(private_key_iv, 'base64')
+            END;
+        END IF;
+      END;
+      $$ LANGUAGE plpgsql;
+
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_name = 'conductor_keys'
+            AND column_name = 'private_key_tag'
+            AND udt_name = 'text'
+        ) THEN
+          ALTER TABLE conductor_keys
+            ALTER COLUMN private_key_tag TYPE BYTEA
+            USING CASE
+              WHEN private_key_tag IS NULL THEN NULL
+              ELSE decode(private_key_tag, 'base64')
+            END;
+        END IF;
+      END;
+      $$ LANGUAGE plpgsql;
 
       CREATE INDEX IF NOT EXISTS idx_conductor_keys_status ON conductor_keys(status);
       CREATE INDEX IF NOT EXISTS idx_conductor_keys_activation_date

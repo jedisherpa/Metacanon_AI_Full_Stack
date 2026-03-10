@@ -160,6 +160,7 @@ This overlay is now a first-class track and gates release readiness. Feature wor
 18. `DONE`: Conductor key retirement path is now explicit. API routes expose retirement (`POST /api/v1/sphere/retire-conductor-key`) with guardrails that prevent retiring the active signing key, while allowing grace-window updates for retired keys; covered by boundary + Postgres integration tests and standalone disabled-surface parity.
 19. `DONE`: Conductor key audit visibility is expanded. API routes now expose per-key lookup (`GET /api/v1/sphere/conductor-keys/:keyId`) and stricter key-state metadata in registry payloads (verification state, grace-period end, private-material presence, expiration flags) plus aggregate audit counters.
 20. `DONE`: Runtime bridge interface parity gate is now enforced in automation. `check:bridge-parity` validates runtime bridge method and arity parity between `runtimeRoutes` and `ffi-node` command surface (or CI contract mirror fallback), runs in CI, and is available in local pre-commit hooks.
+21. `DONE`: Conductor key material persistence now uses binary storage (`BYTEA`) for `public_key`, `private_key_ciphertext`, `private_key_iv`, and `private_key_tag`, with migration guards that convert legacy text/base64 rows in-place and runtime decoding that remains backward compatible during roll-forward.
 
 ### 8.3 Enterprise Readiness Work Packages
 
