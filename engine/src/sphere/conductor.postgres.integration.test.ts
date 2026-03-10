@@ -1,4 +1,4 @@
-import { createHash, generateKeyPairSync, randomUUID } from 'node:crypto'
+import { createCipheriv, createHash, generateKeyPairSync, randomBytes, randomUUID } from 'node:crypto'
 import { mkdtemp, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { tmpdir } from 'node:os'
@@ -45,6 +45,23 @@ function sortValue(value: unknown): unknown {
 
 function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex')
+}
+
+function encryptPrivateKeyForLegacyTextRow(params: {
+  conductorSecret: string
+  privateKeyPem: string
+}): { ciphertextBase64: string; ivBase64: string; tagBase64: string } {
+  const iv = randomBytes(12)
+  const encryptionKey = createHash('sha256').update(params.conductorSecret).digest()
+  const cipher = createCipheriv('aes-256-gcm', encryptionKey, iv)
+  const ciphertext = Buffer.concat([cipher.update(params.privateKeyPem, 'utf8'), cipher.final()])
+  const tag = cipher.getAuthTag()
+
+  return {
+    ciphertextBase64: ciphertext.toString('base64'),
+    ivBase64: iv.toString('base64'),
+    tagBase64: tag.toString('base64')
+  }
 }
 
 function quoteIdentifier(value: string): string {
@@ -101,6 +118,7 @@ describe.runIf(runPgIntegration)('SphereConductor Postgres integration', () => {
   beforeEach(async () => {
     await pool.query(`
       TRUNCATE TABLE
+        conductor_keys,
         sphere_acks,
         sphere_events,
         sphere_threads,
@@ -108,6 +126,9 @@ describe.runIf(runPgIntegration)('SphereConductor Postgres integration', () => {
         sphere_event_write_tokens
       RESTART IDENTITY CASCADE
     `)
+
+    await conductor['ensureCurrentSigningKeyPersistedForRotation']()
+    await conductor['loadConductorKeyRegistryFromDb']()
   })
 
   afterAll(async () => {
@@ -439,6 +460,177 @@ describe.runIf(runPgIntegration)('SphereConductor Postgres integration', () => {
     expect(afterGrace.verified).toBe(false)
     const issueCodes = new Set(afterGrace.issues.map((issue: { code: string }) => issue.code))
     expect(issueCodes.has('EXPIRED_CONDUCTOR_SIGNATURE_V2_KEY')).toBe(true)
+  })
+
+  it('migrates legacy conductor_keys text/base64 columns to BYTEA without losing key material', async () => {
+    const legacyKeyId = `legacy-conductor-key-${randomUUID()}`
+    const keyPair = generateKeyPairSync('ed25519')
+    const publicKeyPem = keyPair.publicKey.export({ type: 'spki', format: 'pem' }).toString()
+    const privateKeyPem = keyPair.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString()
+    const encrypted = encryptPrivateKeyForLegacyTextRow({
+      conductorSecret: 'integration-secret',
+      privateKeyPem
+    })
+
+    await pool.query(
+      `
+        ALTER TABLE conductor_keys
+          ALTER COLUMN public_key TYPE TEXT USING convert_from(public_key, 'UTF8'),
+          ALTER COLUMN private_key_ciphertext TYPE TEXT USING CASE
+            WHEN private_key_ciphertext IS NULL THEN NULL
+            ELSE encode(private_key_ciphertext, 'base64')
+          END,
+          ALTER COLUMN private_key_iv TYPE TEXT USING CASE
+            WHEN private_key_iv IS NULL THEN NULL
+            ELSE encode(private_key_iv, 'base64')
+          END,
+          ALTER COLUMN private_key_tag TYPE TEXT USING CASE
+            WHEN private_key_tag IS NULL THEN NULL
+            ELSE encode(private_key_tag, 'base64')
+          END
+      `
+    )
+
+    await pool.query(
+      `
+        INSERT INTO conductor_keys (
+          key_id,
+          public_key,
+          status,
+          activation_date,
+          retirement_date,
+          verification_grace_days,
+          private_key_ciphertext,
+          private_key_iv,
+          private_key_tag,
+          created_at,
+          updated_at
+        )
+        VALUES ($1, $2, 'RETIRED', NOW() - INTERVAL '1 day', NOW() - INTERVAL '1 day', 0, $3, $4, $5, NOW(), NOW())
+        ON CONFLICT (key_id) DO UPDATE
+        SET
+          public_key = EXCLUDED.public_key,
+          private_key_ciphertext = EXCLUDED.private_key_ciphertext,
+          private_key_iv = EXCLUDED.private_key_iv,
+          private_key_tag = EXCLUDED.private_key_tag,
+          updated_at = NOW()
+      `,
+      [legacyKeyId, publicKeyPem, encrypted.ciphertextBase64, encrypted.ivBase64, encrypted.tagBase64]
+    )
+
+    await conductor['ensureSchema']()
+
+    const columnTypes = await pool.query(
+      `
+        SELECT column_name, udt_name
+        FROM information_schema.columns
+        WHERE table_name = 'conductor_keys'
+          AND column_name IN ('public_key', 'private_key_ciphertext', 'private_key_iv', 'private_key_tag')
+      `
+    )
+    const typedColumnRows = columnTypes.rows as Array<{ column_name: string; udt_name: string }>
+    const typeByColumn = new Map<string, string>(
+      typedColumnRows.map((row) => [row.column_name, row.udt_name])
+    )
+    expect(typeByColumn.get('public_key')).toBe('bytea')
+    expect(typeByColumn.get('private_key_ciphertext')).toBe('bytea')
+    expect(typeByColumn.get('private_key_iv')).toBe('bytea')
+    expect(typeByColumn.get('private_key_tag')).toBe('bytea')
+
+    const migrated = await pool.query(
+      `
+        SELECT public_key, private_key_ciphertext, private_key_iv, private_key_tag
+        FROM conductor_keys
+        WHERE key_id = $1
+      `,
+      [legacyKeyId]
+    )
+    const migratedRow = migrated.rows[0] as {
+      public_key: Buffer
+      private_key_ciphertext: Buffer
+      private_key_iv: Buffer
+      private_key_tag: Buffer
+    }
+
+    expect(Buffer.isBuffer(migratedRow.public_key)).toBe(true)
+    expect(migratedRow.public_key.toString('utf8')).toBe(publicKeyPem)
+    expect(migratedRow.private_key_ciphertext.equals(Buffer.from(encrypted.ciphertextBase64, 'base64'))).toBe(
+      true
+    )
+    expect(migratedRow.private_key_iv.equals(Buffer.from(encrypted.ivBase64, 'base64'))).toBe(true)
+    expect(migratedRow.private_key_tag.equals(Buffer.from(encrypted.tagBase64, 'base64'))).toBe(true)
+  })
+
+  it('maintains exactly one ACTIVE conductor key under concurrent rotations', async () => {
+    const rotations = Array.from({ length: 4 }, (_, index) =>
+      conductor.rotateConductorKey({
+        keyId: `conductor-key-concurrent-${index}-${randomUUID()}`,
+        verificationGraceDays: 2
+      })
+    )
+
+    const settled = await Promise.allSettled(rotations)
+    const failures = settled.filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+    expect(failures).toHaveLength(0)
+
+    const activeRows = await pool.query(
+      `
+        SELECT key_id
+        FROM conductor_keys
+        WHERE status = 'ACTIVE'
+        ORDER BY updated_at DESC
+      `
+    )
+    expect(activeRows.rows).toHaveLength(1)
+
+    const listedKeys = await conductor.listConductorKeys()
+    expect(listedKeys.filter((key: { status: string }) => key.status === 'ACTIVE')).toHaveLength(1)
+  })
+
+  it('survives corrupted encrypted private key rows without crashing loader or dispatch', async () => {
+    const rotation = await conductor.rotateConductorKey({
+      keyId: `conductor-key-corrupt-${randomUUID()}`,
+      verificationGraceDays: 2
+    })
+    const activeKeyId = rotation.key.keyId
+
+    await pool.query(
+      `
+        UPDATE conductor_keys
+        SET
+          private_key_ciphertext = decode('00', 'hex'),
+          private_key_iv = decode('00', 'hex'),
+          private_key_tag = decode('00', 'hex'),
+          updated_at = NOW()
+        WHERE key_id = $1
+      `,
+      [activeKeyId]
+    )
+
+    await expect(conductor['loadConductorKeyRegistryFromDb']()).resolves.toBeUndefined()
+
+    const threadId = randomUUID()
+    const missionId = randomUUID()
+
+    await conductor.createThread({
+      threadId,
+      missionId,
+      createdBy: 'did:example:agent-corrupt-key'
+    })
+
+    const committed = await conductor.dispatchIntent({
+      threadId,
+      missionId,
+      authorAgentId: 'did:example:agent-corrupt-key',
+      intent: 'MISSION_REPORT',
+      payload: { body: 'dispatch should still succeed with in-memory key material' },
+      prismHolderApproved: true
+    })
+    expect(committed.ledgerEnvelope.conductorSignatureV2?.keyId).toBe(activeKeyId)
+
+    const report = await conductor.verifyThreadLedger(threadId)
+    expect(report).not.toBeNull()
+    expect(report.verified).toBe(true)
   })
 
   it('benchmarks verifyThreadLedger throughput on a 120-entry thread', async () => {

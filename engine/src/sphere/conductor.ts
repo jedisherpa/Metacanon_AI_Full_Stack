@@ -920,10 +920,14 @@ export class SphereConductor extends EventEmitter {
     const publicKeyPem = keyPair.publicKey.export({ type: 'spki', format: 'pem' }).toString();
     const encryptedPrivateKey = this.encryptPrivateKeyPem(privateKeyPem);
     const previousActiveKeyId = this.conductorEd25519KeyId;
+    const client = await pool.connect();
 
-    await pool.query('BEGIN');
     try {
-      await pool.query(
+      await client.query('BEGIN');
+      // Serialize key-rotation writes so concurrent callers cannot leave multiple ACTIVE keys.
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext('metacanon_conductor_keys_rotation'))`);
+
+      await client.query(
         `
           UPDATE conductor_keys
           SET
@@ -937,7 +941,7 @@ export class SphereConductor extends EventEmitter {
         [verificationGraceDays, keyId]
       );
 
-      await pool.query(
+      await client.query(
         `
           INSERT INTO conductor_keys (
             key_id,
@@ -986,10 +990,12 @@ export class SphereConductor extends EventEmitter {
         ]
       );
 
-      await pool.query('COMMIT');
+      await client.query('COMMIT');
     } catch (error) {
-      await pool.query('ROLLBACK');
+      await client.query('ROLLBACK');
       throw error;
+    } finally {
+      client.release();
     }
 
     await this.loadConductorKeyRegistryFromDb();
