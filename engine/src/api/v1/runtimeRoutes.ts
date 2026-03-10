@@ -239,18 +239,31 @@ function loadRuntimeBridgeFromDisk(): RuntimeBridgeContext {
 
   const explicit = process.env.METACANON_RUNTIME_BRIDGE_MODULE?.trim();
   const candidates = [
-    explicit,
+    ...(explicit
+      ? [
+          explicit.startsWith('.')
+            ? path.resolve(process.cwd(), explicit)
+            : explicit
+        ]
+      : []),
     path.resolve(process.cwd(), '../ffi-node/commands.js'),
     path.resolve(process.cwd(), '../../ffi-node/commands.js'),
-    path.resolve(process.cwd(), 'ffi-node/commands.js')
-  ].filter((value): value is string => Boolean(value && value.trim().length > 0));
+    path.resolve(process.cwd(), 'ffi-node/commands.js'),
+    'ffi-node/commands.js'
+  ].filter((value, index, values): value is string => {
+    if (!value || value.trim().length === 0) {
+      return false;
+    }
+    return values.indexOf(value) === index;
+  });
 
   const require = createRequire(import.meta.url);
   let lastError: string | null = null;
 
   for (const candidate of candidates) {
     try {
-      if (!fs.existsSync(candidate)) {
+      // Treat absolute paths and normalized relative file requests as on-disk targets.
+      if (path.isAbsolute(candidate) && !fs.existsSync(candidate)) {
         continue;
       }
       const moduleValue = require(candidate) as {

@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import express from 'express';
 import request from 'supertest';
 import { describe, expect, it, vi } from 'vitest';
@@ -138,5 +141,65 @@ describe('runtimeRoutes', () => {
     expect(provider.status).toBe(200);
     expect(provider.body.ok).toBe(true);
     expect(provider.body.provider_id).toBe('qwen_local');
+  });
+
+  it('loads bridge commands from explicit module path when enabled', async () => {
+    const bridgeModulePath = path.join(
+      os.tmpdir(),
+      `runtime-bridge-${Date.now()}-${Math.random().toString(16).slice(2)}.cjs`
+    );
+
+    fs.writeFileSync(
+      bridgeModulePath,
+      [
+        'module.exports = {',
+        '  createInstallerWebappCommands() {',
+        '    return {',
+        "      getComputeOptions: () => [{ provider_id: 'disk_bridge', selected_global: true }],",
+        '      setGlobalComputeProvider: (providerId) => ({ ok: true, provider_id: providerId }),',
+        '      setProviderPriority: (priority) => ({ ok: true, cloud_provider_priority: priority }),',
+        '      updateProviderConfig: (providerId, config) => ({ ok: true, provider_id: providerId, config }),',
+        "      invokeGenesisRite: () => ({ ok: true, genesis_hash: 'disk-bridge-hash' }),",
+        '      validateAction: () => true,',
+        "      createTaskSubSphere: () => ({ sub_sphere_id: 'disk-bridge-sphere', status: 'active' }),",
+        '      getSubSphereList: () => [],',
+        "      getSubSphereStatus: () => ({ sub_sphere_id: 'disk-bridge-sphere', status: 'active' }),",
+        '      pauseSubSphere: () => ({ ok: true }),',
+        '      dissolveSubSphere: () => ({ ok: true }),',
+        "      submitSubSphereQuery: () => ({ ok: true, provider_id: 'disk_bridge' }),",
+        '      updateTelegramIntegration: () => ({ ok: true }),',
+        '      updateDiscordIntegration: () => ({ ok: true }),',
+        '      bindAgentCommunicationRoute: () => ({ ok: true }),',
+        '      bindSubSpherePrismRoute: () => ({ ok: true }),',
+        '      sendAgentMessage: () => ({ ok: true }),',
+        '      sendSubSpherePrismMessage: () => ({ ok: true }),',
+        '      getCommunicationStatus: () => ({ ok: true, agent_bindings: [] })',
+        '    };',
+        '  }',
+        '};',
+        ''
+      ].join('\n'),
+      'utf8'
+    );
+
+    try {
+      const app = await buildTestApp({
+        METACANON_RUNTIME_BRIDGE_ENABLED: 'true',
+        METACANON_RUNTIME_BRIDGE_MODULE: bridgeModulePath
+      });
+
+      const health = await request(app).get('/api/v1/runtime/healthz');
+      expect(health.status).toBe(200);
+      expect(health.body.bridge_mode).toBe('ffi');
+      expect(health.body.commands_module_path).toBe(bridgeModulePath);
+
+      const options = await request(app).get('/api/v1/runtime/compute/options');
+      expect(options.status).toBe(200);
+      expect(options.body[0].provider_id).toBe('disk_bridge');
+    } finally {
+      if (fs.existsSync(bridgeModulePath)) {
+        fs.unlinkSync(bridgeModulePath);
+      }
+    }
   });
 });
