@@ -53,6 +53,7 @@ describe('createSphereRoutes boundary hardening', () => {
     getConductorSignatureVerificationPolicy: ReturnType<typeof vi.fn>;
     listConductorKeys: ReturnType<typeof vi.fn>;
     rotateConductorKey: ReturnType<typeof vi.fn>;
+    retireConductorKey: ReturnType<typeof vi.fn>;
     on: ReturnType<typeof vi.fn>;
     off: ReturnType<typeof vi.fn>;
     acknowledgeEntry: ReturnType<typeof vi.fn>;
@@ -188,6 +189,19 @@ describe('createSphereRoutes boundary hardening', () => {
         gracePeriodEndsAt: '2026-03-17T00:00:00.000Z',
         privateKeyPem: '-----BEGIN PRIVATE KEY-----fake-----END PRIVATE KEY-----'
       })),
+      retireConductorKey: vi.fn(async () => ({
+        key: {
+          keyId: 'conductor-key-legacy',
+          publicKey: '-----BEGIN PUBLIC KEY-----legacy-----END PUBLIC KEY-----',
+          status: 'RETIRED',
+          activationDate: '2026-01-01T00:00:00.000Z',
+          retirementDate: '2026-03-10T00:00:00.000Z',
+          verificationGraceDays: 7,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-03-10T00:00:00.000Z'
+        },
+        gracePeriodEndsAt: '2026-03-17T00:00:00.000Z'
+      })),
       on: vi.fn(),
       off: vi.fn(),
       acknowledgeEntry: vi.fn(),
@@ -237,6 +251,7 @@ describe('createSphereRoutes boundary hardening', () => {
     conductor.getConductorSignatureVerificationPolicy.mockReset();
     conductor.listConductorKeys.mockReset();
     conductor.rotateConductorKey.mockReset();
+    conductor.retireConductorKey.mockReset();
     conductor.on.mockReset();
     conductor.off.mockReset();
     conductor.acknowledgeEntry.mockReset();
@@ -292,6 +307,19 @@ describe('createSphereRoutes boundary hardening', () => {
       previousActiveKeyId: 'conductor-key-legacy',
       gracePeriodEndsAt: '2026-03-17T00:00:00.000Z',
       privateKeyPem: '-----BEGIN PRIVATE KEY-----fake-----END PRIVATE KEY-----'
+    });
+    conductor.retireConductorKey.mockResolvedValue({
+      key: {
+        keyId: 'conductor-key-legacy',
+        publicKey: '-----BEGIN PUBLIC KEY-----legacy-----END PUBLIC KEY-----',
+        status: 'RETIRED',
+        activationDate: '2026-01-01T00:00:00.000Z',
+        retirementDate: '2026-03-10T00:00:00.000Z',
+        verificationGraceDays: 7,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-03-10T00:00:00.000Z'
+      },
+      gracePeriodEndsAt: '2026-03-17T00:00:00.000Z'
     });
     conductor.markThreadDegradedNoLlm.mockResolvedValue({
       threadId: '11111111-1111-4111-8111-111111111111',
@@ -674,6 +702,7 @@ describe('createSphereRoutes boundary hardening', () => {
     expect(response.body.features?.ledgerVerification).toBe(true);
     expect(response.body.features?.conductorKeyRegistry).toBe(true);
     expect(response.body.features?.conductorKeyRotation).toBe(true);
+    expect(response.body.features?.conductorKeyRetirement).toBe(true);
     expect(response.body.surface?.legacyAliasDeprecated).toBe(true);
     expect(response.body.surface?.legacyAliasSuccessorBase).toBe('/api/v1/sphere');
     expect(response.body.protocol?.stream?.ackCursorQuery).toBe('ack_cursor');
@@ -1044,6 +1073,39 @@ describe('createSphereRoutes boundary hardening', () => {
     expect(response.body.previousActiveKeyId).toBe('conductor-key-2026-03');
     expect(response.body.privateKeyPem).toContain('PRIVATE KEY');
     expect(conductor.rotateConductorKey).toHaveBeenCalledWith({
+      verificationGraceDays: 7
+    });
+  });
+
+  it('retires conductor key through route', async () => {
+    conductor.retireConductorKey.mockResolvedValueOnce({
+      key: {
+        keyId: 'conductor-key-2026-03',
+        publicKey: '-----BEGIN PUBLIC KEY-----legacy-----END PUBLIC KEY-----',
+        status: 'RETIRED',
+        activationDate: '2026-03-01T00:00:00.000Z',
+        retirementDate: '2026-03-11T00:00:00.000Z',
+        verificationGraceDays: 7,
+        createdAt: '2026-03-01T00:00:00.000Z',
+        updatedAt: '2026-03-11T00:00:00.000Z'
+      },
+      gracePeriodEndsAt: '2026-03-18T00:00:00.000Z'
+    });
+
+    const response = await request
+      .post('/api/v1/sphere/retire-conductor-key')
+      .set('authorization', `Bearer ${token}`)
+      .send({
+        keyId: 'conductor-key-2026-03',
+        verificationGraceDays: 7
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.retiredKey?.keyId).toBe('conductor-key-2026-03');
+    expect(response.body.retiredKey?.status).toBe('RETIRED');
+    expect(response.body.gracePeriodEndsAt).toBe('2026-03-18T00:00:00.000Z');
+    expect(conductor.retireConductorKey).toHaveBeenCalledWith({
+      keyId: 'conductor-key-2026-03',
       verificationGraceDays: 7
     });
   });

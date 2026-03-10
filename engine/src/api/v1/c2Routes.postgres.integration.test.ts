@@ -339,4 +339,66 @@ describe.runIf(runPgIntegration)('Sphere routes Postgres integration', () => {
       )
     ).toBe(true)
   })
+
+  it('retires non-active conductor keys through API and rejects active-key retirement', async () => {
+    const firstRotate = await request
+      .post('/api/v1/sphere/rotate-conductor-key')
+      .set('authorization', `Bearer ${serviceToken}`)
+      .send({
+        keyId: 'conductor-key-api-retire-a',
+        verificationGraceDays: 3
+      })
+
+    expect(firstRotate.status).toBe(201)
+    expect(firstRotate.body.rotatedKey?.keyId).toBe('conductor-key-api-retire-a')
+    expect(firstRotate.body.rotatedKey?.status).toBe('ACTIVE')
+
+    const secondRotate = await request
+      .post('/api/v1/sphere/rotate-conductor-key')
+      .set('authorization', `Bearer ${serviceToken}`)
+      .send({
+        keyId: 'conductor-key-api-retire-b',
+        verificationGraceDays: 3
+      })
+
+    expect(secondRotate.status).toBe(201)
+    expect(secondRotate.body.rotatedKey?.keyId).toBe('conductor-key-api-retire-b')
+    expect(secondRotate.body.previousActiveKeyId).toBe('conductor-key-api-retire-a')
+
+    const retireResponse = await request
+      .post('/api/v1/sphere/retire-conductor-key')
+      .set('authorization', `Bearer ${serviceToken}`)
+      .send({
+        keyId: 'conductor-key-api-retire-a',
+        verificationGraceDays: 9
+      })
+
+    expect(retireResponse.status).toBe(200)
+    expect(retireResponse.body.retiredKey?.keyId).toBe('conductor-key-api-retire-a')
+    expect(retireResponse.body.retiredKey?.status).toBe('RETIRED')
+    expect(retireResponse.body.retiredKey?.verificationGraceDays).toBe(9)
+    expect(retireResponse.body.gracePeriodEndsAt).toBeTypeOf('string')
+
+    const keyRegistryResponse = await request
+      .get('/api/v1/sphere/conductor-keys')
+      .set('authorization', `Bearer ${serviceToken}`)
+
+    expect(keyRegistryResponse.status).toBe(200)
+    const retired = keyRegistryResponse.body.keys.find(
+      (key: { keyId: string }) => key.keyId === 'conductor-key-api-retire-a'
+    )
+    expect(retired?.status).toBe('RETIRED')
+    expect(retired?.verificationGraceDays).toBe(9)
+    expect(retired?.retirementDate).toBeTypeOf('string')
+
+    const activeRetireResponse = await request
+      .post('/api/v1/sphere/retire-conductor-key')
+      .set('authorization', `Bearer ${serviceToken}`)
+      .send({
+        keyId: 'conductor-key-api-retire-b'
+      })
+
+    expect(activeRetireResponse.status).toBe(409)
+    expect(activeRetireResponse.body.code).toBe('STM_ERR_CONDUCTOR_KEY_ACTIVE')
+  })
 })

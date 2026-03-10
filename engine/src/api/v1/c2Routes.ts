@@ -206,6 +206,16 @@ const rotateConductorKeySchema = z.object({
   verificationGraceDays: z.number().int().min(0).max(3650).optional()
 });
 
+const retireConductorKeySchema = z.object({
+  keyId: z
+    .string()
+    .trim()
+    .min(3)
+    .max(160)
+    .regex(/^[a-z0-9._:-]+$/i),
+  verificationGraceDays: z.number().int().min(0).max(3650).optional()
+});
+
 type SphereRouteOptions = {
   conductor: SphereConductor;
   didRegistry: DidRegistry;
@@ -810,6 +820,7 @@ function registerUnifiedRoutes(
     verifyLedger: RequestHandler;
     conductorKeyList: RequestHandler;
     rotateConductorKey: RequestHandler;
+    retireConductorKey: RequestHandler;
     lensProgression: RequestHandler;
     threadAcks: RequestHandler;
     replay: RequestHandler;
@@ -832,6 +843,7 @@ function registerUnifiedRoutes(
   registerGet(router, bases, '/threads/:threadId/verify-ledger', handler.verifyLedger);
   registerGet(router, bases, '/conductor-keys', handler.conductorKeyList);
   registerPost(router, bases, '/rotate-conductor-key', handler.rotateConductorKey);
+  registerPost(router, bases, '/retire-conductor-key', handler.retireConductorKey);
   registerGet(router, bases, '/threads/:threadId/lens-progression', handler.lensProgression);
   registerGet(router, bases, '/threads/:threadId/acks', handler.threadAcks);
   registerGet(router, bases, '/threads/:threadId/replay', handler.replay);
@@ -934,7 +946,8 @@ export function createSphereRoutes(options: SphereRouteOptions): Router {
         cycleState: true,
         ledgerVerification: true,
         conductorKeyRegistry: true,
-        conductorKeyRotation: true
+        conductorKeyRotation: true,
+        conductorKeyRetirement: true
       },
       protocol: {
         stream: {
@@ -1547,6 +1560,29 @@ export function createSphereRoutes(options: SphereRouteOptions): Router {
     }
   };
 
+  const retireConductorKeyHandler: RequestHandler = async (req, res) => {
+    const parsed = retireConductorKeySchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return sendSphereError(req, res, 400, {
+        code: 'SPHERE_ERR_INVALID_SCHEMA',
+        message: 'Invalid retire-conductor-key payload.',
+        retryable: false,
+        details: parsed.error.flatten()
+      });
+    }
+
+    try {
+      const retired = await options.conductor.retireConductorKey(parsed.data);
+      return res.status(200).json({
+        retiredKey: retired.key,
+        gracePeriodEndsAt: retired.gracePeriodEndsAt,
+        traceId: req.sphereTraceId
+      });
+    } catch (err) {
+      return sendRouteError(req, res, err);
+    }
+  };
+
   const lensProgressionHandler: RequestHandler = async (req, res) => {
     try {
       const thread = await options.conductor.getThread(req.params.threadId);
@@ -1865,6 +1901,7 @@ export function createSphereRoutes(options: SphereRouteOptions): Router {
     verifyLedger: verifyLedgerHandler,
     conductorKeyList: conductorKeyListHandler,
     rotateConductorKey: rotateConductorKeyHandler,
+    retireConductorKey: retireConductorKeyHandler,
     lensProgression: lensProgressionHandler,
     threadAcks: threadAcksHandler,
     replay: replayHandler,

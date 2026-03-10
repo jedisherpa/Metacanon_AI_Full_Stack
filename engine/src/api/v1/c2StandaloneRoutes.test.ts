@@ -98,6 +98,7 @@ describe('createC2StandaloneRoutes', () => {
     expect(response.body.features?.ledgerVerification).toBe(false);
     expect(response.body.features?.conductorKeyRegistry).toBe(false);
     expect(response.body.features?.conductorKeyRotation).toBe(false);
+    expect(response.body.features?.conductorKeyRetirement).toBe(false);
   });
 
   it('returns SPHERE_THREAD_DISABLED for lens-upgrade rules in standalone mode', async () => {
@@ -281,6 +282,17 @@ describe('createC2StandaloneRoutes', () => {
       .post('/api/v1/sphere/rotate-conductor-key')
       .set('authorization', `Bearer ${token}`)
       .send({});
+
+    expect(response.status).toBe(503);
+    expect(response.body.code).toBe('SPHERE_THREAD_DISABLED');
+    expect(response.body.sphereThreadEnabled).toBe(false);
+  });
+
+  it('returns SPHERE_THREAD_DISABLED for retire-conductor-key path', async () => {
+    const response = await request
+      .post('/api/v1/sphere/retire-conductor-key')
+      .set('authorization', `Bearer ${token}`)
+      .send({ keyId: 'conductor-key-legacy' });
 
     expect(response.status).toBe(503);
     expect(response.body.code).toBe('SPHERE_THREAD_DISABLED');

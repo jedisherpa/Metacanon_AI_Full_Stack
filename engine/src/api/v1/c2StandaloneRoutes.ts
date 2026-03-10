@@ -161,7 +161,8 @@ export function createC2StandaloneRoutes(options: C2StandaloneRouteOptions = {})
         lensProgression: false,
         ledgerVerification: false,
         conductorKeyRegistry: false,
-        conductorKeyRotation: false
+        conductorKeyRotation: false,
+        conductorKeyRetirement: false
       },
       protocol: {
         stream: {
@@ -283,6 +284,10 @@ export function createC2StandaloneRoutes(options: C2StandaloneRouteOptions = {})
   });
 
   registerPost(router, bases, '/rotate-conductor-key', (req, res) => {
+    return res.status(503).json(sphereDisabledPayload(resolveTraceId(req)));
+  });
+
+  registerPost(router, bases, '/retire-conductor-key', (req, res) => {
     return res.status(503).json(sphereDisabledPayload(resolveTraceId(req)));
   });
 

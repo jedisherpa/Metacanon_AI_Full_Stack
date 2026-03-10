@@ -125,6 +125,11 @@ export type RotateConductorKeyResult = {
   privateKeyPem: string;
 };
 
+export type RetireConductorKeyResult = {
+  key: ConductorKeyRecord;
+  gracePeriodEndsAt: string | null;
+};
+
 export type LedgerVerificationIssueCode =
   | 'SEQUENCE_MISMATCH'
   | 'PREV_HASH_MISMATCH'
@@ -942,6 +947,109 @@ export class SphereConductor extends EventEmitter {
       previousActiveKeyId: previousActiveKeyId ?? null,
       gracePeriodEndsAt,
       privateKeyPem
+    };
+  }
+
+  async retireConductorKey(input: {
+    keyId: string;
+    verificationGraceDays?: number;
+  }): Promise<RetireConductorKeyResult> {
+    await this.ensureReady();
+
+    const keyId = input.keyId?.trim();
+    if (!keyId) {
+      throw new ConductorError(
+        400,
+        'STM_ERR_INVALID_CONDUCTOR_KEY',
+        'retireConductorKey requires a keyId.'
+      );
+    }
+
+    const verificationGraceDays = Math.max(
+      0,
+      input.verificationGraceDays ?? this.conductorRotationGraceDaysDefault
+    );
+
+    await pool.query('BEGIN');
+    try {
+      const lookup = await pool.query<ConductorDbKeyRow>(
+        `
+          SELECT
+            key_id,
+            public_key,
+            status,
+            activation_date,
+            retirement_date,
+            verification_grace_days,
+            private_key_ciphertext,
+            private_key_iv,
+            private_key_tag,
+            created_at,
+            updated_at
+          FROM conductor_keys
+          WHERE key_id = $1
+          FOR UPDATE
+        `,
+        [keyId]
+      );
+
+      if (lookup.rowCount === 0) {
+        throw new ConductorError(
+          404,
+          'STM_ERR_CONDUCTOR_KEY_NOT_FOUND',
+          `Conductor key '${keyId}' was not found.`
+        );
+      }
+
+      const row = lookup.rows[0];
+      if (row.status === 'ACTIVE') {
+        throw new ConductorError(
+          409,
+          'STM_ERR_CONDUCTOR_KEY_ACTIVE',
+          `Conductor key '${keyId}' is active. Rotate first, then retire the old key.`
+        );
+      }
+
+      await pool.query(
+        `
+          UPDATE conductor_keys
+          SET
+            status = 'RETIRED',
+            retirement_date = COALESCE(retirement_date, NOW()),
+            verification_grace_days = $2,
+            updated_at = NOW()
+          WHERE key_id = $1
+        `,
+        [keyId, verificationGraceDays]
+      );
+
+      await pool.query('COMMIT');
+    } catch (error) {
+      await pool.query('ROLLBACK');
+      throw error;
+    }
+
+    await this.loadConductorKeyRegistryFromDb();
+    const keys = await this.listConductorKeys();
+    const keyRecord = keys.find((key) => key.keyId === keyId);
+
+    if (!keyRecord) {
+      throw new ConductorError(
+        500,
+        'STM_ERR_INTERNAL',
+        `Retired conductor key '${keyId}' was not found after persistence.`
+      );
+    }
+
+    const gracePeriodEndsAt = keyRecord.retirementDate
+      ? new Date(
+          Date.parse(keyRecord.retirementDate) + verificationGraceDays * 24 * 60 * 60 * 1000
+        ).toISOString()
+      : null;
+
+    return {
+      key: keyRecord,
+      gracePeriodEndsAt
     };
   }
 
