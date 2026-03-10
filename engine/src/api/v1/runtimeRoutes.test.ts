@@ -11,6 +11,7 @@ function applyBaseEnv(overrides: Record<string, string> = {}): void {
     KIMI_API_KEY: 'test-kimi-key',
     TELEGRAM_BOT_TOKEN: 'test-telegram-token',
     WS_TOKEN_SECRET: '12345678901234567890123456789012',
+    METACANON_CONTROL_API_KEY: '',
     RUNTIME_ENV: 'local',
     MISSION_STUB_FALLBACK_ENABLED: 'true',
     HYBRID_EXEC_TIMEOUT_MS: '12000',
@@ -18,14 +19,23 @@ function applyBaseEnv(overrides: Record<string, string> = {}): void {
   });
 }
 
-async function buildTestApp(overrides: Record<string, string> = {}): Promise<express.Express> {
+async function buildTestApp(
+  overrides: Record<string, string> = {},
+  bridgeCommands?: Record<string, (...args: unknown[]) => unknown>
+): Promise<express.Express> {
   vi.resetModules();
   applyBaseEnv(overrides);
 
   const runtimeRoutes = await import('./runtimeRoutes.js');
   const app = express();
   app.use(express.json());
-  app.use(runtimeRoutes.createRuntimeRoutes());
+  app.use(
+    runtimeRoutes.createRuntimeRoutes(
+      bridgeCommands
+        ? { bridgeCommands: bridgeCommands as never, bridgeModulePath: 'runtime-test-bridge' }
+        : undefined
+    )
+  );
 
   return app;
 }
@@ -81,5 +91,52 @@ describe('runtimeRoutes', () => {
       .get('/api/v1/runtime/healthz')
       .set('x-metacanon-key', 'runtime-secret');
     expect(authorized.status).toBe(200);
+  });
+
+  it('uses injected bridge commands when provided', async () => {
+    const app = await buildTestApp(
+      {},
+      {
+        getComputeOptions: () => [{ provider_id: 'bridge_provider', selected_global: true }],
+        setGlobalComputeProvider: (providerId: unknown) => ({ ok: true, provider_id: providerId }),
+        setProviderPriority: (priority: unknown) => ({ ok: true, cloud_provider_priority: priority }),
+        updateProviderConfig: (providerId: unknown, config: unknown) => ({
+          ok: true,
+          provider_id: providerId,
+          config
+        }),
+        invokeGenesisRite: () => ({ ok: true, genesis_hash: 'bridge-hash' }),
+        validateAction: () => true,
+        createTaskSubSphere: () => ({ sub_sphere_id: 'bridge-sphere', status: 'active' }),
+        getSubSphereList: () => [],
+        getSubSphereStatus: () => ({ sub_sphere_id: 'bridge-sphere', status: 'active' }),
+        pauseSubSphere: () => ({ ok: true }),
+        dissolveSubSphere: () => ({ ok: true }),
+        submitSubSphereQuery: () => ({ ok: true, provider_id: 'bridge_provider' }),
+        updateTelegramIntegration: () => ({ ok: true }),
+        updateDiscordIntegration: () => ({ ok: true }),
+        bindAgentCommunicationRoute: () => ({ ok: true }),
+        bindSubSpherePrismRoute: () => ({ ok: true }),
+        sendAgentMessage: () => ({ ok: true }),
+        sendSubSpherePrismMessage: () => ({ ok: true }),
+        getCommunicationStatus: () => ({ ok: true, agent_bindings: [] })
+      }
+    );
+
+    const health = await request(app).get('/api/v1/runtime/healthz');
+    expect(health.status).toBe(200);
+    expect(health.body.bridge_mode).toBe('ffi');
+    expect(health.body.commands_module_path).toBe('runtime-test-bridge');
+
+    const options = await request(app).get('/api/v1/runtime/compute/options');
+    expect(options.status).toBe(200);
+    expect(options.body[0].provider_id).toBe('bridge_provider');
+
+    const provider = await request(app)
+      .post('/api/v1/runtime/compute/global-provider')
+      .send({ provider_id: 'qwen_local' });
+    expect(provider.status).toBe(200);
+    expect(provider.body.ok).toBe(true);
+    expect(provider.body.provider_id).toBe('qwen_local');
   });
 });

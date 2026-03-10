@@ -1,4 +1,7 @@
 import { randomUUID } from 'node:crypto';
+import fs from 'node:fs';
+import { createRequire } from 'node:module';
+import path from 'node:path';
 import { Router } from 'express';
 import { z } from 'zod';
 import { sendApiError } from '../../lib/apiError.js';
@@ -30,6 +33,44 @@ type SubSphereBindingRecord = {
   telegram_chat_id: string | null;
   discord_thread_id: string | null;
   in_app_thread_id: string | null;
+};
+
+type RuntimeBridgeCommands = {
+  getComputeOptions(): unknown;
+  setGlobalComputeProvider(providerId: string): unknown;
+  setProviderPriority(priority: string[]): unknown;
+  updateProviderConfig(providerId: string, config: Record<string, unknown>): unknown;
+  invokeGenesisRite(request: Record<string, unknown>): unknown;
+  validateAction(action: Record<string, unknown>, willVector: Record<string, unknown>): boolean;
+  createTaskSubSphere(payload: { name: string; objective: string; hitl_required: boolean }): unknown;
+  getSubSphereList(): unknown;
+  getSubSphereStatus(subSphereId: string): unknown;
+  pauseSubSphere(subSphereId: string): unknown;
+  dissolveSubSphere(subSphereId: string, reason: string): unknown;
+  submitSubSphereQuery(
+    subSphereId: string,
+    query: string,
+    providerOverride?: string | null
+  ): unknown;
+  updateTelegramIntegration(config: Record<string, unknown>): unknown;
+  updateDiscordIntegration(config: Record<string, unknown>): unknown;
+  bindAgentCommunicationRoute(payload: Record<string, unknown>): unknown;
+  bindSubSpherePrismRoute(payload: Record<string, unknown>): unknown;
+  sendAgentMessage(payload: Record<string, unknown>): unknown;
+  sendSubSpherePrismMessage(payload: Record<string, unknown>): unknown;
+  getCommunicationStatus(): unknown;
+};
+
+type RuntimeRouteOptions = {
+  bridgeCommands?: RuntimeBridgeCommands | null;
+  bridgeModulePath?: string;
+  bridgeLoadError?: string | null;
+};
+
+type RuntimeBridgeContext = {
+  commands: RuntimeBridgeCommands | null;
+  modulePath: string;
+  loadError: string | null;
 };
 
 const RUNTIME_BASE = '/api/v1/runtime';
@@ -169,14 +210,109 @@ function providerExists(providerId: string): providerId is (typeof supportedProv
   return supportedProviderIds.includes(providerId as (typeof supportedProviderIds)[number]);
 }
 
-export function createRuntimeRoutes(): Router {
+function truthyEnv(value: string | undefined): boolean {
+  if (!value) {
+    return false;
+  }
+  const normalized = value.trim().toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
+}
+
+function readErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message;
+  }
+  if (typeof error === 'string' && error.trim().length > 0) {
+    return error;
+  }
+  return 'unknown runtime bridge error';
+}
+
+function loadRuntimeBridgeFromDisk(): RuntimeBridgeContext {
+  if (!truthyEnv(process.env.METACANON_RUNTIME_BRIDGE_ENABLED)) {
+    return {
+      commands: null,
+      modulePath: 'metacanon-runtime/memory',
+      loadError: null
+    };
+  }
+
+  const explicit = process.env.METACANON_RUNTIME_BRIDGE_MODULE?.trim();
+  const candidates = [
+    explicit,
+    path.resolve(process.cwd(), '../ffi-node/commands.js'),
+    path.resolve(process.cwd(), '../../ffi-node/commands.js'),
+    path.resolve(process.cwd(), 'ffi-node/commands.js')
+  ].filter((value): value is string => Boolean(value && value.trim().length > 0));
+
+  const require = createRequire(import.meta.url);
+  let lastError: string | null = null;
+
+  for (const candidate of candidates) {
+    try {
+      if (!fs.existsSync(candidate)) {
+        continue;
+      }
+      const moduleValue = require(candidate) as {
+        createInstallerWebappCommands?: () => RuntimeBridgeCommands;
+      };
+      if (typeof moduleValue.createInstallerWebappCommands !== 'function') {
+        lastError = `${candidate} does not export createInstallerWebappCommands()`;
+        continue;
+      }
+
+      const commands = moduleValue.createInstallerWebappCommands();
+      return {
+        commands,
+        modulePath: candidate,
+        loadError: null
+      };
+    } catch (error) {
+      lastError = `${candidate}: ${readErrorMessage(error)}`;
+    }
+  }
+
+  return {
+    commands: null,
+    modulePath: explicit || candidates[0] || 'metacanon-runtime/memory',
+    loadError:
+      lastError ??
+      'runtime bridge enabled but no bridge module was found (set METACANON_RUNTIME_BRIDGE_MODULE).'
+  };
+}
+
+function sendRuntimeBridgeError(
+  req: Parameters<typeof sendApiError>[0],
+  res: Parameters<typeof sendApiError>[1],
+  operation: string,
+  error: unknown
+): void {
+  sendApiError(
+    req,
+    res,
+    502,
+    'RUNTIME_BRIDGE_ERROR',
+    `Runtime bridge operation '${operation}' failed: ${readErrorMessage(error)}`,
+    true
+  );
+}
+
+export function createRuntimeRoutes(options: RuntimeRouteOptions = {}): Router {
   const router = Router();
   const controlApiKey = process.env.METACANON_CONTROL_API_KEY?.trim() ?? '';
+  const bridge =
+    options.bridgeCommands === undefined
+      ? loadRuntimeBridgeFromDisk()
+      : {
+          commands: options.bridgeCommands,
+          modulePath: options.bridgeModulePath ?? 'metacanon-runtime/injected',
+          loadError: options.bridgeLoadError ?? null
+        };
 
   const runtimeState = {
-    commandsModulePath: 'metacanon-runtime/local',
-    loaded: true,
-    loadError: null as string | null,
+    commandsModulePath: bridge.modulePath,
+    loaded: bridge.loadError == null || Boolean(bridge.commands),
+    loadError: bridge.loadError as string | null,
     globalProviderId: 'qwen_local',
     cloudProviderPriority: ['openai', 'anthropic', 'moonshot_kimi', 'grok'],
     providerConfigs: new Map<string, Record<string, unknown>>(),
@@ -255,8 +391,9 @@ export function createRuntimeRoutes(): Router {
 
   router.get(`${RUNTIME_BASE}/healthz`, (_req, res) => {
     res.json({
-      status: 'ok',
+      status: runtimeState.loaded ? 'ok' : 'degraded',
       bridge_ready: runtimeState.loaded,
+      bridge_mode: bridge.commands ? 'ffi' : 'memory',
       commands_module_path: runtimeState.commandsModulePath,
       ...(runtimeState.loadError ? { error: runtimeState.loadError } : {})
     });
@@ -266,11 +403,23 @@ export function createRuntimeRoutes(): Router {
     res.json({
       commands_module_path: runtimeState.commandsModulePath,
       loaded: runtimeState.loaded,
-      load_error: runtimeState.loadError
+      load_error: runtimeState.loadError,
+      mode: bridge.commands ? 'ffi' : 'memory'
     });
   });
 
   router.get(`${RUNTIME_BASE}/compute/options`, (_req, res) => {
+    if (bridge.commands) {
+      try {
+        const options = bridge.commands.getComputeOptions();
+        res.json(options);
+      } catch (error) {
+        runtimeState.loadError = readErrorMessage(error);
+        sendRuntimeBridgeError(_req, res, 'getComputeOptions', error);
+      }
+      return;
+    }
+
     res.json(buildComputeOptions());
   });
 
@@ -280,6 +429,17 @@ export function createRuntimeRoutes(): Router {
       sendApiError(req, res, 400, 'RUNTIME_INVALID_SCHEMA', 'Invalid global provider payload.', false, {
         errors: parsed.error.flatten()
       });
+      return;
+    }
+
+    if (bridge.commands) {
+      try {
+        const result = bridge.commands.setGlobalComputeProvider(parsed.data.provider_id);
+        res.json(result);
+      } catch (error) {
+        runtimeState.loadError = readErrorMessage(error);
+        sendRuntimeBridgeError(req, res, 'setGlobalComputeProvider', error);
+      }
       return;
     }
 
@@ -296,6 +456,17 @@ export function createRuntimeRoutes(): Router {
       sendApiError(req, res, 400, 'RUNTIME_INVALID_SCHEMA', 'Invalid compute priority payload.', false, {
         errors: parsed.error.flatten()
       });
+      return;
+    }
+
+    if (bridge.commands) {
+      try {
+        const result = bridge.commands.setProviderPriority(parsed.data.cloud_provider_priority);
+        res.json(result);
+      } catch (error) {
+        runtimeState.loadError = readErrorMessage(error);
+        sendRuntimeBridgeError(req, res, 'setProviderPriority', error);
+      }
       return;
     }
 
@@ -326,6 +497,17 @@ export function createRuntimeRoutes(): Router {
       return;
     }
 
+    if (bridge.commands) {
+      try {
+        const result = bridge.commands.updateProviderConfig(providerId, parsed.data.config);
+        res.json(result);
+      } catch (error) {
+        runtimeState.loadError = readErrorMessage(error);
+        sendRuntimeBridgeError(req, res, 'updateProviderConfig', error);
+      }
+      return;
+    }
+
     runtimeState.providerConfigs.set(providerId, parsed.data.config);
     res.json({
       ok: true,
@@ -340,6 +522,28 @@ export function createRuntimeRoutes(): Router {
       sendApiError(req, res, 400, 'RUNTIME_INVALID_SCHEMA', 'Invalid genesis invocation payload.', false, {
         errors: parsed.error.flatten()
       });
+      return;
+    }
+
+    if (bridge.commands) {
+      try {
+        const result = bridge.commands.invokeGenesisRite({
+          vision_core: parsed.data.vision_core ?? 'MetaCanon runtime bridge genesis invocation',
+          core_values: parsed.data.core_values ?? ['Sovereignty'],
+          soul_facets: [],
+          human_in_loop: true,
+          interpretive_boundaries: [],
+          drift_prevention: 'strict',
+          enable_morpheus_compute: false,
+          morpheus: {},
+          will_directives: parsed.data.will_directives ?? [],
+          signing_secret: parsed.data.signing_secret ?? 'runtime-bridge-signing-secret'
+        });
+        res.status(201).json(result);
+      } catch (error) {
+        runtimeState.loadError = readErrorMessage(error);
+        sendRuntimeBridgeError(req, res, 'invokeGenesisRite', error);
+      }
       return;
     }
 
@@ -365,6 +569,20 @@ export function createRuntimeRoutes(): Router {
       return;
     }
 
+    if (bridge.commands) {
+      try {
+        const valid = bridge.commands.validateAction(parsed.data.action, parsed.data.will_vector);
+        res.json({
+          valid,
+          reason: valid ? null : 'action blocked by bridge validation'
+        });
+      } catch (error) {
+        runtimeState.loadError = readErrorMessage(error);
+        sendRuntimeBridgeError(req, res, 'validateAction', error);
+      }
+      return;
+    }
+
     const actionContent = parsed.data.action.content;
     const valid = typeof actionContent === 'string' && actionContent.trim().length > 0;
     res.json({
@@ -379,6 +597,21 @@ export function createRuntimeRoutes(): Router {
       sendApiError(req, res, 400, 'RUNTIME_INVALID_SCHEMA', 'Invalid sub-sphere payload.', false, {
         errors: parsed.error.flatten()
       });
+      return;
+    }
+
+    if (bridge.commands) {
+      try {
+        const result = bridge.commands.createTaskSubSphere({
+          name: parsed.data.name,
+          objective: parsed.data.objective,
+          hitl_required: parsed.data.hitl_required
+        });
+        res.status(201).json(result);
+      } catch (error) {
+        runtimeState.loadError = readErrorMessage(error);
+        sendRuntimeBridgeError(req, res, 'createTaskSubSphere', error);
+      }
       return;
     }
 
@@ -399,10 +632,32 @@ export function createRuntimeRoutes(): Router {
   });
 
   router.get(`${RUNTIME_BASE}/sub-spheres`, (_req, res) => {
+    if (bridge.commands) {
+      try {
+        const result = bridge.commands.getSubSphereList();
+        res.json(result);
+      } catch (error) {
+        runtimeState.loadError = readErrorMessage(error);
+        sendRuntimeBridgeError(_req, res, 'getSubSphereList', error);
+      }
+      return;
+    }
+
     res.json([...runtimeState.subSpheres.values()]);
   });
 
   router.get(`${RUNTIME_BASE}/sub-spheres/:subSphereId`, (req, res) => {
+    if (bridge.commands) {
+      try {
+        const result = bridge.commands.getSubSphereStatus(req.params.subSphereId);
+        res.json(result);
+      } catch (error) {
+        runtimeState.loadError = readErrorMessage(error);
+        sendRuntimeBridgeError(req, res, 'getSubSphereStatus', error);
+      }
+      return;
+    }
+
     const record = runtimeState.subSpheres.get(req.params.subSphereId);
     if (!record) {
       sendApiError(req, res, 404, 'RUNTIME_SUB_SPHERE_NOT_FOUND', 'Sub-sphere was not found.', false);
@@ -413,6 +668,17 @@ export function createRuntimeRoutes(): Router {
   });
 
   router.post(`${RUNTIME_BASE}/sub-spheres/:subSphereId/pause`, (req, res) => {
+    if (bridge.commands) {
+      try {
+        const result = bridge.commands.pauseSubSphere(req.params.subSphereId);
+        res.json(result);
+      } catch (error) {
+        runtimeState.loadError = readErrorMessage(error);
+        sendRuntimeBridgeError(req, res, 'pauseSubSphere', error);
+      }
+      return;
+    }
+
     const record = runtimeState.subSpheres.get(req.params.subSphereId);
     if (!record) {
       sendApiError(req, res, 404, 'RUNTIME_SUB_SPHERE_NOT_FOUND', 'Sub-sphere was not found.', false);
@@ -426,6 +692,25 @@ export function createRuntimeRoutes(): Router {
   });
 
   router.post(`${RUNTIME_BASE}/sub-spheres/:subSphereId/dissolve`, (req, res) => {
+    if (bridge.commands) {
+      const parsed = dissolveSubSphereSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        sendApiError(req, res, 400, 'RUNTIME_INVALID_SCHEMA', 'Invalid dissolve payload.', false, {
+          errors: parsed.error.flatten()
+        });
+        return;
+      }
+
+      try {
+        const result = bridge.commands.dissolveSubSphere(req.params.subSphereId, parsed.data.reason ?? '');
+        res.json(result);
+      } catch (error) {
+        runtimeState.loadError = readErrorMessage(error);
+        sendRuntimeBridgeError(req, res, 'dissolveSubSphere', error);
+      }
+      return;
+    }
+
     const record = runtimeState.subSpheres.get(req.params.subSphereId);
     if (!record) {
       sendApiError(req, res, 404, 'RUNTIME_SUB_SPHERE_NOT_FOUND', 'Sub-sphere was not found.', false);
@@ -448,6 +733,29 @@ export function createRuntimeRoutes(): Router {
   });
 
   router.post(`${RUNTIME_BASE}/sub-spheres/:subSphereId/query`, (req, res) => {
+    if (bridge.commands) {
+      const parsed = querySubSphereSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        sendApiError(req, res, 400, 'RUNTIME_INVALID_SCHEMA', 'Invalid query payload.', false, {
+          errors: parsed.error.flatten()
+        });
+        return;
+      }
+
+      try {
+        const result = bridge.commands.submitSubSphereQuery(
+          req.params.subSphereId,
+          parsed.data.query,
+          parsed.data.provider_override ?? null
+        );
+        res.json(result);
+      } catch (error) {
+        runtimeState.loadError = readErrorMessage(error);
+        sendRuntimeBridgeError(req, res, 'submitSubSphereQuery', error);
+      }
+      return;
+    }
+
     const record = runtimeState.subSpheres.get(req.params.subSphereId);
     if (!record) {
       sendApiError(req, res, 404, 'RUNTIME_SUB_SPHERE_NOT_FOUND', 'Sub-sphere was not found.', false);
@@ -485,6 +793,17 @@ export function createRuntimeRoutes(): Router {
   });
 
   router.get(`${RUNTIME_BASE}/communications/status`, (_req, res) => {
+    if (bridge.commands) {
+      try {
+        const result = bridge.commands.getCommunicationStatus();
+        res.json(result);
+      } catch (error) {
+        runtimeState.loadError = readErrorMessage(error);
+        sendRuntimeBridgeError(_req, res, 'getCommunicationStatus', error);
+      }
+      return;
+    }
+
     res.json(buildCommunicationStatus());
   });
 
@@ -494,6 +813,17 @@ export function createRuntimeRoutes(): Router {
       sendApiError(req, res, 400, 'RUNTIME_INVALID_SCHEMA', 'Invalid telegram integration payload.', false, {
         errors: parsed.error.flatten()
       });
+      return;
+    }
+
+    if (bridge.commands) {
+      try {
+        const result = bridge.commands.updateTelegramIntegration(parsed.data as Record<string, unknown>);
+        res.json(result);
+      } catch (error) {
+        runtimeState.loadError = readErrorMessage(error);
+        sendRuntimeBridgeError(req, res, 'updateTelegramIntegration', error);
+      }
       return;
     }
 
@@ -517,6 +847,17 @@ export function createRuntimeRoutes(): Router {
       sendApiError(req, res, 400, 'RUNTIME_INVALID_SCHEMA', 'Invalid discord integration payload.', false, {
         errors: parsed.error.flatten()
       });
+      return;
+    }
+
+    if (bridge.commands) {
+      try {
+        const result = bridge.commands.updateDiscordIntegration(parsed.data as Record<string, unknown>);
+        res.json(result);
+      } catch (error) {
+        runtimeState.loadError = readErrorMessage(error);
+        sendRuntimeBridgeError(req, res, 'updateDiscordIntegration', error);
+      }
       return;
     }
 
@@ -547,6 +888,17 @@ export function createRuntimeRoutes(): Router {
       return;
     }
 
+    if (bridge.commands) {
+      try {
+        const result = bridge.commands.bindAgentCommunicationRoute(parsed.data as Record<string, unknown>);
+        res.json(result);
+      } catch (error) {
+        runtimeState.loadError = readErrorMessage(error);
+        sendRuntimeBridgeError(req, res, 'bindAgentCommunicationRoute', error);
+      }
+      return;
+    }
+
     const binding: AgentBindingRecord = {
       agent_id: parsed.data.agent_id,
       telegram_chat_id: normalizeNullable(parsed.data.telegram_chat_id),
@@ -567,6 +919,17 @@ export function createRuntimeRoutes(): Router {
       sendApiError(req, res, 400, 'RUNTIME_INVALID_SCHEMA', 'Invalid sub-sphere prism bind payload.', false, {
         errors: parsed.error.flatten()
       });
+      return;
+    }
+
+    if (bridge.commands) {
+      try {
+        const result = bridge.commands.bindSubSpherePrismRoute(parsed.data as Record<string, unknown>);
+        res.json(result);
+      } catch (error) {
+        runtimeState.loadError = readErrorMessage(error);
+        sendRuntimeBridgeError(req, res, 'bindSubSpherePrismRoute', error);
+      }
       return;
     }
 
@@ -593,6 +956,17 @@ export function createRuntimeRoutes(): Router {
       return;
     }
 
+    if (bridge.commands) {
+      try {
+        const result = bridge.commands.sendAgentMessage(parsed.data as Record<string, unknown>);
+        res.json(result);
+      } catch (error) {
+        runtimeState.loadError = readErrorMessage(error);
+        sendRuntimeBridgeError(req, res, 'sendAgentMessage', error);
+      }
+      return;
+    }
+
     const agentBinding = runtimeState.agentBindings.get(parsed.data.agent_id);
     res.json({
       ok: true,
@@ -611,6 +985,17 @@ export function createRuntimeRoutes(): Router {
       sendApiError(req, res, 400, 'RUNTIME_INVALID_SCHEMA', 'Invalid sub-sphere message payload.', false, {
         errors: parsed.error.flatten()
       });
+      return;
+    }
+
+    if (bridge.commands) {
+      try {
+        const result = bridge.commands.sendSubSpherePrismMessage(parsed.data as Record<string, unknown>);
+        res.json(result);
+      } catch (error) {
+        runtimeState.loadError = readErrorMessage(error);
+        sendRuntimeBridgeError(req, res, 'sendSubSpherePrismMessage', error);
+      }
       return;
     }
 
