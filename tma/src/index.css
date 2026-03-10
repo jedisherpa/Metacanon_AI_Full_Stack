@@ -3,15 +3,15 @@
 @tailwind utilities;
 
 :root {
-  --color-void: #0A0A0F;
-  --color-void-mid: #12121A;
-  --color-void-light: #1E1E2E;
+  --color-void: #060b14;
+  --color-void-mid: #0d1320;
+  --color-void-light: #182233;
   --color-citadel: #F5C842;
   --color-forge: #00E5FF;
-  --color-hub: #9B59B6;
+  --color-hub: #4ecdc4;
   --color-engine: #39FF14;
-  --color-text: #E8E8F0;
-  --color-text-dim: #888899;
+  --color-text: #f0f4ff;
+  --color-text-dim: #91a0bd;
 }
 
 * {
@@ -28,18 +28,84 @@ html, body, #root {
 }
 
 body {
-  background-color: var(--color-void);
-  color: var(--color-text);
-  font-family: 'Inter', system-ui, sans-serif;
+  background-color: var(--lf-color-bg-base, var(--color-void));
+  background-image:
+    radial-gradient(1100px 600px at -10% -5%, rgba(0, 229, 255, 0.16), transparent 58%),
+    radial-gradient(900px 620px at 105% -10%, rgba(245, 200, 66, 0.14), transparent 54%),
+    linear-gradient(180deg, #070d18 0%, #060b14 42%, #050911 100%);
+  color: var(--lf-color-text-primary, var(--color-text));
+  font-family: var(--lf-font-family-primary, 'Space Grotesk', 'Inter', system-ui, sans-serif);
   -webkit-font-smoothing: antialiased;
   overscroll-behavior: none;
 }
 
+#root {
+  isolation: isolate;
+}
+
+.app-ambient {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: var(--lf-ambient-bg, none);
+}
+
+.app-shell {
+  position: relative;
+  z-index: 1;
+  max-width: 1120px;
+  margin: 0 auto;
+  min-height: 100%;
+  border-left: 1px solid var(--lf-color-border-default, rgba(255, 255, 255, 0.08));
+  border-right: 1px solid var(--lf-color-border-default, rgba(255, 255, 255, 0.08));
+  background: var(--lf-color-bg-base, linear-gradient(180deg, rgba(14, 21, 36, 0.55), rgba(7, 11, 19, 0.72)));
+}
+
+.app-shell::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--lf-color-accent-primary, rgba(245, 200, 66, 0.5)),
+    var(--lf-color-accent-secondary, rgba(0, 229, 255, 0.5)),
+    transparent
+  );
+  pointer-events: none;
+}
+
 /* Scrollable containers */
 .scroll-area {
+  height: 100%;
+  min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
   overscroll-behavior: contain;
+}
+
+.territory-card {
+  border-radius: var(--lf-radius-md, 14px);
+  border: 1px solid var(--lf-color-border-default, rgba(255, 255, 255, 0.14));
+  background: var(--lf-color-bg-elevated, linear-gradient(160deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.02)));
+  box-shadow: var(--lf-shadow-sm, inset 0 1px 0 rgba(255, 255, 255, 0.16)), 0 12px 28px rgba(0, 0, 0, 0.32);
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.territory-card:hover {
+  border-color: var(--lf-color-border-accent, rgba(255, 255, 255, 0.24));
+  background: var(--lf-color-bg-card, linear-gradient(160deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.04)));
+  box-shadow: var(--lf-shadow-md, 0 12px 28px rgba(0, 0, 0, 0.32));
+  transform: translateY(-1px);
+}
+
+.territory-card:active {
+  transform: translateY(1px) scale(0.995);
 }
 
 /* Voxel pixel border effect */
@@ -73,3 +139,32 @@ body {
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
+
+/* Legacy utility bridge so existing Tailwind-heavy pages respond to active skin tokens. */
+[data-skin] .text-white { color: var(--lf-color-text-primary) !important; }
+[data-skin] .text-white\/80 { color: color-mix(in srgb, var(--lf-color-text-primary) 80%, transparent) !important; }
+[data-skin] .text-white\/75 { color: color-mix(in srgb, var(--lf-color-text-primary) 75%, transparent) !important; }
+[data-skin] .text-white\/70 { color: color-mix(in srgb, var(--lf-color-text-primary) 70%, transparent) !important; }
+[data-skin] .text-white\/68 { color: color-mix(in srgb, var(--lf-color-text-primary) 68%, transparent) !important; }
+[data-skin] .text-white\/65 { color: color-mix(in srgb, var(--lf-color-text-primary) 65%, transparent) !important; }
+[data-skin] .text-white\/60 { color: color-mix(in srgb, var(--lf-color-text-primary) 60%, transparent) !important; }
+[data-skin] .text-white\/55 { color: color-mix(in srgb, var(--lf-color-text-primary) 55%, transparent) !important; }
+[data-skin] .text-white\/50 { color: color-mix(in srgb, var(--lf-color-text-primary) 50%, transparent) !important; }
+[data-skin] .text-white\/45 { color: color-mix(in srgb, var(--lf-color-text-primary) 45%, transparent) !important; }
+[data-skin] .text-white\/40 { color: color-mix(in srgb, var(--lf-color-text-primary) 40%, transparent) !important; }
+[data-skin] .text-white\/35 { color: color-mix(in srgb, var(--lf-color-text-primary) 35%, transparent) !important; }
+[data-skin] .text-white\/30 { color: color-mix(in srgb, var(--lf-color-text-primary) 30%, transparent) !important; }
+[data-skin] .text-white\/20 { color: color-mix(in srgb, var(--lf-color-text-primary) 20%, transparent) !important; }
+
+[data-skin] .border-white\/25,
+[data-skin] .border-white\/20,
+[data-skin] .border-white\/18,
+[data-skin] .border-white\/15,
+[data-skin] .border-white\/12 {
+  border-color: color-mix(in srgb, var(--lf-color-border-default) 75%, transparent) !important;
+}
+
+[data-skin] .bg-void { background-color: var(--lf-color-bg-base) !important; }
+[data-skin] .bg-void-light,
+[data-skin] .bg-void-light\/70 { background-color: var(--lf-color-bg-overlay) !important; }
+[data-skin] .bg-void-mid\/88 { background-color: color-mix(in srgb, var(--lf-color-bg-surface) 88%, transparent) !important; }

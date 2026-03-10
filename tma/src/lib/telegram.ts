@@ -9,6 +9,7 @@ type TelegramWebApp = {
   close: () => void;
   initData: string;
   initDataUnsafe: {
+    start_param?: string;
     user?: {
       id: number;
       first_name: string;
@@ -120,4 +121,33 @@ export function getTelegramUser() {
 
 export function getColorScheme(): 'light' | 'dark' {
   return getTelegramApp()?.colorScheme ?? 'dark';
+}
+
+function getWindowParam(keys: string[]): string | null {
+  if (typeof window === 'undefined') return null;
+
+  const searchParams = new URLSearchParams(window.location.search);
+  for (const key of keys) {
+    const value = searchParams.get(key);
+    if (value) return value;
+  }
+
+  const hash = window.location.hash.startsWith('#')
+    ? window.location.hash.slice(1)
+    : window.location.hash;
+  if (!hash) return null;
+
+  const hashParams = new URLSearchParams(hash);
+  for (const key of keys) {
+    const value = hashParams.get(key);
+    if (value) return value;
+  }
+
+  return null;
+}
+
+export function getTelegramStartParam(): string | null {
+  const tg = getTelegramApp();
+  if (tg?.initDataUnsafe?.start_param) return tg.initDataUnsafe.start_param;
+  return getWindowParam(['tgWebAppStartParam', 'startapp', 'start_param', 'command']);
 }

@@ -15,8 +15,8 @@ export default {
         'void-light': '#1E1E2E'
       },
       fontFamily: {
-        mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
-        sans: ['Inter', 'system-ui', 'sans-serif']
+        mono: ['IBM Plex Mono', 'JetBrains Mono', 'Fira Code', 'monospace'],
+        sans: ['Space Grotesk', 'Inter', 'system-ui', 'sans-serif']
       },
       animation: {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',

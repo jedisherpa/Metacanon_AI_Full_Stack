@@ -2,6 +2,8 @@ import { defineConfig, devices } from '@playwright/test';
 
 const ENGINE_PORT = Number(process.env.ENGINE_PORT || 3101);
 const ENGINE_URL = `http://localhost:${ENGINE_PORT}`;
+const TMA_PORT = Number(process.env.TMA_PORT || 4173);
+const TMA_URL = `http://localhost:${TMA_PORT}`;
 
 export default defineConfig({
   testDir: './e2e',
@@ -29,6 +31,9 @@ export default defineConfig({
         PORT: String(ENGINE_PORT),
         DATABASE_URL: process.env.DATABASE_URL || 'postgresql://council:council@localhost:5432/council',
         ADMIN_PANEL_PASSWORD: 'test-password',
+        TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || 'test-telegram-bot-token',
+        WS_TOKEN_SECRET: process.env.WS_TOKEN_SECRET || 'test-ws-token-secret-123456789012345',
+        KIMI_API_KEY: process.env.KIMI_API_KEY || 'test-kimi-key',
         LLM_PROVIDER_DEFAULT: 'morpheus',
         MORPHEUS_BASE_URL: 'https://api.mor.org/api/v1',
         MORPHEUS_API_KEY: 'test',
@@ -49,12 +54,20 @@ export default defineConfig({
       }
     },
     {
-      command: 'npm run dev -w skins/council-nebula',
+      command: 'npm run dev -w skins/council-nebula -- --port 5173',
       url: 'http://localhost:5173',
       reuseExistingServer: !process.env.CI,
       env: {
         VITE_ENGINE_URL: ENGINE_URL,
         VITE_ENGINE_WS_URL: `ws://localhost:${ENGINE_PORT}`
+      }
+    },
+    {
+      command: `npm --prefix tma run dev -- --port ${TMA_PORT}`,
+      url: TMA_URL,
+      reuseExistingServer: !process.env.CI,
+      env: {
+        VITE_API_BASE: ''
       }
     }
   ]

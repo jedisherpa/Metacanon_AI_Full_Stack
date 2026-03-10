@@ -6,10 +6,19 @@ import { telegramAuthMiddleware } from '../../middleware/telegramAuth.js';
 import { eq, desc, count, sql } from 'drizzle-orm';
 import { env } from '../../config/env.js';
 import type { LensPack } from '../../config/lensPack.js';
+import { z } from 'zod';
+import { sendApiError } from '../../lib/apiError.js';
+import { SkillRuntimeError, type SkillRuntime } from '../../agents/skillRuntime.js';
 
-export function createEngineRoomRoutes(deps: { lensPack: LensPack }): Router {
+const skillRunSchema = z.object({
+  skillId: z.string().min(1),
+  input: z.unknown().default({}),
+  traceId: z.string().min(1).optional()
+});
+
+export function createEngineRoomRoutes(deps: { lensPack: LensPack; skillRuntime?: SkillRuntime }): Router {
   const router = Router();
-  const { lensPack } = deps;
+  const { lensPack, skillRuntime } = deps;
 
   router.use('/api/v1/engine-room', telegramAuthMiddleware);
 
@@ -306,6 +315,91 @@ export function createEngineRoomRoutes(deps: { lensPack: LensPack }): Router {
       });
     } catch (err) {
       res.status(500).json({ error: 'Internal server error', code: 'CONFIG_PATCH_ERROR' });
+    }
+  });
+
+  // ─── GET /api/v1/engine-room/skills ────────────────────────────────────────
+  router.get('/api/v1/engine-room/skills', async (_req, res) => {
+    try {
+      if (!skillRuntime) {
+        sendApiError(_req, res, 503, 'SKILL_RUNTIME_UNAVAILABLE', 'Skill runtime is unavailable.', true);
+        return;
+      }
+      res.json({
+        ok: true,
+        skills: skillRuntime.listSkills(),
+        hapticTrigger: null
+      });
+    } catch (err) {
+      res.status(500).json({ error: 'Internal server error', code: 'SKILLS_LIST_ERROR' });
+    }
+  });
+
+  // ─── GET /api/v1/engine-room/skills/:skillId/status ───────────────────────
+  router.get('/api/v1/engine-room/skills/:skillId/status', async (req, res) => {
+    try {
+      if (!skillRuntime) {
+        sendApiError(req, res, 503, 'SKILL_RUNTIME_UNAVAILABLE', 'Skill runtime is unavailable.', true);
+        return;
+      }
+      const status = skillRuntime.getSkillStatus(req.params.skillId);
+      res.json({
+        ok: true,
+        status,
+        hapticTrigger: null
+      });
+    } catch (err) {
+      if (err instanceof SkillRuntimeError) {
+        sendApiError(req, res, err.statusCode, err.code, err.message, false, err.details);
+        return;
+      }
+      res.status(500).json({ error: 'Internal server error', code: 'SKILL_STATUS_ERROR' });
+    }
+  });
+
+  // ─── POST /api/v1/engine-room/skills/run ───────────────────────────────────
+  router.post('/api/v1/engine-room/skills/run', async (req, res) => {
+    try {
+      if (!skillRuntime) {
+        sendApiError(req, res, 503, 'SKILL_RUNTIME_UNAVAILABLE', 'Skill runtime is unavailable.', true);
+        return;
+      }
+
+      const parsed = skillRunSchema.safeParse(req.body);
+      if (!parsed.success) {
+        sendApiError(
+          req,
+          res,
+          400,
+          'SKILL_RUN_INPUT_INVALID',
+          'Invalid skill run payload.',
+          false,
+          parsed.error.flatten()
+        );
+        return;
+      }
+
+      const run = await skillRuntime.runSkill({
+        skillId: parsed.data.skillId,
+        input: parsed.data.input,
+        traceId: parsed.data.traceId,
+        requestedBy: req.telegramUserId
+      });
+
+      const statusCode =
+        run.result.status === 'blocked' && run.result.code === 'SKILL_ALREADY_RUNNING' ? 409 : 200;
+
+      res.status(statusCode).json({
+        ok: run.result.status === 'success',
+        run,
+        hapticTrigger: run.result.status === 'success' ? 'impact_light' : null
+      });
+    } catch (err) {
+      if (err instanceof SkillRuntimeError) {
+        sendApiError(req, res, err.statusCode, err.code, err.message, false, err.details);
+        return;
+      }
+      res.status(500).json({ error: 'Internal server error', code: 'SKILL_RUN_ERROR' });
     }
   });
 

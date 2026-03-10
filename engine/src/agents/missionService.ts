@@ -1,7 +1,11 @@
 import { env } from '../config/env.js';
-import { callWithRetry } from '../llm/fallback.js';
-import { getProviderSet, type ProviderChoice } from '../llm/providers.js';
-import type { ChatChunk } from '../llm/types.js';
+import { type ProviderChoice } from '../llm/providers.js';
+import {
+  HybridExecutionError,
+  executeHybridMissionGeneration,
+  type RuntimeRoute,
+  type UsageMetering
+} from '../runtime/hybridExecutionRouter.js';
 
 export type MissionReport = {
   summary: string;
@@ -9,21 +13,20 @@ export type MissionReport = {
   risks: string[];
   recommendedActions: string[];
   provider: ProviderChoice;
+  usageMetering: UsageMetering;
   degraded: boolean;
   degradedReason?: string;
 };
 
 export class MissionServiceError extends Error {
   readonly code: string;
+  readonly details?: Record<string, unknown>;
 
-  constructor(code: string, message: string) {
+  constructor(code: string, message: string, details?: Record<string, unknown>) {
     super(message);
     this.code = code;
+    this.details = details;
   }
-}
-
-function isAsyncIterable<T>(value: unknown): value is AsyncIterable<T> {
-  return value != null && typeof (value as AsyncIterable<T>)[Symbol.asyncIterator] === 'function';
 }
 
 function toBulletList(text: string, fallbackLabel: string): string[] {
@@ -48,8 +51,6 @@ export async function generateMissionReport(input: {
   objective: string;
   provider: ProviderChoice;
 }): Promise<MissionReport> {
-  const { generation } = getProviderSet(input.provider);
-
   const messages = [
     {
       role: 'system' as const,
@@ -72,40 +73,47 @@ export async function generateMissionReport(input: {
   ];
 
   try {
-    const response = await callWithRetry(generation, {
-      model: generation.model,
+    const execution = await executeHybridMissionGeneration({
+      provider: input.provider,
+      agentDid: input.agentDid,
+      objective: input.objective,
       messages,
       temperature: 0.3,
-      max_tokens: 700
+      maxTokens: 700
     });
 
-    let text = '';
-    if (isAsyncIterable<ChatChunk>(response)) {
-      for await (const chunk of response) {
-        text += chunk.choices?.[0]?.delta?.content ?? '';
-      }
-    } else {
-      text = response.choices?.[0]?.message?.content ?? '';
-    }
-
-    const normalized = text.trim();
+    const normalized = execution.text.trim();
     return {
       summary: normalized.slice(0, 600) || `Mission completed for objective: ${input.objective}`,
       keyFindings: toBulletList(normalized, 'No findings returned by provider.'),
       risks: toBulletList(normalized, 'No explicit risks returned by provider.'),
       recommendedActions: toBulletList(normalized, 'No recommendations returned by provider.'),
       provider: input.provider,
+      usageMetering: execution.usageMetering,
       degraded: false
     };
-  } catch (err) {
+    } catch (err) {
+    const reason = err instanceof Error ? err.message : 'Unknown LLM error';
     if (!canUseStubFallback()) {
+      const runtime =
+        err instanceof HybridExecutionError
+          ? {
+              attemptedRoutes: err.attemptedRoutes,
+              failedRoutes: err.failedRoutes
+            }
+          : undefined;
       throw new MissionServiceError(
         'LLM_UNAVAILABLE',
-        `Mission report generation failed and stub fallback is disabled in ${env.RUNTIME_ENV}.`
+        `Mission report generation failed and stub fallback is disabled in ${env.RUNTIME_ENV}.`,
+        runtime ? { runtime } : undefined
       );
     }
 
-    const reason = err instanceof Error ? err.message : 'Unknown LLM error';
+    const attemptedRoutes: RuntimeRoute[] =
+      err instanceof HybridExecutionError && err.attemptedRoutes.length > 0
+        ? [...err.attemptedRoutes, 'stub']
+        : ['stub'];
+    const failedRoutes = err instanceof HybridExecutionError ? err.failedRoutes : undefined;
     return {
       summary: `Stub mission output generated because upstream LLM was unavailable: ${reason}`,
       keyFindings: [
@@ -121,6 +129,18 @@ export async function generateMissionReport(input: {
         'Escalate to observer if mission is material impact.'
       ],
       provider: input.provider,
+      usageMetering: {
+        route: 'stub',
+        adapter: 'local_stub_fallback',
+        provider: input.provider,
+        model: 'stub',
+        attemptedRoutes,
+        failedRoutes,
+        timeoutMs: env.HYBRID_EXEC_TIMEOUT_MS,
+        latencyMs: 0,
+        attempts: attemptedRoutes.length,
+        fallbackUsed: true
+      },
       degraded: true,
       degradedReason: reason
     };

@@ -24,6 +24,7 @@ export type IntentValidationResult = {
   code?:
     | 'THREAD_HALTED'
     | 'INTENT_BLOCKED_IN_DEGRADED_MODE'
+    | 'LENS_NOT_FOUND'
     | 'LENS_PROHIBITED_ACTION'
     | 'LENS_ACTION_NOT_PERMITTED'
     | 'PRISM_HOLDER_APPROVAL_REQUIRED'
@@ -44,9 +45,11 @@ export function createIntentValidator(policies: GovernancePolicies) {
 
   return function validateIntent(input: IntentValidationInput): IntentValidationResult {
     const normalizedIntent = normalize(input.intent);
-    const highRiskRule = policies.highRiskByIntent.get(input.intent);
+    const highRiskRule = policies.highRiskByIntent.get(normalizedIntent);
     const highRisk = Boolean(highRiskRule);
     const lens = policies.contactLensesByDid.get(input.agentDid);
+    const isBreakGlassIntent =
+      normalize(policies.highRiskRegistry.breakGlassPolicy.intent) === normalizedIntent;
 
     if (input.threadState === 'HALTED' && normalizedIntent !== 'EMERGENCY_SHUTDOWN') {
       return {
@@ -58,8 +61,15 @@ export function createIntentValidator(policies: GovernancePolicies) {
       };
     }
 
-    const isBreakGlassIntent =
-      normalize(policies.highRiskRegistry.breakGlassPolicy.intent) === normalizedIntent;
+    if (!lens && !isBreakGlassIntent) {
+      return {
+        allowed: false,
+        code: 'LENS_NOT_FOUND',
+        message: `No contact lens configured for agent ${input.agentDid}.`,
+        requiresApproval: false,
+        highRisk
+      };
+    }
 
     if (
       input.threadState === 'DEGRADED_NO_LLM' &&
@@ -88,7 +98,7 @@ export function createIntentValidator(policies: GovernancePolicies) {
       }
 
       const permitted = lens.permittedActivities.map(normalize);
-      if (permitted.length > 0 && !permitted.includes(normalizedIntent)) {
+      if (!permitted.includes(normalizedIntent)) {
         return {
           allowed: false,
           code: 'LENS_ACTION_NOT_PERMITTED',

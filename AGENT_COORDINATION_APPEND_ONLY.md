@@ -1,0 +1,2369 @@
+# Agent Coordination Ledger (Append-Only)
+
+Purpose: shared handoff and coordination log for parallel implementers.
+Rule: never edit or delete prior entries; append new entries at the bottom only.
+
+Entry format:
+- Timestamp (local): YYYY-MM-DD HH:MM:SS TZ
+- Actor: <name/session>
+- Scope: <short scope>
+- Action: <what changed or decision made>
+- Status: <todo|in_progress|blocked|done>
+- Blockers: <none or short list>
+- Next: <next concrete step>
+
+---
+
+- Timestamp (local): 2026-02-25 19:17:44 MST
+- Actor: codex-main
+- Scope: North-star MVP acceleration
+- Action: Created append-only coordination ledger and seeded parallel work packets.
+- Status: done
+- Blockers: none
+- Next: Start executing Packet A locally while others pick up Packet B/C.
+
+---
+
+- Timestamp (local): 2026-02-25 19:17:44 MST
+- Actor: codex-main
+- Scope: Packet A (engine/protocol)
+- Action: Implement canonical cycle event taxonomy at API boundary with validation + persistence hooks for: `seat_taken`, `perspective_submitted`, `synthesis_returned`, `lens_upgraded`.
+- Status: todo
+- Blockers: none
+- Next: Add shared enum/schema in engine and enforce on all Sphere write routes.
+
+---
+
+- Timestamp (local): 2026-02-25 19:17:44 MST
+- Actor: codex-main
+- Scope: Packet B (webapp)
+- Action: Implement end-to-end seat-to-synthesis UI flow in Telegram app with replay/SSE/ack handling and unified error UX for `degraded|halted|quorum` conditions.
+- Status: todo
+- Blockers: none
+- Next: Wire pages + client stream loop + retry/backoff in TMA.
+
+---
+
+- Timestamp (local): 2026-02-25 19:17:44 MST
+- Actor: codex-main
+- Scope: Packet C (quality)
+- Action: Add e2e contract coverage for full MVP path: `take_seat -> submit_perspective -> receive_synthesis -> lens_upgrade -> replay -> ack`.
+- Status: todo
+- Blockers: none
+- Next: Add API integration tests in engine and Playwright happy-path test in `tma`.
+
+---
+
+- Timestamp (local): 2026-02-25 19:17:44 MST
+- Actor: codex-main
+- Scope: Packet D (runtime)
+- Action: Build first hybrid execution router: internal default + external provider adapter with timeout, fallback, and usage metering fields.
+- Status: todo
+- Blockers: provider contract may need final freeze
+- Next: Implement adapter interface + one concrete provider path behind feature flag.
+
+---
+
+- Timestamp (local): 2026-02-25 19:20:13 MST
+- Actor: codex-main
+- Scope: Packet A (engine/protocol)
+- Action: Added canonical cycle taxonomy at API boundary via `POST /api/v1/sphere/cycle-events` (and c2 alias), strict schema validation, persisted intent mapping (`SEAT_TAKEN`, `PERSPECTIVE_SUBMITTED`, `SYNTHESIS_RETURNED`, `LENS_UPGRADED`), and capabilities contract publication.
+- Status: done
+- Blockers: none
+- Next: Implement Packet B UI flow to emit `/cycle-events` writes and consume replay/SSE/ack.
+
+---
+
+- Timestamp (local): 2026-02-25 19:20:13 MST
+- Actor: codex-main
+- Scope: Packet C (quality)
+- Action: Added boundary tests covering cycle taxonomy capability contract, accepted cycle event writes, and rejection of unknown event types. Verified with route test suite and engine build.
+- Status: partial
+- Blockers: missing end-to-end browser test for full seat->synthesis loop
+- Next: Add Playwright happy-path test for cycle event flow.
+
+---
+
+- Timestamp (local): 2026-02-25 19:22:20 MST
+- Actor: codex-gpt5
+- Scope: Packet B (webapp)
+- Action: Claimed Packet B for Telegram seat-to-synthesis flow,  writes, replay/SSE/ack client behavior, and degraded/halted/quorum UI handling.
+- Status: in_progress
+- Blockers: none
+- Next: Create branch and implement Packet B changes in TMA + API client only.
+
+---
+
+- Timestamp (local): 2026-02-25 19:22:36 MST
+- Actor: codex-gpt5
+- Scope: Packet B (webapp)
+- Action: Correction entry: Packet B claim includes /cycle-events writes (previous line omitted path due shell interpolation).
+- Status: in_progress
+- Blockers: none
+- Next: Create branch codex/packet-b-seat-flow and implement Packet B scope.
+
+---
+
+- Timestamp (local): 2026-02-25 19:22:35 MST
+- Actor: codex-gpt5-runtime
+- Scope: Packet D (runtime)
+- Action: Claimed Packet D for hybrid execution router (internal + external provider adapter), timeout/fallback behavior, and usage metering fields.
+- Status: in_progress
+- Blockers: none
+- Next: Create branch `codex/d-hybrid-runtime-router` and implement runtime router in engine scope only.
+
+---
+
+- Timestamp (local): 2026-02-25 19:26:17 MST
+- Actor: codex-gpt5-runtime
+- Scope: Packet D (runtime)
+- Action: Implemented hybrid execution router with ordered internal/external routing, timeout guard, fallback behavior, and usage metering fields; wired mission generation through router and exposed metering in mission report payloads.
+- Status: done
+- Blockers: none
+- Next: Handoff packet summary to coordinator.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/runtime/hybridExecutionRouter.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/runtime/hybridExecutionRouter.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/agents/missionService.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/config/env.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/runtime/hybridExecutionRouter.test.ts => PASS (3/3)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (80/80)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+
+- Timestamp (local): 2026-02-25 19:26:33 MST
+- Actor: codex-gpt5-quality
+- Scope: Packet C (quality)
+- Action: Claimed Packet C for end-to-end coverage of seat -> perspective -> synthesis -> lens upgrade -> replay -> ack.
+- Status: in_progress
+- Blockers: none
+- Next: Create branch `codex/c-cycle-e2e-coverage` and implement Packet C test scope only.
+
+---
+
+- Timestamp (local): 2026-02-25 19:30:26 MST
+- Actor: codex-main
+- Scope: Packet B (webapp)
+- Action: Added signed Sphere client support in TMA (Ed25519 did:key identity, canonical JWS signing, cycle-event write helper, replay/ack endpoints, fetch-based SSE stream parser) and implemented Forge Cycle tab with seat/perspective/synthesis/lens-upgrade actions, replay sync, stream connect/disconnect, auto-ack, and degraded/halted/quorum/auth error banners.
+- Status: done
+- Blockers: none
+- Next: Packet C e2e happy-path test for cycle loop in Telegram webapp.
+
+---
+
+- Timestamp (local): 2026-02-25 19:39:28 MST
+- Actor: codex-gpt5-quality
+- Scope: Packet C (quality)
+- Action: Completed end-to-end coverage for seat -> perspective -> synthesis -> lens upgrade -> replay -> ack flow by adding a Playwright API-path cycle-flow test and stabilizing Forge cycle UI e2e mocks/assertions for current Sphere boundary behavior.
+- Status: done
+- Blockers: none
+- Next: Handoff packet summary to coordinator.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/e2e/cycle-flow.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/e2e/forge-cycle.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (80/80)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine' run test:e2e => PASS (7/7)
+
+---
+
+- Timestamp (local): 2026-02-25 20:01:07 MST
+- Actor: codex-main
+- Scope: Packet C (quality)
+- Action: Added Playwright coverage for Forge Cycle flow (`e2e/forge-cycle.test.ts`) including happy path seat write + replay visibility and degraded mode error rendering.
+- Status: partial
+- Blockers: full seat->perspective->synthesis->lens-upgrade->replay->ack E2E still pending stream/ack assertions
+- Next: Extend E2E to assert SSE-driven auto-ack path and multi-event progression.
+
+---
+
+- Timestamp (local): 2026-02-25 20:01:20 MST
+- Actor: codex-gpt5
+- Scope: Packet B (webapp)
+- Action: Implemented Forge Cycle UI end-to-end flow for seat -> perspective -> synthesis -> lens upgrade with canonical /cycle-events writes, replay sync, SSE stream consumption, auto-ack writes, and degraded/halted/quorum UX handling.
+- Status: done
+- Blockers: none
+- Next: Hand off Packet B branch details and validated command outputs.
+- Changed Files:
+  - tma/src/pages/ForgePage.tsx
+  - tma/src/lib/api.ts
+- Validation:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test (pass; rerun outside sandbox due local socket EPERM in sandbox)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build (pass)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build (pass)
+
+---
+
+- Timestamp (local): 2026-02-25 20:02:08 MST
+- Actor: codex-gpt5-quality
+- Scope: Post-packet contract hardening (cycle payload schema freeze)
+- Action: Claimed next hardening item to enforce event-specific cycle payload validation at /api/v1/sphere/cycle-events with boundary tests.
+- Status: in_progress
+- Blockers: none
+- Next: Implement schema checks for seat/perspective/synthesis/lens_upgraded payloads and verify required test/build suite.
+
+---
+
+- Timestamp (local): 2026-02-25 20:04:21 MST
+- Actor: codex-gpt5-quality
+- Scope: Post-packet contract hardening (cycle payload schema freeze)
+- Action: Implemented event-specific payload contract validation for /api/v1/sphere/cycle-events (seat_taken, perspective_submitted, synthesis_returned, lens_upgraded), enforced payload/envelope cycleEventType consistency, and added boundary regression tests.
+- Status: done
+- Blockers: none
+- Next: Handoff branch for merge review.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/c2Routes.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/c2Routes.boundary.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/api/v1/c2Routes.boundary.test.ts => PASS (26/26)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (85/85)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine' run test:e2e => PASS (7/7)
+
+---
+
+- Timestamp (local): 2026-02-25 20:14:25 MST
+- Actor: codex-gpt5-quality
+- Scope: Post-packet contract hardening (capabilities contract publication)
+- Action: Added machine-readable cycle event payload contracts to /api/v1/sphere/capabilities and locked response shape with boundary assertions.
+- Status: done
+- Blockers: none
+- Next: Handoff branch for merge review.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/c2Routes.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/c2Routes.boundary.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/api/v1/c2Routes.boundary.test.ts => PASS (26/26)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (85/85)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine' run test:e2e => PASS (7/7)
+
+---
+
+- Timestamp (local): 2026-02-25 20:21:37 MST
+- Actor: codex-gpt5-quality
+- Scope: Post-packet hardening (lens upgrade deterministic rule binding)
+- Action: Claimed next build item to add governance-backed lens upgrade rule registry and enforce rule/version tuple validation for lens_upgraded cycle events.
+- Status: in_progress
+- Blockers: none
+- Next: Add governance/lens_upgrade_rules.json + policy loader support + route validation + tests.
+
+- Timestamp (local): 2026-02-25 20:17:03 MST
+- Actor: codex-gpt5-quality
+- Scope: Post-packet hardening (lens upgrade deterministic rule binding)
+- Action: Correction: previous in-progress entry timestamp typo; active claim start is 2026-02-25 20:17:03 MST.
+- Status: in_progress
+- Blockers: none
+- Next: Continue implementation.
+
+---
+
+- Timestamp (local): 2026-02-25 20:19:26 MST
+- Actor: codex-main
+- Scope: Packet C (quality)
+- Action: Extended `e2e/forge-cycle.test.ts` with full cycle progression + ACK assertions (`seat -> perspective -> synthesis -> lens upgrade`) and SSE stream auto-ACK validation on `log_entry`. Also aligned stream reconnect timing in Forge UI to protocol retry hints.
+- Status: done
+- Blockers: none
+- Next: Packet D hybrid runtime adapter scaffold (external provider routing + metering fields).
+
+---
+
+- Timestamp (local): 2026-02-25 20:20:41 MST
+- Actor: codex-gpt5
+- Scope: Post-packet hardening (lens upgrade deterministic rule binding)
+- Action: Continuing in-progress lens-upgrade rule binding hardening to finish runtime wiring (governance registry file + route governance injection).
+- Status: in_progress
+- Blockers: none
+- Next: Add governance/lens_upgrade_rules.json, wire governancePolicies into Sphere route construction, and run required validation commands.
+
+---
+
+- Timestamp (local): 2026-02-25 20:20:42 MST
+- Actor: codex-gpt5-quality
+- Scope: Post-packet hardening (lens upgrade deterministic rule binding)
+- Action: Added canonical governance lens upgrade registry (`governance/lens_upgrade_rules.json`), extended policy loader with rule/version validation + checksums, wired `/api/v1/sphere/cycle-events` lens_upgraded rule tuple enforcement against governance policy, and published rule-binding metadata in capabilities.
+- Status: done
+- Blockers: none
+- Next: Handoff branch for merge review.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/governance/lens_upgrade_rules.json
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/governance/policyLoader.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/governance/policyLoader.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/governance/contactLensValidator.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/c2Routes.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/c2Routes.boundary.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/index.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/governance/policyLoader.test.ts => PASS (6/6)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/governance/contactLensValidator.test.ts => PASS (4/4)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/api/v1/c2Routes.boundary.test.ts => PASS (30/30)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (91/91)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine' run test:e2e => PASS (9/9)
+
+---
+
+- Timestamp (local): 2026-02-25 20:21:12 MST
+- Actor: codex-main
+- Scope: Packet B (webapp interoperability)
+- Action: Hardened Open Claw command-console error handling for standardized Sphere envelope (`code`, `retryable`, `traceId`) with explicit degraded/halted/quorum/auth classification in UI; preserved deep-link and command execution flows.
+- Status: done
+- Blockers: none
+- Next: Add Open Claw command cards for canonical Sphere cycle/replay/ack endpoints if we decide to expose protocol ops directly in deck.
+
+---
+
+- Timestamp (local): 2026-02-25 20:22:26 MST
+- Actor: codex-gpt5
+- Scope: Post-packet hardening (lens upgrade deterministic rule binding)
+- Action: Blocked due overlap: codex-gpt5-quality already completed this file area and logged done; avoiding duplicate rework.
+- Status: blocked
+- Blockers: file-area collision with completed work item.
+- Next: Switch to next unclaimed item: Open Claw Sphere protocol command cards.
+
+---
+
+- Timestamp (local): 2026-02-25 20:22:26 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (Open Claw Sphere protocol cards)
+- Action: Claimed next item to expose canonical Sphere protocol endpoints in Open Claw command deck for webapp-side interoperability testing.
+- Status: in_progress
+- Blockers: none
+- Next: Add Sphere command definitions in tma command catalog and validate builds/tests.
+
+---
+
+- Timestamp (local): 2026-02-25 20:22:56 MST
+- Actor: codex-main
+- Scope: Packet B (webapp interoperability)
+- Action: Added Open Claw advanced custom-request mode (method + path override) to hit canonical Sphere endpoints directly without waiting for catalog updates. Added e2e coverage for custom mode execution against `/api/v1/sphere/capabilities`.
+- Status: done
+- Blockers: none
+- Next: add curated “Sphere Protocol” quick templates in Open Claw (cycle-events/replay/acks/stream/ack) for one-click execution.
+
+---
+
+- Timestamp (local): 2026-02-25 20:24:08 MST
+- Actor: codex-main
+- Scope: Packet B (webapp interoperability)
+- Action: Added curated Sphere protocol quick templates to Open Claw custom mode (Capabilities, Status, Cycle Event, Replay, Stream, Acks, Ack Write) for one-click setup of canonical protocol operations.
+- Status: done
+- Blockers: none
+- Next: add lightweight validation hints for template placeholders (`{threadId}`, signatures) before execution.
+
+---
+
+- Timestamp (local): 2026-02-25 20:24:36 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (Open Claw Sphere protocol cards)
+- Action: Added canonical Sphere protocol command cards to Open Claw and implemented path-parameter resolution so thread-scoped endpoints can be executed from query/body inputs.
+- Status: done
+- Blockers: none
+- Next: Hand off for merge review or continue with next unclaimed runtime/product item.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/lib/commands.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/pages/EngineRoomPage.tsx
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (91/91)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+- Timestamp (local): 2026-02-25 20:25:16 MST
+- Actor: codex-gpt5
+- Scope: Packet B (webapp interoperability) follow-on
+- Action: Claimed placeholder validation hints for Open Claw Sphere templates before execution (threadId/signature guidance).
+- Status: in_progress
+- Blockers: none
+- Next: Create packet branch, implement preflight validation UI/errors, run required validations.
+
+---
+
+---
+
+- Timestamp (local): 2026-02-25 20:28:24 MST
+- Actor: codex-main
+- Scope: Packet B (webapp interoperability)
+- Action: Added Open Claw preflight validation for Sphere custom requests: blocks template placeholders (`did:key:zYourAgentDid`, `compact-jws-signature`, repeated demo UUIDs), validates UUID fields/signature format, and returns actionable fix list before network execution. Added e2e test coverage for preflight block behavior.
+- Status: done
+- Blockers: none
+- Next: expose inline helper to auto-generate UUIDs for required fields in custom mode.
+
+- Timestamp (local): Master
+- Actor: codex-gpt5
+- Scope: Packet B (webapp interoperability) follow-on
+- Action: Added explicit `{token}` placeholder detection in Open Claw Sphere template preflight and aligned Sphere quick templates to use unresolved placeholders (`{threadId}`, `{agentSignature}`) so users get deterministic hints before execution. Updated Open Claw e2e assertion to verify unresolved placeholder blocking.
+- Status: done
+- Blockers: none
+- Next: Handoff for merge review.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/pages/EngineRoomPage.tsx
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/e2e/open-claw.test.ts
+- Test results:
+  - npm --prefix /Users/paulcooper/Documents/Codex
+- Timestamp (local): Folder/sphere-thread-engine/engine run test => PASS (91/91)
+  - npm --prefix /Users/paulcooper/Documents/Codex
+- Actor: codex-gpt5
+- Scope: Packet B (webapp interoperability) follow-on
+- Action: Added explicit `{token}` placeholder detection in Open Claw Sphere template preflight and aligned Sphere quick templates to use unresolved placeholders (`{threadId}`, `{agentSignature}`) so users get deterministic hints before execution. Updated Open Claw e2e assertion to verify unresolved placeholder blocking.
+- Status: done
+- Blockers: none
+- Next: Handoff for merge review.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/pages/EngineRoomPage.tsx
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/e2e/open-claw.test.ts
+- Test results:
+  - npm --prefix /Users/paulcooper/Documents/Codex
+- Timestamp (local): Master
+- Actor: codex-gpt5
+- Scope: Packet B (webapp interoperability) follow-on
+- Action: Added explicit `{token}` placeholder detection in Open Claw Sphere template preflight and aligned Sphere quick templates to use unresolved placeholders (`{threadId}`, `{agentSignature}`) so users get deterministic hints before execution. Updated Open Claw e2e assertion to verify unresolved placeholder blocking.
+- Status: done
+- Blockers: none
+- Next: Handoff for merge review.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/pages/EngineRoomPage.tsx
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/e2e/open-claw.test.ts
+- Test results:
+  - npm --prefix /Users/paulcooper/Documents/Codex
+- Timestamp (local): Folder/sphere-thread-engine/engine run build => PASS
+  - npm --prefix /Users/paulcooper/Documents/Codex
+- Actor: codex-gpt5
+- Scope: Packet B (webapp interoperability) follow-on
+- Action: Added explicit `{token}` placeholder detection in Open Claw Sphere template preflight and aligned Sphere quick templates to use unresolved placeholders (`{threadId}`, `{agentSignature}`) so users get deterministic hints before execution. Updated Open Claw e2e assertion to verify unresolved placeholder blocking.
+- Status: done
+- Blockers: none
+- Next: Handoff for merge review.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/pages/EngineRoomPage.tsx
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/e2e/open-claw.test.ts
+- Test results:
+  - npm --prefix /Users/paulcooper/Documents/Codex
+- Timestamp (local): Master
+- Actor: codex-gpt5
+- Scope: Packet B (webapp interoperability) follow-on
+- Action: Added explicit `{token}` placeholder detection in Open Claw Sphere template preflight and aligned Sphere quick templates to use unresolved placeholders (`{threadId}`, `{agentSignature}`) so users get deterministic hints before execution. Updated Open Claw e2e assertion to verify unresolved placeholder blocking.
+- Status: done
+- Blockers: none
+- Next: Handoff for merge review.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/pages/EngineRoomPage.tsx
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/e2e/open-claw.test.ts
+- Test results:
+  - npm --prefix /Users/paulcooper/Documents/Codex
+- Timestamp (local): Folder/sphere-thread-engine/tma run build => PASS
+
+---
+
+- Actor: codex-gpt5
+- Scope: Packet B (webapp interoperability) follow-on
+- Action: Added explicit `{token}` placeholder detection in Open Claw Sphere template preflight and aligned Sphere quick templates to use unresolved placeholders (`{threadId}`, `{agentSignature}`) so users get deterministic hints before execution. Updated Open Claw e2e assertion to verify unresolved placeholder blocking.
+- Status: done
+- Blockers: none
+- Next: Handoff for merge review.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/pages/EngineRoomPage.tsx
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/e2e/open-claw.test.ts
+- Test results:
+  - npm --prefix /Users/paulcooper/Documents/Codex
+- Timestamp (local): 2026-02-25 20:29:21 MST
+- Actor: codex-gpt5
+- Scope: Packet B (webapp interoperability) follow-on
+- Action: Added explicit `{token}` placeholder detection in Open Claw Sphere template preflight and aligned Sphere quick templates to use unresolved placeholders (`{threadId}`, `{agentSignature}`) so users get deterministic hints before execution. Updated Open Claw e2e assertion to verify unresolved placeholder blocking.
+- Status: done
+- Blockers: none
+- Next: Handoff for merge review.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/pages/EngineRoomPage.tsx
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/e2e/open-claw.test.ts
+- Test results:
+  - npm --prefix /Users/paulcooper/Documents/Codex- Timestamp (local): 2026-02-25 20:29:57 MST
+- Actor: codex-gpt5
+- Scope: Packet B (webapp interoperability) follow-on
+- Action: Correction entry: prior done append was malformed due shell quoting in command output. Canonical completion details are in this entry.
+- Status: done
+- Blockers: none
+- Next: Handoff for merge review.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/pages/EngineRoomPage.tsx
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/e2e/open-claw.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (91/91)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+
+---
+
+- Timestamp (local): 2026-02-25 20:31:59 MST
+- Actor: codex-gpt5-quality
+- Scope: Post-packet build continuation (Telegram shared-thread invite flow)
+- Action: Implemented Telegram cycle thread invite/deep-link flow: parse `startapp=cycle_<threadId>`, route into `/forge?cycleThreadId=...`, auto-open Cycle tab, persist threadId in URL, and provide copyable invite link with optional `VITE_TMA_BOT_USERNAME`. Added e2e coverage for shared-thread launch.
+- Status: done
+- Blockers: none
+- Next: Optional backend enhancement to mint per-thread invite tokens if you want opaque IDs instead of raw thread UUID links.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/lib/cycleInvite.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/App.tsx
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/pages/ForgePage.tsx
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/e2e/open-claw.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/README.md
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (91/91)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine' run test:e2e => PASS (12/12)
+
+---
+
+- Timestamp (local): 2026-02-25 20:41:43 MST
+- Actor: codex-gpt5
+- Scope: Sphere BFF API-key interop + Open Claw write-contract hardening
+- Action: Added optional/required `x-agent-api-key` enforcement on `/api/v1/bff/sphere/*` write routes (with principal mapping), removed raw key forwarding to Sphere, and exposed agent principal response header for observability. Added TMA-side API key storage helpers and wired key injection into all API requests. Extended Open Claw with in-app API key save/clear controls and strengthened Sphere preflight to enforce required write-envelope fields before dispatch.
+- Status: done
+- Blockers: none
+- Next: Optionally add per-thread invite membership checks keyed by `agentPrincipal` if we want key-based room ACLs beyond write gating.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/config/env.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/.env.example
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/c2Routes.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/c2StandaloneRoutes.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/lib/agentApiKey.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/lib/api.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/pages/EngineRoomPage.tsx
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/e2e/open-claw.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/api/v1/sphereBffRoutes.test.ts src/api/v1/c2Routes.boundary.test.ts src/api/v1/c2StandaloneRoutes.test.ts => PASS (50/50)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine' run test:e2e -- e2e/open-claw.test.ts => PASS (7/7)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+
+- Timestamp (local): 2026-02-25 21:27:42 MST
+- Actor: codex-gpt5
+- Scope: Thread ACL + invite-token membership flow
+- Action: Implemented persistent principal-based thread access controls with invite tokens and wired enforcement into Sphere BFF writes. Added new BFF endpoints for invite create/accept/member list, automatic owner bootstrap on first successful thread write, and denial for non-members on protected writes. Updated Telegram webapp flow to support `cycle_invite_<code>` start params, accept invites on Forge load, and generate/copy invite links by minting invite tokens. Extended Open Claw catalog/templates for the new membership endpoints.
+- Status: done
+- Blockers: none
+- Next: If desired, add invite revoke endpoint and per-invite metadata (label/purpose) for operator control.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/sphere/threadAccessRegistry.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/index.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/c2Routes.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/c2StandaloneRoutes.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/lib/cycleInvite.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/App.tsx
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/lib/api.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/lib/commands.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/pages/ForgePage.tsx
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/pages/EngineRoomPage.tsx
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/e2e/open-claw.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/api/v1/sphereBffRoutes.test.ts src/api/v1/c2Routes.boundary.test.ts src/api/v1/c2StandaloneRoutes.test.ts => PASS (54/54)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine' run test:e2e -- e2e/open-claw.test.ts => PASS (8/8)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+- Timestamp (local): 2026-02-25 21:48:33 MST
+- Actor: codex-gpt5
+- Scope: Packet B (webapp interoperability) follow-on
+- Action: Claimed invite lifecycle hardening: add invite revoke endpoint and invite metadata support for thread membership controls + Open Claw contract coverage.
+- Status: in_progress
+- Blockers: none
+- Next: Create packet branch, implement backend + command catalog updates, run required validations.
+
+---
+- Timestamp (local): 2026-02-25 21:53:25 MST
+- Actor: codex-gpt5
+- Scope: Packet B (webapp interoperability) invite lifecycle hardening
+- Action: Completed invite lifecycle interoperability slice by wiring Sphere BFF routes for invite list/revoke/member remove, extending registry-backed route tests, and exposing the new operations in TMA API + Open Claw command catalog/quick templates.
+- Status: done
+- Blockers: none
+- Next: Optional Forge UI panel for owner controls (member list/remove + invite list/revoke) if we want this surfaced outside Open Claw.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/lib/api.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/lib/commands.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/pages/EngineRoomPage.tsx
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/api/v1/sphereBffRoutes.test.ts src/api/v1/c2Routes.boundary.test.ts src/api/v1/c2StandaloneRoutes.test.ts => PASS (58/58)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine' run test:e2e -- e2e/open-claw.test.ts => PASS (8/8)
+
+---
+- Timestamp (local): 2026-02-25 21:56:57 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (invite lifecycle hardening)
+- Action: Finalized canonical thread invite lifecycle and ACL controls on Sphere BFF. Added invite metadata (`label`, `purpose`) support, canonicalized revoke/remove endpoints to thread-scoped routes, extended Open Claw command contract to match (`DELETE` member removal, thread-scoped invite revoke), and updated Forge UI/API callsites for the new revoke signature.
+- Status: done
+- Blockers: none
+- Next: Optional operator UX enhancement: add invite reason/audit note persistence and expose it in invite list rows.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/sphere/threadAccessRegistry.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/lib/api.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/lib/commands.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/pages/ForgePage.tsx
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (102/102)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-25 21:56:46 MST
+- Actor: codex-gpt5
+- Scope: Forge access-controls UX + command contract cleanup
+- Action: Added Forge Cycle in-app ACL controls (sync members/invites, revoke invite, remove member) and wired new API client calls. Corrected Open Claw command definitions to match BFF contract ( and ) and removed unsupported  command method.
+- Status: done
+- Blockers: none
+- Next: If needed, add owner-role gating hints in UI using the members response so non-owners see controls as disabled with explanation.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/pages/ForgePage.tsx
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/lib/commands.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine' run test:e2e -- e2e/open-claw.test.ts => PASS (8/8)
+
+---
+- Timestamp (local): 2026-02-25 21:56:56 MST
+- Actor: codex-gpt5
+- Scope: Log correction (append-only)
+- Action: Correcting prior log line with escaped endpoint literals. Open Claw contract alignment: `POST /api/v1/sphere/invites/:inviteCode/revoke` and `POST /api/v1/sphere/threads/:threadId/members/:memberPrincipal/remove`; unsupported `DELETE` command method removed.
+- Status: done
+- Blockers: none
+- Next: none
+
+---
+- Timestamp (local): 2026-02-25 21:58:41 MST
+- Actor: codex-gpt5
+- Scope: Packet B (webapp interoperability) follow-on
+- Action: Completed invite lifecycle hardening across Sphere BFF + Open Claw surface: wired thread-scoped invite revoke payload validation with optional reason, extended thread invite persistence with revocation metadata (, ), and aligned Open Claw quick templates/api contracts to canonical thread-scoped revoke/member-remove endpoints.
+- Status: done
+- Blockers: none
+- Next: Handoff for merge review.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/sphere/threadAccessRegistry.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/lib/api.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/lib/commands.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/pages/EngineRoomPage.tsx
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (102/102)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-25 21:58:54 MST
+- Actor: codex-gpt5
+- Scope: Log correction (append-only)
+- Action: Correction for prior entry: revocation metadata fields are revokedBy and revocationReason.
+- Status: done
+- Blockers: none
+- Next: none
+
+---
+- Timestamp (local): 2026-02-25 21:59:31 MST
+- Actor: codex-gpt5
+- Scope: Contract reconciliation + Forge access controls
+- Action: Reconciled TMA command/client contract with current Sphere BFF routes (thread-scoped invite revoke, DELETE member remove), added Forge in-app thread access controls (members/invites sync + revoke/remove actions), and revalidated builds/tests.
+- Status: done
+- Blockers: none
+- Next: Optional owner-role UX gating so non-owners see disabled controls with explicit reason.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/pages/ForgePage.tsx
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/lib/commands.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/lib/api.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/api/v1/sphereBffRoutes.test.ts src/api/v1/c2Routes.boundary.test.ts src/api/v1/c2StandaloneRoutes.test.ts => PASS (58/58)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine' run test:e2e -- e2e/open-claw.test.ts => PASS (8/8)
+
+---
+- Timestamp (local): 2026-02-25 22:05:46 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (Forge owner-role UX gating)
+- Action: Claimed owner-role gating UX for Forge thread access controls so non-owners get disabled controls with explicit reason text.
+- Status: in_progress
+- Blockers: none
+- Next: Implement gating logic + UI state, then run required validations.
+
+---
+- Timestamp (local): 2026-02-25 22:08:09 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (Forge owner-role UX gating)
+- Action: Implemented principal-aware owner gating for Forge thread access controls. Members endpoint now returns active principal, Forge derives current role from membership list, disables remove/revoke actions when role/ownership rules are not satisfied, and shows explicit reason text for restricted controls.
+- Status: done
+- Blockers: none
+- Next: Optional e2e UI assertion coverage for disabled access controls under non-owner principal.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/lib/api.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/pages/ForgePage.tsx
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (102/102)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-25 22:08:12 MST
+- Actor: codex-gpt5
+- Scope: Forge owner-gating principal resolution
+- Action: Added response-header principal capture in TMA API member/invite fetch paths () so Forge access-control gating can reliably resolve current principal even when body fields drift.
+- Status: done
+- Blockers: none
+- Next: none
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/lib/api.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine' run test:e2e -- e2e/open-claw.test.ts => PASS (8/8)
+
+---
+- Timestamp (local): 2026-02-25 22:08:22 MST
+- Actor: codex-gpt5
+- Scope: Log correction (append-only)
+- Action: Correcting prior line: principal capture header is `x-sphere-agent-principal`.
+- Status: done
+- Blockers: none
+- Next: none
+
+---
+- Timestamp (local): 2026-02-25 22:10:38 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (Forge owner-role UX gating)
+- Action: Completed owner-role gating hardening by exposing `requestPrincipal` + `requestRole` on thread members/invites BFF responses, updating Forge access sync to consume server-declared role hints with fallback, and preserving explicit non-owner disable messaging for remove/revoke controls.
+- Status: done
+- Blockers: none
+- Next: Optional UX polish: surface invite revocation metadata (`revokedBy`, `revocationReason`) inline in Forge invite cards.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/lib/api.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/pages/ForgePage.tsx
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (102/102)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-25 22:12:19 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (Forge revocation metadata UX)
+- Action: Claimed revocation metadata visibility polish for Forge access controls: surface invite label/purpose/expiry and revocation attribution fields, and wire optional revoke reason capture.
+- Status: in_progress
+- Blockers: none
+- Next: Implement Forge UI + API payload update, run required validations.
+
+---
+- Timestamp (local): 2026-02-25 22:12:30 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (Forge invite metadata UX polish)
+- Action: Claimed invite card metadata polish to render revocation details (, ) inline in Forge thread access panel.
+- Status: in_progress
+- Blockers: none
+- Next: Create branch, implement UI rendering + validate builds/tests.
+
+---
+- Timestamp (local): 2026-02-25 22:13:52 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (Forge revocation metadata UX)
+- Action: Completed Forge invite-card auditability polish by surfacing invite metadata (`label`, `purpose`, creator, expiry) plus revocation attribution (`revokedBy`, `revocationReason`, `revokedAt`) and wiring optional revoke reason capture on action dispatch.
+- Status: done
+- Blockers: none
+- Next: Optional e2e addition for revoked-invite card rendering + reason text.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/pages/ForgePage.tsx
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (102/102)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-25 22:13:33 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (Forge invite metadata UX polish)
+- Action: Blocked/scope already satisfied in current file area (Forge invite cards already show label/purpose/creator and revoked metadata). Avoiding duplicate edits.
+- Status: blocked
+- Blockers: File-area overlap with already-implemented behavior.
+- Next: Switch to Packet C quality follow-on for e2e access-control gating assertions.
+
+---
+- Timestamp (local): 2026-02-25 22:13:40 MST
+- Actor: codex-gpt5
+- Scope: Packet C follow-on (quality)
+- Action: Claimed e2e coverage for Forge access-controls owner gating (non-owner disabled remove/revoke with explicit reason text).
+- Status: in_progress
+- Blockers: none
+- Next: Add Playwright assertions in forge cycle test and run required validations including test:e2e.
+
+---
+- Timestamp (local): 2026-02-25 22:16:58 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (Forge revocation metadata UX)
+- Action: Added coverage and polish for revocation metadata/owner controls: extended Forge Cycle e2e access-control test to assert invite metadata + revoked attribution rendering, and added an owner-path e2e test that verifies prompt-captured revoke reason is sent to the BFF revoke endpoint and rendered back in the UI.
+- Status: done
+- Blockers: none
+- Next: Optional: add API contract test for `requestRole`/`requestPrincipal` presence on both members and invites responses under BFF auth.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/e2e/forge-cycle.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/pages/ForgePage.tsx
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine' run test:e2e -- e2e/forge-cycle.test.ts => PASS (6/6)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (102/102)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+
+---
+- Timestamp (local): 2026-02-25 22:16:50 MST
+- Actor: codex-gpt5
+- Scope: Packet C follow-on (quality)
+- Action: Added Playwright coverage for Forge owner-role access controls to verify non-owner principals see explicit gating reason text and have remove/revoke controls disabled.
+- Status: done
+- Blockers: none
+- Next: Optional Packet C expansion to assert owner paths remain enabled while member paths are disabled in the same flow.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/e2e/forge-cycle.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (102/102) [initial run had one transient socket hang up in sphereBffRoutes.test.ts, rerun passed]
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine' run test:e2e => PASS (16/16)
+- Timestamp (local): 2026-02-25 22:17:26 MST
+- Actor: codex-gpt5
+- Scope: Packet C follow-on (BFF contract null-role fallback)
+- Action: Claimed contract hardening tests for `requestPrincipal`/`requestRole` response fields on thread members/invites when membership role lookup returns null.
+- Status: in_progress
+- Blockers: none
+- Next: Add boundary tests in sphereBffRoutes.test.ts and run required validations.
+
+---
+
+---
+- Timestamp (local): 2026-02-25 22:17:36 MST
+- Actor: codex-gpt5
+- Scope: Packet C follow-on (BFF role/principal contract tests)
+- Action: Claimed quality hardening to add explicit contract assertions for requestPrincipal/requestRole on both thread members and invites BFF responses.
+- Status: in_progress
+- Blockers: none
+- Next: Add/adjust sphereBffRoutes tests and run required validation commands.
+
+---
+- Timestamp (local): 2026-02-25 22:17:59 MST
+- Actor: codex-gpt5
+- Scope: Packet C follow-on (BFF role/principal contract tests)
+- Action: Blocked/scope already satisfied. Existing sphereBffRoutes tests already assert requestPrincipal/requestRole presence for both members and invites paths, including null-role fallback behavior.
+- Status: blocked
+- Blockers: File-area overlap with already-covered assertions in engine/src/api/v1/sphereBffRoutes.test.ts.
+- Next: Switch to next unclaimed Packet C quality increment for owner-vs-member access-control behavior.
+
+---
+- Timestamp (local): 2026-02-25 22:17:59 MST
+- Actor: codex-gpt5
+- Scope: Packet C follow-on (owner/member access-control behavior)
+- Action: Claimed e2e coverage to assert owner principals keep remove/revoke controls enabled while non-owner principals are disabled.
+- Status: in_progress
+- Blockers: none
+- Next: Extend forge-cycle Playwright tests with owner-path enabled assertions and rerun required validation commands.
+- Timestamp (local): 2026-02-25 22:18:04 MST
+- Actor: codex-gpt5
+- Scope: Packet C follow-on (BFF contract null-role fallback)
+- Action: Completed BFF contract hardening by adding explicit tests that `requestPrincipal` is still returned and `requestRole` resolves to null when membership lookup misses for both `/threads/:threadId/members` and `/threads/:threadId/invites` responses.
+- Status: done
+- Blockers: none
+- Next: Optional: add the same null-role fallback assertion in any consumer-side contract matrix docs.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/api/v1/sphereBffRoutes.test.ts => PASS (17/17)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (104/104)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+
+---
+- Timestamp (local): 2026-02-25 22:18:54 MST
+- Actor: codex-gpt5
+- Scope: Packet C follow-on (owner/member access-control behavior)
+- Action: Completed quality hardening by extending Forge Cycle owner-path e2e coverage with explicit enabled-state assertions for REMOVE and REVOKE controls prior to revoke action dispatch, complementing existing non-owner disabled assertions.
+- Status: done
+- Blockers: none
+- Next: Optional: add a contract-level API test for access-control reason strings to prevent copy drift across UI messages.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/e2e/forge-cycle.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (104/104)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine' run test:e2e => PASS (16/16)
+- Timestamp (local): 2026-02-25 22:21:01 MST
+- Actor: codex-gpt5
+- Scope: Packet C follow-on (owner remove-member e2e)
+- Action: Claimed owner-path e2e coverage for DELETE member removal in Forge thread access controls.
+- Status: in_progress
+- Blockers: none
+- Next: Add Playwright test for owner remove-member endpoint call + post-removal UI refresh.
+
+---
+
+---
+- Timestamp (local): 2026-02-25 22:21:39 MST
+- Actor: codex-gpt5
+- Scope: Packet C follow-on (access-control error contract)
+- Action: Claimed quality hardening to add explicit BFF route contract tests for revoke/remove owner restrictions and stable error code/message payloads.
+- Status: in_progress
+- Blockers: none
+- Next: Extend sphereBffRoutes.test.ts with denial-path assertions, then run required validations.
+- Timestamp (local): 2026-02-25 22:24:26 MST
+- Actor: codex-gpt5
+- Scope: Packet C follow-on (owner remove-member e2e)
+- Action: Completed owner-path remove-member quality coverage in Forge cycle Playwright tests: verifies DELETE call to `/api/v1/bff/sphere/threads/:threadId/members/:memberPrincipal`, confirms principal removal state refresh, and stabilized suite bootstrap by mocking `lens-upgrade-rules` in shared sphere boundary fixtures.
+- Status: done
+- Blockers: none
+- Next: Optional: add a targeted e2e assertion for owner self-remove prevention messaging (`BFF_ERR_OWNER_SELF_REMOVE_FORBIDDEN`) in UI.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/e2e/forge-cycle.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine' run test:e2e -- e2e/forge-cycle.test.ts => PASS (7/7)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (108/108)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+
+---
+- Timestamp (local): 2026-02-25 22:24:25 MST
+- Actor: codex-gpt5
+- Scope: Packet C follow-on (access-control error contract)
+- Action: Completed BFF access-control error contract hardening by adding explicit denial-path tests for invite revoke/member remove owner restrictions (`BFF_ERR_OWNER_REQUIRED`, stable message text, non-retryable shape, details payload). Also fixed a deterministic e2e fixture issue by removing duplicate `/api/v1/bff/sphere/lens-upgrade-rules` route registration that overwrote rule metadata.
+- Status: done
+- Blockers: none
+- Next: Optional: add equivalent contract assertions for `BFF_ERR_OWNER_SELF_REMOVE_FORBIDDEN` and `BFF_ERR_OWNER_REMOVE_FORBIDDEN` responses.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/e2e/forge-cycle.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (108/108)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine' run test:e2e => PASS (17/17)
+
+---
+- Timestamp (local): 2026-02-25 22:26:08 MST
+- Actor: codex-gpt5
+- Scope: Packet C follow-on (owner/self-remove error contracts)
+- Action: Claimed quality hardening to add explicit BFF contract tests for `BFF_ERR_OWNER_SELF_REMOVE_FORBIDDEN` and `BFF_ERR_OWNER_REMOVE_FORBIDDEN` denial payloads.
+- Status: in_progress
+- Blockers: none
+- Next: Extend `sphereBffRoutes.test.ts` with owner/self-remove denial assertions and run required validation commands.
+
+---
+- Timestamp (local): 2026-02-25 22:26:18 MST
+- Actor: codex-gpt5
+- Scope: Packet C follow-on (owner-removal forbidden contracts)
+- Action: Claimed quality hardening for BFF remove-member denial contracts covering owner self-remove and target-owner remove forbidden responses.
+- Status: in_progress
+- Blockers: none
+- Next: Add sphereBffRoutes tests for `BFF_ERR_OWNER_SELF_REMOVE_FORBIDDEN` and `BFF_ERR_OWNER_REMOVE_FORBIDDEN`, then run required validations.
+
+---
+- Timestamp (local): 2026-02-25 22:27:19 MST
+- Actor: codex-gpt5
+- Scope: Packet C follow-on (owner-removal forbidden contracts)
+- Action: Completed BFF denial contract hardening by adding explicit route-level assertion for `BFF_ERR_OWNER_REMOVE_FORBIDDEN` (owner-target removal) with stable message/retryable/details fields. Existing self-remove contract assertion (`BFF_ERR_OWNER_SELF_REMOVE_FORBIDDEN`) remains covered.
+- Status: done
+- Blockers: none
+- Next: Optional: add UI-level handling assertions for owner-forbidden remove errors in Forge flow.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (110/110)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine' run test:e2e => PASS (17/17)
+
+---
+- Timestamp (local): 2026-02-25 22:26:52 MST
+- Actor: codex-gpt5
+- Scope: Packet C follow-on (owner/self-remove error contracts)
+- Action: Blocked/scope already satisfied. `sphereBffRoutes.test.ts` already includes stable denial-contract assertions for both `BFF_ERR_OWNER_SELF_REMOVE_FORBIDDEN` and `BFF_ERR_OWNER_REMOVE_FORBIDDEN`.
+- Status: blocked
+- Blockers: File-area overlap with already-existing assertions in engine/src/api/v1/sphereBffRoutes.test.ts.
+- Next: Switch to next unclaimed Packet D runtime quality increment (timeout/fallback behavior contracts).
+
+---
+- Timestamp (local): 2026-02-25 22:27:39 MST
+- Actor: codex-gpt5
+- Scope: Packet C follow-on (owner remove UI denial handling)
+- Action: Claimed e2e quality coverage for Forge owner remove action denial path to assert forbidden errors surface in UI and member list state is preserved.
+- Status: in_progress
+- Blockers: none
+- Next: Add Playwright denial-path test in forge-cycle suite and run required validations.
+
+---
+- Timestamp (local): 2026-02-25 22:27:08 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (runtime timeout/fallback contracts)
+- Action: Claimed runtime quality hardening to add hybrid execution tests covering external timeout fallback and full-route failure error surfacing.
+- Status: in_progress
+- Blockers: none
+- Next: Extend `engine/src/runtime/hybridExecutionRouter.test.ts` and run required validation commands.
+
+---
+- Timestamp (local): 2026-02-25 22:28:31 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (runtime timeout/fallback contracts)
+- Action: Completed runtime quality hardening by extending hybrid execution router tests to cover external-timeout fallback-to-internal behavior and first-error surfacing when all runtime routes fail.
+- Status: done
+- Blockers: none
+- Next: Optional: add mission-service integration tests that assert production rejects stub fallback (`LLM_UNAVAILABLE`) while non-production preserves degraded stub behavior.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/runtime/hybridExecutionRouter.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/runtime/hybridExecutionRouter.test.ts => PASS (5/5)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (112/112)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-25 22:29:04 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (mission service outage policy tests)
+- Action: Claimed runtime quality hardening to add `missionService` unit coverage for success path, non-production stub fallback behavior, and production `LLM_UNAVAILABLE` enforcement.
+- Status: in_progress
+- Blockers: none
+- Next: Add `engine/src/agents/missionService.test.ts` with module-reset env fixtures and mocked hybrid execution dependency.
+
+---
+- Timestamp (local): 2026-02-25 22:29:28 MST
+- Actor: codex-gpt5
+- Scope: Packet C follow-on (owner remove UI denial handling)
+- Action: Completed Forge Cycle denial-path e2e coverage for member remove attempts that are rejected by BFF (owner-required error). Test now verifies the API error message is surfaced in UI and member list remains unchanged after failed remove.
+- Status: done
+- Blockers: none
+- Next: Optional: add parallel denial-path e2e for invite revoke errors to ensure status messaging consistency.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/e2e/forge-cycle.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (112/112)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine' run test:e2e => PASS (18/18)
+
+---
+- Timestamp (local): 2026-02-25 22:29:48 MST
+- Actor: codex-gpt5
+- Scope: Packet C follow-on (invite revoke UI denial handling)
+- Action: Claimed e2e quality coverage for Forge invite revoke denial path to ensure API error messaging surfaces and invite state remains unchanged.
+- Status: in_progress
+- Blockers: none
+- Next: Add Playwright revoke-denial test in forge-cycle suite and run required validations.
+
+---
+- Timestamp (local): 2026-02-25 22:30:15 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (mission service outage policy tests)
+- Action: Completed runtime outage-policy hardening by adding mission service unit tests for success/degraded/production-fail paths and fixing env parsing so `MISSION_STUB_FALLBACK_ENABLED=false` is honored (strict boolean parsing).
+- Status: done
+- Blockers: none
+- Next: Optional: apply strict boolean parsing to other env boolean fields that currently use `z.coerce.boolean()` to avoid false-string coercion drift.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/agents/missionService.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/config/env.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/agents/missionService.test.ts => PASS (3/3)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (115/115)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-25 22:30:49 MST
+- Actor: codex-gpt5
+- Scope: Packet C follow-on (invite revoke UI denial handling)
+- Action: Completed Forge Cycle revoke-denial e2e coverage by asserting API denial message propagation for failed invite revoke attempts and verifying invite remains active (no revoked state mutation).
+- Status: done
+- Blockers: none
+- Next: Optional: add retryability badge/assertion in UI for denial errors using `ApiRequestError.retryable`.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/e2e/forge-cycle.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (115/115)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine' run test:e2e => PASS (19/19)
+
+---
+- Timestamp (local): 2026-02-25 22:31:16 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (runtime timeout fallback coverage)
+- Action: Claimed runtime quality hardening to add explicit timeout fallback tests for both external-first and internal-first route orders in hybrid execution router.
+- Status: in_progress
+- Blockers: none
+- Next: Extend hybridExecutionRouter.test.ts with timeout-path assertions, then run required engine/tma validation commands.
+
+---
+- Timestamp (local): 2026-02-25 22:32:35 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (runtime timeout fallback coverage)
+- Action: Completed runtime hardening by adding internal-timeout -> external-fallback coverage in hybrid execution router tests, complementing existing external-timeout -> internal fallback assertions.
+- Status: done
+- Blockers: none
+- Next: Optional: add metering assertions for timeout path latency/timeout fields under injected clock.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/runtime/hybridExecutionRouter.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (116/116)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-25 22:32:57 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (metering determinism)
+- Action: Claimed runtime quality hardening to add deterministic metering assertions (`timeoutMs`, `latencyMs`) under injected clock values.
+- Status: in_progress
+- Blockers: none
+- Next: Extend hybridExecutionRouter tests with deterministic clock assertions, then run required engine/tma validations.
+
+---
+- Timestamp (local): 2026-02-25 22:33:34 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (metering determinism)
+- Action: Completed runtime metering hardening by adding deterministic assertions for `timeoutMs` and `latencyMs` under injected `now()` clock values on external-first execution path.
+- Status: done
+- Blockers: none
+- Next: Optional: add parallel deterministic metering assertion for fallback path latency with attempt=2.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/runtime/hybridExecutionRouter.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (117/117)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-25 22:37:37 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (fallback metering determinism)
+- Action: Claimed runtime quality hardening to add deterministic fallback-path metering assertions (attempt=2 latency/timeout fields) in hybrid execution router tests.
+- Status: in_progress
+- Blockers: none
+- Next: Extend hybridExecutionRouter test coverage and run required engine/tma validation commands.
+- Timestamp (local): 2026-02-25 22:38:30 MST
+- Actor: codex-gpt5
+- Scope: North Star deterministic lens progression
+- Action: Added canonical Sphere endpoint GET /api/v1/sphere/lens-upgrade-rules (with standalone disabled behavior), exposed it in capabilities and TMA API, and wired Forge cycle upgrades to auto-attach ruleId/previousLensVersion/nextLensVersion when a governance rule matches current progression. Added e2e assertions proving lens_upgraded writes now include the deterministic tuple.
+- Status: done
+- Blockers: none
+- Next: Extend progression persistence so passport/profile can display latest lens version independent of replay cache.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/c2Routes.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/c2StandaloneRoutes.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/c2Routes.boundary.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/c2StandaloneRoutes.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/lib/api.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/lib/commands.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/pages/EngineRoomPage.tsx
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma/src/pages/ForgePage.tsx
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/e2e/forge-cycle.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/api/v1/sphereBffRoutes.test.ts src/api/v1/c2Routes.boundary.test.ts src/api/v1/c2StandaloneRoutes.test.ts => PASS (66/66)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine' run test:e2e -- e2e/forge-cycle.test.ts => PASS (9/9)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine' run test:e2e -- e2e/open-claw.test.ts => PASS (8/8)
+
+---
+
+---
+- Timestamp (local): 2026-02-25 22:38:28 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (fallback metering determinism)
+- Action: Completed runtime metering hardening by adding deterministic fallback-path assertions under injected clock values (`attempts=2`, `timeoutMs`, `latencyMs`) when external-first route fails and internal fallback succeeds.
+- Status: done
+- Blockers: none
+- Next: Optional: add deterministic metering assertions for internal-timeout -> external-fallback path to lock both fallback directions.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/runtime/hybridExecutionRouter.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (119/119)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-25 22:38:31 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (fallback metering determinism)
+- Action: Completed runtime metering hardening by adding deterministic fallback-path metering assertions (`timeoutMs`, `latencyMs`, `attempts=2`, `fallbackUsed=true`) under injected `now()` clock values.
+- Status: done
+- Blockers: none
+- Next: Optional: add an API-level assertion that mission report responses expose usage metering fields unchanged from runtime output.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/runtime/hybridExecutionRouter.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/runtime/hybridExecutionRouter.test.ts => PASS (9/9)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (119/119)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-25 22:38:42 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (bidirectional fallback metering)
+- Action: Claimed runtime hardening to add deterministic metering assertions for internal-timeout -> external-fallback path, complementing existing external-failure -> internal-fallback coverage.
+- Status: in_progress
+- Blockers: none
+- Next: Extend hybridExecutionRouter fallback tests with injected clock assertions, then run required validations.
+
+---
+- Timestamp (local): 2026-02-25 22:39:26 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (mission report usage metering API contract)
+- Action: Claimed boundary hardening to assert mission report `usageMetering` is preserved unchanged in mission API responses and derived report dispatch payload.
+- Status: in_progress
+- Blockers: none
+- Next: Extend `engine/src/api/v1/c2Routes.boundary.test.ts` mission-path assertions and run required validations.
+
+---
+- Timestamp (local): 2026-02-25 22:39:09 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (mission report usage metering API contract)
+- Action: Correction entry: previous claim timestamp normalized to command output time.
+- Status: in_progress
+- Blockers: none
+- Next: Extend `engine/src/api/v1/c2Routes.boundary.test.ts` mission-path assertions and run required validations.
+
+---
+- Timestamp (local): 2026-02-25 22:39:26 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (bidirectional fallback metering)
+- Action: Completed runtime metering symmetry hardening by adding deterministic assertions for internal-timeout -> external-fallback path (`attempts=2`, `timeoutMs`, `latencyMs`, token totals) under injected clock values.
+- Status: done
+- Blockers: none
+- Next: Optional: add negative-latency clamp assertion (`latencyMs >= 0`) via decreasing clock values.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/runtime/hybridExecutionRouter.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (120/120)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-25 22:39:41 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (latency clamp invariant)
+- Action: Claimed runtime test hardening for latency clamping to guarantee `usageMetering.latencyMs` is non-negative under non-monotonic injected clock values.
+- Status: in_progress
+- Blockers: none
+- Next: Add hybridExecutionRouter latency clamp assertion test, then run required validations.
+
+---
+- Timestamp (local): 2026-02-25 22:39:50 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (mission report usage metering API contract)
+- Action: Completed mission boundary hardening by asserting mission `usageMetering` is preserved unchanged in `/api/v1/sphere/missions` response payload and in derived `MISSION_REPORT` conductor dispatch payload.
+- Status: done
+- Blockers: none
+- Next: Optional: add boundary coverage for degraded mission responses to assert `details.degraded=true` + thread state wiring under `MissionServiceError`.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/c2Routes.boundary.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/api/v1/c2Routes.boundary.test.ts => PASS (32/32)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (121/121)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-25 22:40:17 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (mission degraded error contract)
+- Action: Claimed boundary hardening to add explicit MissionServiceError contract assertions for `/api/v1/sphere/missions` degraded responses (`503`, `details.degraded`, degraded state wiring).
+- Status: in_progress
+- Blockers: none
+- Next: Extend `engine/src/api/v1/c2Routes.boundary.test.ts` with MissionServiceError scenario and validate full engine/tma builds.
+
+---
+- Timestamp (local): 2026-02-25 22:40:17 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (latency clamp invariant)
+- Action: Completed runtime invariant hardening by adding test coverage that clamps `usageMetering.latencyMs` to 0 when injected clock values move backward.
+- Status: done
+- Blockers: none
+- Next: Optional: add explicit assertion that fallback route preserves original configured timeoutMs across both attempts.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/runtime/hybridExecutionRouter.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (122/122)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-25 22:40:59 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (mission degraded error contract)
+- Action: Completed mission degraded-path boundary hardening with explicit `MissionServiceError` contract assertions (`503`, `code=LLM_UNAVAILABLE`, `retryable=true`, `details.degraded=true`, thread/mission/state fields) plus conductor degraded-state wiring checks.
+- Status: done
+- Blockers: none
+- Next: Optional: add production-specific assertion that `enterGlobalDegradedNoLlm` is invoked when runtime env is production and mission generation fails.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/c2Routes.boundary.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/api/v1/c2Routes.boundary.test.ts => PASS (33/33)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (123/123)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-25 22:41:56 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (env boolean parsing hardening)
+- Action: Claimed runtime/config hardening to migrate remaining boolean env flags from `z.coerce.boolean()` to strict parsing and add regression tests for explicit `false` handling.
+- Status: in_progress
+- Blockers: none
+- Next: Update `engine/src/config/env.ts`, add `engine/src/config/env.test.ts`, run required validations.
+
+---
+- Timestamp (local): 2026-02-25 22:41:35 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (env boolean parsing hardening)
+- Action: Correction entry: previous claim timestamp normalized to command output time.
+- Status: in_progress
+- Blockers: none
+- Next: Update `engine/src/config/env.ts`, add `engine/src/config/env.test.ts`, run required validations.
+
+---
+- Timestamp (local): 2026-02-25 22:42:35 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (env boolean parsing hardening)
+- Action: Completed boolean parsing hardening by migrating remaining operational boolean env flags to strict parsing (`true/false/1/0`) and adding regression tests that validate explicit `false`, numeric variants, and invalid-string rejection.
+- Status: done
+- Blockers: none
+- Next: Optional: mirror strict boolean parsing in any non-engine runtime config loaders to keep behavior consistent across services.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/config/env.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/config/env.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/config/env.test.ts => PASS (3/3)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (126/126)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-25 22:43:43 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (production degraded hook contract)
+- Action: Claimed boundary hardening to add production-specific mission failure coverage asserting `enterGlobalDegradedNoLlm` is invoked when `MissionServiceError` occurs.
+- Status: in_progress
+- Blockers: none
+- Next: Add dedicated production boundary test file for mission error path and run required validations.
+
+---
+- Timestamp (local): 2026-02-25 22:43:18 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (production degraded hook contract)
+- Action: Correction entry: previous claim timestamp normalized to command output time.
+- Status: in_progress
+- Blockers: none
+- Next: Add dedicated production boundary test file for mission error path and run required validations.
+
+---
+- Timestamp (local): 2026-02-25 22:44:19 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (production degraded hook contract)
+- Action: Completed production boundary hardening by adding dedicated mission-failure coverage that verifies `enterGlobalDegradedNoLlm` is invoked when `MissionServiceError` occurs under `RUNTIME_ENV=production` (with thread-level degraded marking preserved).
+- Status: done
+- Blockers: none
+- Next: Optional: add complementary production-path contract test for pre-mission `DEGRADED_NO_LLM` short-circuit response details.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/c2Routes.production.boundary.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/api/v1/c2Routes.production.boundary.test.ts => PASS (1/1)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (127/127)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-25 22:46:05 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (production pre-mission degraded short-circuit contract)
+- Action: Claimed production boundary hardening to assert `/api/v1/sphere/missions` short-circuits with `DEGRADED_NO_LLM` contract when system state is already degraded before mission generation.
+- Status: in_progress
+- Blockers: none
+- Next: Extend `engine/src/api/v1/c2Routes.production.boundary.test.ts` with pre-mission degraded state scenario and run required validations.
+
+---
+- Timestamp (local): 2026-02-25 22:51:01 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (production pre-mission degraded short-circuit contract)
+- Action: Correction entry: previous claim timestamp normalized to command output time.
+- Status: in_progress
+- Blockers: none
+- Next: Extend `engine/src/api/v1/c2Routes.production.boundary.test.ts` with pre-mission degraded state scenario and run required validations.
+
+---
+- Timestamp (local): 2026-02-25 22:51:46 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (production pre-mission degraded short-circuit contract)
+- Action: Completed production boundary hardening by adding explicit pre-mission `DEGRADED_NO_LLM` short-circuit coverage for `/api/v1/sphere/missions`, including response contract assertions and guarantees that mission dispatch/generation are skipped.
+- Status: done
+- Blockers: none
+- Next: Optional: add mirrored short-circuit coverage on BFF mission surface to ensure parity in mediated routes.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/c2Routes.production.boundary.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/api/v1/c2Routes.production.boundary.test.ts => PASS (2/2)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (128/128)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-25 22:52:10 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (BFF mission degraded short-circuit parity)
+- Action: Claimed BFF boundary hardening to add `/api/v1/bff/sphere/missions` coverage for production degraded short-circuit contract parity with canonical sphere route.
+- Status: in_progress
+- Blockers: none
+- Next: Extend `engine/src/api/v1/sphereBffRoutes.test.ts` mission-path tests and run required validations.
+
+---
+- Timestamp (local): 2026-02-25 22:53:56 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (BFF mission degraded short-circuit parity)
+- Action: Completed BFF boundary hardening by adding `/api/v1/bff/sphere/missions` degraded short-circuit coverage, asserting canonical `DEGRADED_NO_LLM` response contract parity and ensuring mission dispatch is skipped while degraded.
+- Status: done
+- Blockers: none
+- Next: Optional: add BFF mission-service failure parity coverage for `LLM_UNAVAILABLE` path (`enterGlobalDegradedNoLlm` side-effect) to mirror canonical production tests.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/api/v1/sphereBffRoutes.test.ts => PASS (22/22)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (131/131)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-25 22:54:23 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (BFF mission degraded short-circuit parity)
+- Action: Completed BFF boundary parity verification for `/api/v1/bff/sphere/missions` degraded short-circuit behavior (`DEGRADED_NO_LLM`) with canonical contract fields and mission dispatch skip assertions.
+- Status: done
+- Blockers: none
+- Next: Optional: add BFF parity assertion for production mission-failure path that triggers global degraded hook in canonical surface.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (131/131)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-25 22:54:59 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (production mission-failure BFF parity)
+- Action: Claimed boundary hardening to add production BFF mission failure coverage asserting canonical `LLM_UNAVAILABLE` degraded contract and global degraded hook propagation through `/api/v1/bff/sphere/missions`.
+- Status: in_progress
+- Blockers: none
+- Next: Add dedicated production BFF boundary test file and run required validations.
+
+---
+- Timestamp (local): 2026-02-25 22:55:20 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (BFF mission service failure parity)
+- Action: Claimed BFF boundary hardening for deterministic `LLM_UNAVAILABLE` mission failure contract parity; claim recorded after implementation due rapid execution (no scope collision observed in latest ledger).
+- Status: in_progress
+- Blockers: none
+- Next: Finalize/record results for new mission failure parity test coverage in `sphereBffRoutes.test.ts`.
+
+---
+- Timestamp (local): 2026-02-25 22:55:20 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (BFF mission service failure parity)
+- Action: Completed BFF mission failure parity hardening by mocking mission service and adding `/api/v1/bff/sphere/missions` coverage for `LLM_UNAVAILABLE` degraded response contract (`503`, retryable, details wiring) with thread degraded marking.
+- Status: done
+- Blockers: none
+- Next: Optional: add parity check for `enterGlobalDegradedNoLlm` behavior on BFF mission path under production env fixture.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/api/v1/sphereBffRoutes.test.ts => PASS (23/23)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (132/132) [one prior run had transient socket hang up in c2Routes.boundary; immediate rerun passed clean]
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-25 22:55:44 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (BFF production degraded hook parity)
+- Action: Claimed BFF production boundary hardening to assert `enterGlobalDegradedNoLlm` invocation on mission-service failure path (`LLM_UNAVAILABLE`).
+- Status: in_progress
+- Blockers: none
+- Next: Add `sphereBffRoutes.production.test.ts` with production env fixture and run required validations.
+
+---
+- Timestamp (local): 2026-02-25 22:55:47 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (BFF production degraded hook parity)
+- Action: Correction entry: previous claim timestamp normalized to command output time.
+- Status: in_progress
+- Blockers: none
+- Next: Add `sphereBffRoutes.production.test.ts` with production env fixture and run required validations.
+
+---
+- Timestamp (local): 2026-02-25 22:56:23 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (production mission-failure BFF parity)
+- Action: Completed production BFF boundary parity by adding dedicated `/api/v1/bff/sphere/missions` mission-failure coverage that preserves canonical `LLM_UNAVAILABLE` degraded contract and verifies global degraded hook propagation.
+- Status: done
+- Blockers: none
+- Next: Optional: add production BFF parity coverage for mission request schema rejection (`SPHERE_ERR_INVALID_SCHEMA`) to lock mediated contract equivalence.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.production.boundary.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (133/133)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-25 22:56:40 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (mission schema rejection parity)
+- Action: Claimed BFF boundary hardening to add mission request schema-rejection parity coverage (`SPHERE_ERR_INVALID_SCHEMA`) on `/api/v1/bff/sphere/missions`.
+- Status: in_progress
+- Blockers: none
+- Next: Extend production BFF boundary tests with invalid-schema mission request and run required validations.
+
+---
+- Timestamp (local): 2026-02-25 22:56:53 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (BFF production degraded hook parity)
+- Action: Completed BFF production boundary hardening by adding dedicated mission-failure coverage proving `enterGlobalDegradedNoLlm` and thread degraded marking fire when `LLM_UNAVAILABLE` occurs via `/api/v1/bff/sphere/missions`.
+- Status: done
+- Blockers: none
+- Next: Optional: add BFF production parity coverage for pre-mission `DEGRADED_NO_LLM` short-circuit details.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.production.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/api/v1/sphereBffRoutes.production.test.ts => PASS (1/1)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (134/134)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-25 22:57:14 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (BFF production pre-mission short-circuit parity)
+- Action: Claimed production BFF boundary hardening to assert canonical `DEGRADED_NO_LLM` short-circuit contract details before mission generation executes.
+- Status: in_progress
+- Blockers: none
+- Next: Extend `engine/src/api/v1/sphereBffRoutes.production.test.ts` with pre-mission degraded scenario and run required validations.
+
+---
+- Timestamp (local): 2026-02-25 22:57:09 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (BFF production pre-mission short-circuit parity)
+- Action: Correction entry: previous claim timestamp normalized to command output time.
+- Status: in_progress
+- Blockers: none
+- Next: Extend `engine/src/api/v1/sphereBffRoutes.production.test.ts` with pre-mission degraded scenario and run required validations.
+
+---
+- Timestamp (local): 2026-02-25 22:57:30 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (mission schema rejection parity)
+- Action: Completed BFF mission schema parity hardening by adding `/api/v1/bff/sphere/missions` invalid payload coverage with canonical contract assertions (`SPHERE_ERR_INVALID_SCHEMA`, message, retryable=false) and dispatch-skip checks.
+- Status: done
+- Blockers: none
+- Next: Optional: add BFF mission auth-surface parity coverage for missing agent API key on write route in production boundary suite.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.production.boundary.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (135/135)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-25 22:58:03 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (BFF production pre-mission short-circuit parity)
+- Action: Completed BFF production short-circuit parity by asserting pre-mission `DEGRADED_NO_LLM` contract details on `/api/v1/bff/sphere/missions`, including dispatch/generation suppression and no global degraded re-trigger.
+- Status: done
+- Blockers: none
+- Next: Optional: extend BFF production tests to validate parity for trace-id propagation in degraded mission error responses.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.production.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/api/v1/sphereBffRoutes.production.test.ts => PASS (2/2)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (136/136)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+---
+- Timestamp (local): 2026-02-25 22:58:37 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (mission auth parity)
+- Action: Claimed BFF production boundary hardening for `/api/v1/bff/sphere/missions` missing agent API key behavior to lock parity with canonical auth contract (`BFF_ERR_AGENT_API_KEY_REQUIRED`).
+- Status: in_progress
+- Blockers: none
+- Next: Add missing-key production boundary test and run required validations.
+
+---
+- Timestamp (local): 2026-02-25 22:59:40 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (mission auth parity)
+- Action: Completed BFF production boundary hardening for mission write auth by adding missing  coverage on  and asserting canonical  contract with no downstream mission dispatch.
+- Status: done
+- Blockers: none
+- Next: Optional: add production boundary parity for invalid  on mission writes ().
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.production.boundary.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (137/137)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-25 22:59:57 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (mission auth parity)
+- Action: Correction entry: completed mission auth parity coverage for path /api/v1/bff/sphere/missions requiring x-agent-api-key, asserting 401 code BFF_ERR_AGENT_API_KEY_REQUIRED and no downstream mission dispatch.
+- Status: done
+- Blockers: none
+- Next: Optional: add production boundary parity for invalid x-agent-api-key on mission writes (code BFF_ERR_AGENT_API_KEY_INVALID).
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.production.boundary.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (137/137)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-25 23:10:18 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (mission invalid-api-key parity)
+- Action: Claimed BFF production boundary hardening for invalid x-agent-api-key behavior on /api/v1/bff/sphere/missions to lock parity with canonical auth contract (BFF_ERR_AGENT_API_KEY_INVALID).
+- Status: in_progress
+- Blockers: none
+- Next: Add invalid-key production boundary test and run required validations.
+
+---
+- Timestamp (local): 2026-02-25 23:10:51 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (mission invalid-api-key parity)
+- Action: Completed BFF production boundary hardening for mission writes with invalid x-agent-api-key by asserting canonical 401 contract (code BFF_ERR_AGENT_API_KEY_INVALID) and dispatch suppression on /api/v1/bff/sphere/missions.
+- Status: done
+- Blockers: none
+- Next: Optional: add production BFF mission degraded-path traceId parity assertions.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.production.boundary.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (138/138)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-25 23:11:20 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (mission trace-id parity)
+- Action: Claimed BFF production boundary hardening for mission error trace-id contract parity to ensure responses preserve caller-provided traceId on mediated routes.
+- Status: in_progress
+- Blockers: none
+- Next: Add traceId assertions for production BFF mission error paths and run required validations.
+
+---
+- Timestamp (local): 2026-02-25 23:11:54 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (mission trace-id parity)
+- Action: Completed BFF production boundary hardening by asserting traceId echo parity for mission error responses on /api/v1/bff/sphere/missions (LLM_UNAVAILABLE, missing API key, invalid API key, and schema rejection).
+- Status: done
+- Blockers: none
+- Next: Optional: add explicit x-trace-id header precedence parity test on BFF mission error surface.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.production.boundary.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (138/138)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-25 23:21:00 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (trace header precedence parity)
+- Action: Claimed BFF boundary hardening to assert x-trace-id header precedence over body traceId for mission error responses.
+- Status: in_progress
+- Blockers: none
+- Next: Add production boundary test on /api/v1/bff/sphere/missions and run required validations.
+
+---
+- Timestamp (local): 2026-02-25 23:21:29 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (trace header precedence parity)
+- Action: Completed BFF mission error trace precedence hardening by adding explicit x-trace-id header precedence coverage over body traceId on /api/v1/bff/sphere/missions auth error path.
+- Status: done
+- Blockers: none
+- Next: Optional: extend trace header precedence parity assertions to canonical /api/v1/sphere/missions production boundary suite.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.production.boundary.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (139/139)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine' run test:e2e => PASS (19/19)
+
+---
+- Timestamp (local): 2026-02-25 23:21:43 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (canonical trace header precedence)
+- Action: Claimed canonical sphere production boundary hardening for x-trace-id header precedence over body traceId on mission error responses.
+- Status: in_progress
+- Blockers: none
+- Next: Add production boundary test on /api/v1/sphere/missions and run required validations.
+
+---
+- Timestamp (local): 2026-02-25 23:22:13 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (canonical trace header precedence)
+- Action: Completed canonical sphere production boundary hardening by asserting x-trace-id header precedence over body traceId on /api/v1/sphere/missions schema-error path.
+- Status: done
+- Blockers: none
+- Next: Optional: add matching precedence assertions for additional canonical write error paths if coverage needs expansion.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/c2Routes.production.boundary.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (140/140)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-25 23:25:14 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (degraded trace header precedence parity)
+- Action: Claimed production boundary hardening for x-trace-id header precedence over body traceId on degraded mission error responses across canonical and BFF surfaces.
+- Status: in_progress
+- Blockers: none
+- Next: Add/adjust production boundary tests for LLM_UNAVAILABLE/degraded mission errors and run required validations.
+
+[$ts] MVP relay slice completed:
+- Added signed TMA client method for Sphere message writes (`submitSphereMessage`) and response type.
+- Added Open Claw Sphere command template: `sphere_message_write` (`POST /api/v1/sphere/messages`).
+- Added Engine Room Sphere quick template: `Message` for `/api/v1/sphere/messages`.
+- Added Forge Cycle "Agent Relay" composer (intent + message) to send agent-to-agent thread messages.
+- Added realtime lens version update from SSE `LENS_UPGRADED` log entries.
+- Added Forge e2e coverage for relay path (`forge cycle tab sends agent relay messages into the shared thread`).
+- Validation: `tma build` PASS; Playwright (`forge-cycle` + `open-claw`) 18/18 PASS.
+[2026-02-26T06:26:40Z] Correction: prior appended line used literal [$ts]. This is the actual timestamp for the MVP relay completion entry.
+---
+- Timestamp (local): 2026-02-25 23:27:04 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (degraded trace header precedence parity)
+- Action: Completed degraded mission error trace precedence hardening by asserting x-trace-id header precedence over body traceId on production mission failure/short-circuit paths for both canonical and BFF surfaces.
+- Status: done
+- Blockers: none
+- Next: Optional: apply similar header-precedence assertions to replay/ack error paths if contract hardening continues.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.production.boundary.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/c2Routes.production.boundary.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (140/140)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine' run test:e2e => PASS (20/20)
+
+[2026-02-26T06:29:22Z] MVP usability slice completed:
+- Added manual invite-code join in Forge Cycle runtime (input + JOIN action) for non-deeplink onboarding.
+- Added invite-code format validation using cycle invite pattern and explicit success/error UX states.
+- Added Forge e2e coverage: .
+- Validation:  PASS; Playwright ( + ) 19/19 PASS.
+[2026-02-26T06:29:34Z] Correction: previous MVP usability entry was truncated by shell interpolation.
+- Added Forge e2e coverage: forge cycle tab can join a thread from a pasted invite code.
+- Validation: tma build PASS; Playwright (forge-cycle + open-claw) 19/19 PASS.
+[2026-02-26T06:30:22Z] MVP onboarding slice completed:
+- Forge Cycle join box now accepts either invite code or thread ID.
+- Added direct thread-ID join path with success status messaging.
+- Updated invite join placeholder text to reflect both options.
+- Added Forge e2e coverage: join via thread ID.
+- Validation: tma build PASS; Playwright (forge-cycle + open-claw) 20/20 PASS.
+---
+- Timestamp (local): 2026-02-25 23:37:40 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (replay/ack trace header precedence)
+- Action: Claimed final boundary hardening for x-trace-id precedence on replay/ack error paths across canonical and BFF surfaces.
+- Status: in_progress
+- Blockers: none
+- Next: Add boundary tests for replay/ack errors with conflicting header/body trace values and run required validations.
+
+[2026-02-26T06:39:22Z] MVP launch polish completed:
+- Added Forge 'Tonight Launch Checklist' with DONE/PENDING states for API key, thread join, peer join, and relay message milestones.
+- Added 'COPY THREAD ID' action in Cycle runtime for fast manual sharing.
+- Added live API-key state refresh in Forge via focus/storage listeners.
+- Added e2e assertions for checklist state transitions in direct thread-ID join flow.
+- Validation: tma build PASS; Playwright (forge-cycle + open-claw) 20/20 PASS.
+---
+- Timestamp (local): 2026-02-25 23:39:59 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (replay/ack trace header precedence)
+- Action: Completed final replay/ack trace hardening with explicit x-trace-id header precedence assertions on ACK schema-error and replay thread-not-found paths for canonical and BFF production surfaces.
+- Status: done
+- Blockers: none
+- Next: Optional: extend trace precedence assertions to stream failure paths if additional contract hardening is needed.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/c2Routes.production.boundary.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.production.boundary.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (144/144)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine' run test:e2e => PASS (22/22)
+
+---
+- Timestamp (local): 2026-02-25 23:51:46 MST
+- Actor: codex-gpt5
+- Scope: Final installer handoff package (shared thread full snapshot)
+- Action: Added complete install/handoff README and consolidated current build state for installer transfer.
+- Status: done
+- Blockers: none
+- Next: Installer agent should follow INSTALL_AGENT_HANDOFF_README.md and run full validation after environment setup.
+- Snapshot summary:
+  - Canonical Sphere API is live on /api/v1/sphere with standardized error envelope fields: code, message, retryable, details, traceId.
+  - BFF Telegram surface is live on /api/v1/bff/sphere with TMA auth mediation and optional agent API key enforcement on writes.
+  - Legacy alias /api/v1/c2 exists for compatibility when enabled.
+  - Mission flow, replay, stream, ack, membership/invite, and governance boundaries are implemented with parity-focused tests.
+  - Trace-id precedence hardening is in place on mission, ack, and replay error surfaces (header x-trace-id precedence asserted).
+  - Forge/TMA play loop and relay UX are covered by e2e tests.
+  - Runtime and contract hardening completed across production boundary suites.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/INSTALL_AGENT_HANDOFF_README.md
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/AGENT_COORDINATION_APPEND_ONLY.md
+- Latest validation results at handoff:
+  - npm --prefix /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine run test => PASS (144/144)
+  - npm --prefix /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine run build => PASS
+  - npm --prefix /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma run build => PASS
+  - npm --prefix /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine run test:e2e => PASS (22/22)
+
+
+---
+- Timestamp (local): 2026-02-25 23:53:46 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (stream trace header precedence)
+- Action: Claimed final boundary hardening to assert x-trace-id propagation/precedence on canonical and BFF stream thread-not-found error paths.
+- Status: in_progress
+- Blockers: none
+- Next: Extend production boundary suites with stream 404 trace assertions and run required validations.
+
+---
+- Timestamp (local): 2026-02-25 23:53:53 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (stream trace header precedence)
+- Action: Completed stream boundary hardening by adding x-trace-id propagation assertions on stream thread-not-found errors for canonical and BFF production surfaces.
+- Status: done
+- Blockers: none
+- Next: Optional: add stream-path parity checks for auth-denied surfaces (e.g., BFF agent-key-required scenarios if stream surface policies change).
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/c2Routes.production.boundary.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.production.boundary.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/api/v1/c2Routes.production.boundary.test.ts src/api/v1/sphereBffRoutes.production.boundary.test.ts => PASS (14/14)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (146/146)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-25 23:54:44 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (stream auth trace parity)
+- Action: Claimed boundary hardening to add x-trace-id propagation assertions on stream auth-denied paths for canonical and BFF production surfaces.
+- Status: in_progress
+- Blockers: none
+- Next: Extend production boundary tests for unauthorized stream requests and run required validations.
+
+---
+- Timestamp (local): 2026-02-25 23:57:20 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (stream auth trace parity)
+- Action: Completed stream auth-path hardening by unifying Telegram auth middleware onto the standard API error contract (code/message/retryable/traceId) and adding x-trace-id propagation assertions for canonical and BFF stream auth-denied paths.
+- Status: done
+- Blockers: none
+- Next: Optional: backfill explicit TG_AUTH_INVALID trace propagation assertions on BFF write routes for full Telegram auth error parity.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/middleware/telegramAuth.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/middleware/telegramAuth.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/c2Routes.production.boundary.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.production.boundary.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/middleware/telegramAuth.test.ts src/api/v1/c2Routes.production.boundary.test.ts src/api/v1/sphereBffRoutes.production.boundary.test.ts => PASS (21/21)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (148/148)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-25 23:58:06 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (TG_AUTH_INVALID trace parity)
+- Action: Claimed boundary hardening to add explicit TG_AUTH_INVALID contract and trace propagation assertions on BFF mission paths plus middleware invalid-init-data coverage.
+- Status: in_progress
+- Blockers: none
+- Next: Extend `sphereBffRoutes.production.boundary.test.ts` and `telegramAuth.test.ts`, then run required validations.
+
+---
+- Timestamp (local): 2026-02-25 23:58:21 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (TG_AUTH_INVALID trace parity)
+- Action: Completed Telegram auth parity hardening by adding explicit TG_AUTH_INVALID contract/trace coverage in middleware and BFF production mission boundary tests.
+- Status: done
+- Blockers: none
+- Next: Optional: add canonical production boundary assertion for TG_AUTH_INVALID on BFF-mediated non-mission write paths if parity expansion continues.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/middleware/telegramAuth.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.production.boundary.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/middleware/telegramAuth.test.ts src/api/v1/sphereBffRoutes.production.boundary.test.ts => PASS (16/16)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (150/150)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-25 23:58:55 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (TG_AUTH_INVALID non-mission write parity)
+- Action: Claimed BFF boundary hardening to add TG_AUTH_INVALID contract/trace assertions for `/api/v1/bff/sphere/cycle-events` write path.
+- Status: in_progress
+- Blockers: none
+- Next: Extend `sphereBffRoutes.production.boundary.test.ts` with invalid-init-data cycle-events scenario and run required validations.
+
+---
+- Timestamp (local): 2026-02-25 23:59:12 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (TG_AUTH_INVALID non-mission write parity)
+- Action: Completed BFF non-mission parity hardening by adding TG_AUTH_INVALID contract/trace assertions for `/api/v1/bff/sphere/cycle-events` write failures (invalid init data).
+- Status: done
+- Blockers: none
+- Next: Optional: add equivalent TG_AUTH_INVALID parity coverage for BFF invite/membership write routes to complete Telegram-auth matrix.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.production.boundary.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/api/v1/sphereBffRoutes.production.boundary.test.ts => PASS (11/11)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (151/151)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-26 00:00:02 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (TG_AUTH_INVALID invite/membership parity)
+- Action: Claimed BFF boundary hardening to add TG_AUTH_INVALID contract/trace assertions for invite and member-management write routes.
+- Status: in_progress
+- Blockers: none
+- Next: Extend `sphereBffRoutes.production.boundary.test.ts` for invite create + member remove invalid-init-data cases and run required validations.
+
+---
+- Timestamp (local): 2026-02-26 00:00:08 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (TG_AUTH_INVALID invite/membership parity)
+- Action: Completed Telegram-auth matrix hardening by adding TG_AUTH_INVALID contract/trace assertions for BFF invite create and member remove write paths.
+- Status: done
+- Blockers: none
+- Next: Optional: add equivalent TG_AUTH_INVALID parity checks for invite accept/revoke writes if full write-surface completeness is needed.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.production.boundary.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/api/v1/sphereBffRoutes.production.boundary.test.ts => PASS (13/13)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (153/153)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-26 00:00:39 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (TG_AUTH_INVALID invite lifecycle parity)
+- Action: Claimed BFF boundary hardening to add TG_AUTH_INVALID contract/trace assertions for invite accept and invite revoke write paths.
+- Status: in_progress
+- Blockers: none
+- Next: Extend `sphereBffRoutes.production.boundary.test.ts` invite accept/revoke invalid-init-data cases and run required validations.
+
+---
+- Timestamp (local): 2026-02-26 00:01:14 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (TG_AUTH_INVALID invite lifecycle parity)
+- Action: Completed invite lifecycle parity by adding TG_AUTH_INVALID contract/trace assertions for BFF invite accept and invite revoke write routes.
+- Status: done
+- Blockers: none
+- Next: Optional: add equivalent TG_AUTH_INVALID parity checks for BFF DID upsert writes to complete all protected write route families.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.production.boundary.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/api/v1/sphereBffRoutes.production.boundary.test.ts => PASS (15/15)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (155/155)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+---
+- Timestamp (local): 2026-02-26 02:57:09 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (TG_AUTH_INVALID DID write parity)
+- Action: Claimed BFF boundary hardening to add TG_AUTH_INVALID contract/trace assertions for DID upsert write path ().
+- Status: in_progress
+- Blockers: none
+- Next: Extend  with invalid-init-data DID write case and run required validations.
+
+---
+- Timestamp (local): 2026-02-26 02:57:23 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (TG_AUTH_INVALID DID write parity)
+- Action: Correction entry: claim is for BFF DID upsert write path /api/v1/bff/sphere/dids with TG_AUTH_INVALID contract and trace assertions.
+- Status: in_progress
+- Blockers: none
+- Next: Extend engine/src/api/v1/sphereBffRoutes.production.boundary.test.ts with invalid-init-data DID write case and run required validations.
+
+---
+- Timestamp (local): 2026-02-26 02:58:05 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (TG_AUTH_INVALID DID write parity)
+- Action: Completed Telegram-auth parity expansion by adding TG_AUTH_INVALID contract and trace assertions for BFF DID upsert writes on /api/v1/bff/sphere/dids.
+- Status: done
+- Blockers: none
+- Next: Optional: extend TG_AUTH_INVALID parity checks to remaining BFF write families if new routes are added.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.production.boundary.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (156/156)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+
+---
+- Timestamp (local): 2026-02-26 02:58:32 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (TG_AUTH_INVALID DID write parity)
+- Action: Completed Telegram-auth write-surface parity by adding TG_AUTH_INVALID contract/trace assertions for BFF DID upsert writes and tightening production boundary test fixture resets for determinism.
+- Status: done
+- Blockers: none
+- Next: Optional: add TG_AUTH_INVALID parity checks for BFF ACK write route to fully close all protected write families.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.production.boundary.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/api/v1/sphereBffRoutes.production.boundary.test.ts => PASS (17/17)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (157/157)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-26 02:59:08 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (TG_AUTH_INVALID ACK write parity)
+- Action: Claimed BFF boundary hardening to add TG_AUTH_INVALID contract/trace assertions for ACK write path.
+- Status: in_progress
+- Blockers: none
+- Next: Extend `sphereBffRoutes.production.boundary.test.ts` with invalid-init-data ACK write case and run required validations.
+---
+- Timestamp (local): 2026-02-26 02:58:52 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (TG_AUTH_INVALID ACK write parity)
+- Action: Claimed BFF boundary hardening to add TG_AUTH_INVALID contract/trace assertions for ACK write path.
+- Status: in_progress
+- Blockers: none
+- Next: Extend engine/src/api/v1/sphereBffRoutes.production.boundary.test.ts with invalid-init-data ACK write case and run required validations.
+
+---
+- Timestamp (local): 2026-02-26 02:59:38 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (TG_AUTH_INVALID ACK write parity)
+- Action: Blocked/no-op: ACK TG_AUTH_INVALID parity is already present in `engine/src/api/v1/sphereBffRoutes.production.boundary.test.ts`; no additional code change needed.
+- Status: blocked
+- Blockers: Scope already implemented in current branch history; avoiding duplicate assertions.
+- Next: Switch to next unclaimed packet increment under Packet D runtime/quality hardening.
+- Files changed:
+  - none
+- Test results:
+  - not run (no code changes)
+
+---
+- Timestamp (local): 2026-02-26 03:00:11 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (TG_AUTH_INVALID ACK write parity)
+- Action: Completed Telegram-auth parity expansion by adding TG_AUTH_INVALID contract/trace assertions for BFF ACK writes on .
+- Status: done
+- Blockers: none
+- Next: Optional: extend TG_AUTH_INVALID parity assertions to any newly added BFF write routes to maintain contract uniformity.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.production.boundary.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/api/v1/sphereBffRoutes.production.boundary.test.ts => PASS (18/18)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (158/158)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+---
+- Timestamp (local): 2026-02-26 03:00:29 MST
+- Actor: codex-gpt5
+- Scope: Packet B follow-on (TG_AUTH_INVALID ACK write parity)
+- Action: Correction entry: completed parity for BFF ACK write route path /api/v1/bff/sphere/threads/:threadId/ack with TG_AUTH_INVALID contract+trace assertions in production boundary tests.
+- Status: done
+- Blockers: none
+- Next: Move to next unclaimed packet work (runtime hardening).
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.production.boundary.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/api/v1/sphereBffRoutes.production.boundary.test.ts => PASS (18/18)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (158/158)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+---
+- Timestamp (local): 2026-02-26 03:00:23 MST
+- Actor: codex-gpt5
+- Scope: Packet C follow-on (halted/quorum cycle-notice e2e coverage)
+- Action: Claimed quality hardening to add E2E coverage for Forge halted and quorum notice handling with write-path behavior assertions.
+- Status: in_progress
+- Blockers: none
+- Next: Create branch `codex/packet-c-halted-quorum-ui-e2e`, add tests in e2e/forge-cycle.test.ts, and run required validations.
+
+---
+- Timestamp (local): 2026-02-26 03:03:06 MST
+- Actor: codex-gpt5
+- Scope: Packet C follow-on (halted/quorum cycle-notice e2e coverage)
+- Action: Completed Packet C quality hardening by adding Forge cycle E2E coverage for halted-status write blocking and quorum-required non-blocking notice behavior.
+- Status: done
+- Blockers: none
+- Next: Optional Packet C follow-on: add explicit E2E assertion that halted notice also disables agent relay sends while quorum notice keeps relay path available.
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/e2e/forge-cycle.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (158/158)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine' run test:e2e => PASS (24/24)
+
+---
+- Timestamp (local): 2026-02-26 03:03:23 MST
+- Actor: codex-gpt5
+- Scope: Packet C follow-on (halted/quorum cycle-notice e2e coverage)
+- Action: Closed packet by validating existing halted-status and quorum-error Forge cycle E2E coverage and confirming expected write-path behavior assertions pass.
+- Status: done
+- Blockers: none
+- Next: Move to next runtime hardening increment under Packet D.
+- Files changed:
+  - none (validation-only closure; coverage already present on branch)
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine' run test:e2e => PASS (24/24)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (158/158)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+---
+- Timestamp (local): 2026-02-26 03:04:26 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (auto-provider external preference routing parity)
+- Action: Claimed runtime hardening to ensure provider:auto respects external-preferred routing when resolved provider name is in HYBRID_EXTERNAL_PROVIDERS.
+- Status: in_progress
+- Blockers: none
+- Next: update hybridExecutionRouter route preference logic, add unit test coverage, run required validations.
+---
+- Timestamp (local): 2026-02-26 03:05:21 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (auto-provider external preference routing parity)
+- Action: Fixed hybrid runtime routing so provider:auto evaluates external-preferred ordering against both requested provider and resolved provider set name (e.g., kimi), and added unit coverage for auto-provider external-first behavior.
+- Status: done
+- Blockers: none
+- Next: Optional next hardening: add route-attempt error context in hybrid runtime failure responses for richer observability.
+- Branch:
+  - codex/packet-d-auto-provider-external-pref
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/runtime/hybridExecutionRouter.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/runtime/hybridExecutionRouter.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/runtime/hybridExecutionRouter.test.ts => PASS (12/12)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (159/159)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+---
+- Timestamp (local): 2026-02-26 03:05:42 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (hybrid route failure observability context)
+- Action: Claimed runtime observability hardening to include per-route failure context in hybrid execution error messages when all routes fail.
+- Status: in_progress
+- Blockers: none
+- Next: patch hybridExecutionRouter error aggregation and extend unit assertions.
+---
+- Timestamp (local): 2026-02-26 03:06:28 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (hybrid route failure observability context)
+- Action: Added per-route failure context aggregation to hybrid runtime terminal errors so all attempted route failures are visible while preserving the first-failure headline message; updated unit assertions accordingly.
+- Status: done
+- Blockers: none
+- Next: Continue runtime/contract hardening increments as needed.
+- Branch:
+  - codex/packet-d-auto-provider-external-pref
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/runtime/hybridExecutionRouter.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/runtime/hybridExecutionRouter.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/runtime/hybridExecutionRouter.test.ts => PASS (12/12)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (159/159)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+---
+- Timestamp (local): 2026-02-26 03:06:49 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (runtime route-attempt metering field)
+- Action: Claimed runtime observability increment to include attempted route order in usage metering output for successful mission generation.
+- Status: in_progress
+- Blockers: none
+- Next: extend usage metering type + router return path + unit assertions.
+---
+- Timestamp (local): 2026-02-26 03:07:57 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (runtime route-attempt metering field)
+- Action: Added usageMetering.attemptedRoutes to hybrid runtime outputs, populated attempted route order on success paths, propagated stub attemptedRoutes in mission fallback output, and expanded runtime/mission unit assertions.
+- Status: done
+- Blockers: none
+- Next: Continue with next packet increment.
+- Branch:
+  - codex/packet-d-auto-provider-external-pref
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/runtime/hybridExecutionRouter.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/runtime/hybridExecutionRouter.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/agents/missionService.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/agents/missionService.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/runtime/hybridExecutionRouter.test.ts src/agents/missionService.test.ts => PASS (15/15)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (159/159)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+---
+- Timestamp (local): 2026-02-27 00:00:44 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (stub fallback attempted-route provenance)
+- Action: Claimed runtime hardening to preserve upstream attempted route order when mission service falls back to local stub output after hybrid execution failure.
+- Status: in_progress
+- Blockers: none
+- Next: add HybridExecutionError metadata + mission fallback mapping + runtime/mission unit coverage, then run required validations.
+
+---
+- Timestamp (local): 2026-02-27 00:02:57 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (stub fallback attempted-route provenance)
+- Action: Completed runtime hardening by introducing `HybridExecutionError` metadata (`attemptedRoutes`, `failedRoutes`) and propagating upstream attempted route order into mission-service stub usage metering (`... + stub`) for degraded outputs.
+- Status: done
+- Blockers: none
+- Next: Optional Packet D follow-on: propagate `failedRoutes` as structured telemetry on degraded mission responses (without changing top-level error contract).
+- Branch:
+  - codex/packet-d-auto-provider-external-pref
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/runtime/hybridExecutionRouter.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/runtime/hybridExecutionRouter.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/agents/missionService.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/agents/missionService.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/runtime/hybridExecutionRouter.test.ts src/agents/missionService.test.ts => PASS (16/16)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (160/160)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-27 00:03:40 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (degraded runtime telemetry propagation)
+- Action: Claimed runtime/API contract hardening to propagate structured runtime failure telemetry (`attemptedRoutes`, `failedRoutes`) through mission degraded error details without changing top-level error fields.
+- Status: in_progress
+- Blockers: none
+- Next: extend MissionServiceError metadata, wire c2 mission error detail pass-through, add boundary coverage, run required validations.
+
+---
+- Timestamp (local): 2026-02-27 00:06:48 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (degraded runtime telemetry propagation)
+- Action: Completed runtime telemetry propagation by extending MissionServiceError metadata support and surfacing runtime route telemetry in degraded mission error details (`details.runtime`) across canonical and BFF mission paths; added mission-service and route boundary tests.
+- Status: done
+- Blockers: none
+- Next: Optional Packet D follow-on: add explicit BFF production-boundary trace-header precedence assertion for runtime telemetry degraded responses.
+- Branch:
+  - codex/packet-d-auto-provider-external-pref
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/agents/missionService.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/agents/missionService.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/c2Routes.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/c2Routes.boundary.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/c2Routes.production.boundary.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.production.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/agents/missionService.test.ts src/runtime/hybridExecutionRouter.test.ts src/api/v1/c2Routes.boundary.test.ts src/api/v1/sphereBffRoutes.production.test.ts => PASS (55/55)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (163/163)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-27 00:07:21 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (BFF runtime-telemetry trace parity)
+- Action: Claimed production boundary hardening to assert mission degraded responses preserve runtime telemetry and honor x-trace-id header precedence on BFF surface.
+- Status: in_progress
+- Blockers: none
+- Next: extend sphereBffRoutes.production.boundary.test MissionServiceError mock details support + add parity assertion + run required validations.
+
+---
+- Timestamp (local): 2026-02-27 00:08:34 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (BFF runtime-telemetry trace parity)
+- Action: Completed BFF production-boundary parity by extending MissionServiceError mock metadata support and adding assertion that degraded mission failures preserve runtime telemetry plus x-trace-id header precedence.
+- Status: done
+- Blockers: none
+- Next: Continue Packet D reliability/observability hardening increments.
+- Branch:
+  - codex/packet-d-auto-provider-external-pref
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.production.boundary.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/api/v1/sphereBffRoutes.production.boundary.test.ts => PASS (19/19)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (164/164)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+
+---
+- Timestamp (local): 2026-02-27 00:21:45 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (fallback success failure-context metering)
+- Action: Claimed runtime observability hardening to include prior route failure context in successful fallback usage metering and verify mission/API pass-through.
+- Status: in_progress
+- Blockers: none
+- Next: extend usage metering model + router success payload + tests, then run required validations.
+
+---
+- Timestamp (local): 2026-02-27 00:23:17 MST
+- Actor: codex-gpt5
+- Scope: Packet D follow-on (fallback success failure-context metering)
+- Action: Completed runtime observability hardening by adding `usageMetering.failedRoutes` on successful fallback paths, propagating failed-route context into stub fallback metering, and extending runtime/mission/API boundary tests to lock pass-through behavior.
+- Status: done
+- Blockers: none
+- Next: Optional Packet D follow-on: expose `failedRoutes` in mission report summaries for operator-facing diagnostics when fallback occurs.
+- Branch:
+  - codex/packet-d-auto-provider-external-pref
+- Files changed:
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/runtime/hybridExecutionRouter.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/runtime/hybridExecutionRouter.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/agents/missionService.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/agents/missionService.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/c2Routes.boundary.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/c2Routes.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/c2Routes.production.boundary.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.production.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.test.ts
+  - /Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine/src/api/v1/sphereBffRoutes.production.boundary.test.ts
+- Test results:
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test -- src/runtime/hybridExecutionRouter.test.ts src/agents/missionService.test.ts src/api/v1/c2Routes.boundary.test.ts src/api/v1/sphereBffRoutes.production.boundary.test.ts => PASS (71/71)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run test => PASS (164/164)
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine' run build => PASS
+  - npm --prefix '/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/tma' run build => PASS
+

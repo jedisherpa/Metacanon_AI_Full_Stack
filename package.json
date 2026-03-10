@@ -7,6 +7,8 @@
     "skins/council-nebula"
   ],
   "scripts": {
+    "check:command-parity": "node scripts/check-tma-command-catalog-parity.mjs",
+    "test:integration:pg": "npm run test:integration:pg -w engine",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },

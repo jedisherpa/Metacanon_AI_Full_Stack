@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Shield, Plus, ThumbsUp, ThumbsDown, Minus, ChevronRight, FileText } from 'lucide-react';
+import { Shield, Plus, ThumbsUp, ThumbsDown, Minus, FileText, Clock3 } from 'lucide-react';
 import { api, type Proposal, type UserProfile } from '../lib/api';
 import { triggerHaptic } from '../lib/telegram';
 
@@ -50,117 +50,128 @@ export default function CitadelPage({ profile }: Props) {
     }
   }
 
+  const openProposals = proposals.filter((proposal) => proposal.status === 'open').length;
+
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex-shrink-0 flex items-center justify-between px-4 pt-4 pb-3 border-b border-citadel/30">
-        <div className="flex items-center gap-2">
-          <Shield size={18} className="text-citadel" />
-          <h2 className="text-citadel font-mono font-semibold tracking-wide">THE CITADEL</h2>
+    <div className="flex flex-col h-full scroll-area px-4 pb-6">
+      <div className="pt-5 pb-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-citadel text-xs font-mono uppercase tracking-[0.18em]">Territory</p>
+            <h2 className="text-white text-2xl font-semibold mt-1 leading-none">The Citadel</h2>
+            <p className="text-white/65 text-sm mt-2">
+              Governance control for {profile.firstName}. Open proposals: {openProposals}
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              triggerHaptic('impact_light');
+              setShowNewProposal(true);
+            }}
+            className="lf-button lf-button--secondary rounded-xl border border-citadel/60 bg-citadel/12 px-3.5 py-2.5 text-citadel text-sm font-mono tracking-wide flex items-center gap-1.5"
+          >
+            <Plus size={12} />
+            Propose
+          </button>
         </div>
-        <button
-          onClick={() => { triggerHaptic('impact_light'); setShowNewProposal(true); }}
-          className="flex items-center gap-1 text-citadel text-xs font-mono border border-citadel/50 px-2 py-1 rounded-sm hover:bg-citadel/10"
-        >
-          <Plus size={12} />
-          PROPOSE
-        </button>
       </div>
 
-      {/* New proposal form */}
       {showNewProposal && (
-        <div className="flex-shrink-0 mx-4 mt-3 p-3 border border-citadel/40 bg-citadel/5 rounded-sm">
-          <p className="text-citadel text-xs font-mono uppercase tracking-wider mb-2">New Proposal</p>
+        <div className="territory-card lf-card mt-2 p-4 border-citadel/45 bg-citadel/10">
+          <p className="text-citadel text-xs font-mono uppercase tracking-[0.16em] mb-2">New Proposal</p>
           <input
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
-            placeholder="Proposal title..."
-            className="w-full bg-void-light border border-white/20 text-white text-sm px-3 py-2 rounded-sm mb-2 outline-none focus:border-citadel/60"
+            placeholder="Proposal title"
+            className="lf-input w-full bg-void-light/70 border border-white/20 text-white text-sm px-3 py-2.5 rounded-lg mb-2 outline-none focus:border-citadel/60"
           />
           <textarea
             value={newDesc}
             onChange={(e) => setNewDesc(e.target.value)}
-            placeholder="Describe the proposal..."
-            rows={3}
-            className="w-full bg-void-light border border-white/20 text-white text-sm px-3 py-2 rounded-sm mb-2 outline-none focus:border-citadel/60 resize-none"
+            placeholder="Describe the proposal and expected impact"
+            rows={4}
+            className="lf-input w-full bg-void-light/70 border border-white/20 text-white text-sm px-3 py-2.5 rounded-lg mb-2 outline-none focus:border-citadel/60 resize-none"
           />
           <div className="flex gap-2">
             <button
               onClick={handlePropose}
               disabled={submitting}
-              className="flex-1 bg-citadel text-void font-mono text-sm py-2 rounded-sm font-bold disabled:opacity-50"
+              className="lf-button lf-button--primary flex-1 bg-citadel text-void font-mono text-sm py-2.5 rounded-lg font-bold disabled:opacity-50"
             >
-              {submitting ? 'SUBMITTING...' : 'SUBMIT'}
+              {submitting ? 'Submitting...' : 'Submit Proposal'}
             </button>
             <button
               onClick={() => setShowNewProposal(false)}
-              className="px-4 border border-white/20 text-white/60 font-mono text-sm py-2 rounded-sm"
+              className="lf-button lf-button--secondary px-4 border border-white/20 text-white/70 font-mono text-sm py-2.5 rounded-lg"
             >
-              CANCEL
+              Cancel
             </button>
           </div>
         </div>
       )}
 
-      {/* Proposals list */}
-      <div className="flex-1 scroll-area px-4 py-3 space-y-3">
+      <div className="mt-3.5 space-y-3.5">
         {loading && (
           <div className="flex items-center justify-center py-8">
-            <div className="w-6 h-6 border border-citadel rounded-sm animate-spin" />
+            <div className="w-7 h-7 border-2 border-citadel/50 border-t-citadel rounded-full animate-spin" />
           </div>
         )}
 
         {!loading && proposals.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-12 gap-3">
+          <div className="territory-card lf-card p-6 flex flex-col items-center justify-center gap-3 border-citadel/25">
             <FileText size={32} className="text-white/20" />
-            <p className="text-white/40 text-sm font-mono">No proposals yet</p>
-            <p className="text-white/30 text-xs">Be the first to propose</p>
+            <p className="text-white/70 text-sm font-medium">No proposals yet</p>
+            <p className="text-white/45 text-xs">Start governance by opening the first proposal.</p>
           </div>
         )}
 
         {proposals.map((proposal) => (
-          <div
-            key={proposal.id}
-            className="border border-citadel/30 bg-citadel/5 rounded-sm p-3"
-          >
-            <div className="flex items-start justify-between gap-2 mb-2">
+          <div key={proposal.id} className="territory-card lf-card p-3.5 border-citadel/30 bg-citadel/5">
+            <div className="flex items-start justify-between gap-2 mb-2.5">
               <div className="flex-1">
                 <p className="text-white text-sm font-medium leading-tight">{proposal.title}</p>
-                <p className="text-white/50 text-xs mt-1 line-clamp-2">{proposal.description}</p>
+                <p className="text-white/60 text-xs mt-1 line-clamp-3">{proposal.description}</p>
               </div>
-              <span className={`
-                flex-shrink-0 text-[10px] font-mono px-1.5 py-0.5 rounded-sm border
-                ${proposal.status === 'open' ? 'text-citadel border-citadel/50' : 'text-white/40 border-white/20'}
-              `}>
-                {proposal.status.toUpperCase()}
+              <span
+                className={`
+                  flex-shrink-0 text-[10px] font-mono px-2 py-1 rounded-full border uppercase tracking-wide
+                  ${proposal.status === 'open' ? 'text-citadel border-citadel/50 bg-citadel/10' : 'text-white/55 border-white/20'}
+                `}
+              >
+                {proposal.status}
               </span>
             </div>
 
+            <div className="flex items-center gap-1.5 text-[11px] text-white/45 font-mono">
+              <Clock3 size={11} />
+              {new Date(proposal.createdAt).toLocaleString()}
+            </div>
+
             {proposal.status === 'open' && (
-              <div className="flex gap-2 mt-3">
+              <div className="grid grid-cols-3 gap-2 mt-3">
                 <button
                   onClick={() => handleVote(proposal.id, 'yes')}
                   disabled={votingId === proposal.id}
-                  className="flex items-center gap-1 text-green-400 border border-green-400/40 px-3 py-1.5 rounded-sm text-xs font-mono hover:bg-green-400/10 disabled:opacity-50"
+                  className="lf-button lf-button--secondary flex items-center justify-center gap-1 text-green-300 border border-green-300/40 px-2 py-2 rounded-lg text-xs font-mono bg-green-300/5 disabled:opacity-50"
                 >
                   <ThumbsUp size={12} />
-                  YES
+                  Yes
                 </button>
                 <button
                   onClick={() => handleVote(proposal.id, 'no')}
                   disabled={votingId === proposal.id}
-                  className="flex items-center gap-1 text-red-400 border border-red-400/40 px-3 py-1.5 rounded-sm text-xs font-mono hover:bg-red-400/10 disabled:opacity-50"
+                  className="lf-button lf-button--secondary flex items-center justify-center gap-1 text-red-300 border border-red-300/40 px-2 py-2 rounded-lg text-xs font-mono bg-red-300/5 disabled:opacity-50"
                 >
                   <ThumbsDown size={12} />
-                  NO
+                  No
                 </button>
                 <button
                   onClick={() => handleVote(proposal.id, 'abstain')}
                   disabled={votingId === proposal.id}
-                  className="flex items-center gap-1 text-white/40 border border-white/20 px-3 py-1.5 rounded-sm text-xs font-mono hover:bg-white/5 disabled:opacity-50"
+                  className="lf-button lf-button--secondary flex items-center justify-center gap-1 text-white/75 border border-white/20 px-2 py-2 rounded-lg text-xs font-mono bg-white/5 disabled:opacity-50"
                 >
                   <Minus size={12} />
-                  ABSTAIN
+                  Pass
                 </button>
               </div>
             )}

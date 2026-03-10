@@ -1,0 +1,74 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: council
+      POSTGRES_USER: council
+      POSTGRES_PASSWORD: council
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U council -d council"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    restart: "no"
+    env_file:
+      - ../../engine/.env
+    environment:
+      DATABASE_URL: postgresql://council:council@db:5432/council
+    command: ["sh", "-c", "cd engine && node ../node_modules/drizzle-kit/bin.cjs migrate --config=drizzle.config.ts"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  engine:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ../../engine/.env
+    environment:
+      DATABASE_URL: postgresql://council:council@db:5432/council
+      PORT: 8080
+      INLINE_WORKER_ENABLED: "true"
+      SPHERE_THREAD_ENABLED: "true"
+      SPHERE_C2_ALIAS_ENABLED: "true"
+      SPHERE_SIGNATURE_VERIFICATION: "off"
+      TELEGRAM_AUTH_DEV_BYPASS_ENABLED: "true"
+      TELEGRAM_MESSAGE_BRIDGE_ENABLED: "true"
+      TELEGRAM_BRIDGE_POLL_TIMEOUT_SECONDS: "30"
+      TELEGRAM_BRIDGE_ERROR_BACKOFF_MS: "3000"
+      CORS_ORIGINS: http://178.156.233.14:8088,http://178.156.233.14,https://178.156.233.14
+      SESSION_SECURE_COOKIES: "false"
+      MISSION_STUB_FALLBACK_ENABLED: "true"
+      RUNTIME_ENV: local
+      DATABASE_SSL: "false"
+    expose:
+      - "8080"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  web:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.tma
+    restart: unless-stopped
+    ports:
+      - "8088:80"
+    depends_on:
+      engine:
+        condition: service_started
+
+volumes:
+  pgdata:

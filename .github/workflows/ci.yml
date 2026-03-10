@@ -47,10 +47,14 @@ jobs:
           cache: "npm"
       - name: Install Dependencies
         run: npm install
+      - name: Lint
+        run: npm run lint -w engine
       - name: Build
         run: npm run build --workspaces
       - name: Migrate DB
         run: npm run db:migrate -w engine
+      - name: Run Postgres integration tests
+        run: npm run test:integration:pg -w engine
       - name: Test
         run: npm test --workspaces --if-present
       - name: Install Playwright Browsers

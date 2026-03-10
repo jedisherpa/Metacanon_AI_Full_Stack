@@ -33,7 +33,7 @@ function makePolicies(): GovernancePolicies {
   };
 
   const highRiskByIntent = new Map(
-    highRiskRegistry.prismHolderApprovalRequired.map((rule) => [rule.intent, rule])
+    highRiskRegistry.prismHolderApprovalRequired.map((rule) => [rule.intent.trim().toUpperCase(), rule])
   );
 
   const contactLensesByDid = new Map([
@@ -54,19 +54,76 @@ function makePolicies(): GovernancePolicies {
     governanceRoot: '/tmp/governance',
     contactLensSchemaPath: '/tmp/governance/contact_lens_schema.json',
     highRiskRegistryPath: '/tmp/governance/high_risk_intent_registry.json',
+    lensUpgradeRulesPath: '/tmp/governance/lens_upgrade_rules.json',
     contactLensesPath: '/tmp/governance/contact_lenses',
     checksums: {
       contactLensSchema: 'x',
       highRiskRegistry: 'y',
-      contactLenses: {}
+      lensUpgradeRules: 'z',
+      contactLenses: {},
+      contactLensPack: 'pack'
     },
     highRiskRegistry,
     highRiskByIntent,
+    lensUpgradeRegistry: {
+      version: '1.0',
+      description: 'test lens upgrade rules',
+      rules: [
+        {
+          ruleId: 'rule-lens-upgrade-v1',
+          fromVersion: '1.0.0',
+          toVersion: '1.1.0'
+        }
+      ]
+    },
+    lensUpgradeRuleById: new Map([
+      [
+        'rule-lens-upgrade-v1',
+        {
+          ruleId: 'rule-lens-upgrade-v1',
+          fromVersion: '1.0.0',
+          toVersion: '1.1.0'
+        }
+      ]
+    ]),
     contactLensesByDid
   };
 }
 
 describe('createIntentValidator', () => {
+  it('rejects non-breakglass intent when contact lens is missing', () => {
+    const validate = createIntentValidator(makePolicies());
+
+    const result = validate({
+      intent: 'MISSION_REPORT',
+      agentDid: 'did:test:missing',
+      threadState: 'ACTIVE',
+      prismHolderApproved: false
+    });
+
+    expect(result.allowed).toBe(false);
+    expect(result.code).toBe('LENS_NOT_FOUND');
+  });
+
+  it('rejects intent when permitted activities list is empty', () => {
+    const policies = makePolicies();
+    policies.contactLensesByDid.set('did:test:alpha', {
+      ...policies.contactLensesByDid.get('did:test:alpha')!,
+      permittedActivities: []
+    });
+    const validate = createIntentValidator(policies);
+
+    const result = validate({
+      intent: 'MISSION_REPORT',
+      agentDid: 'did:test:alpha',
+      threadState: 'ACTIVE',
+      prismHolderApproved: false
+    });
+
+    expect(result.allowed).toBe(false);
+    expect(result.code).toBe('LENS_ACTION_NOT_PERMITTED');
+  });
+
   it('rejects high-risk intent without prism holder approval', () => {
     const validate = createIntentValidator(makePolicies());
 
@@ -117,5 +174,19 @@ describe('createIntentValidator', () => {
 
     expect(result.allowed).toBe(false);
     expect(result.code).toBe('BREAK_GLASS_AUTH_FAILED');
+  });
+
+  it('enforces high-risk approval even when intent casing differs', () => {
+    const validate = createIntentValidator(makePolicies());
+
+    const result = validate({
+      intent: 'dispatch_mission',
+      agentDid: 'did:test:alpha',
+      threadState: 'ACTIVE',
+      prismHolderApproved: false
+    });
+
+    expect(result.allowed).toBe(false);
+    expect(result.code).toBe('PRISM_HOLDER_APPROVAL_REQUIRED');
   });
 });

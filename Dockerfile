@@ -18,7 +18,9 @@ ENV PORT=8080
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/engine/dist ./engine/dist
 COPY --from=builder /app/engine/drizzle ./engine/drizzle
+COPY --from=builder /app/engine/drizzle.config.ts ./engine/drizzle.config.ts
 COPY --from=builder /app/engine/package.json ./engine/package.json
+COPY --from=builder /app/governance ./governance
 COPY --from=builder /app/lens-packs ./lens-packs
 
 EXPOSE 8080

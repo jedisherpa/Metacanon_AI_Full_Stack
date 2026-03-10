@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import type { Request, Response, NextFunction } from 'express';
 import { env } from '../config/env.js';
+import { sendApiError } from '../lib/apiError.js';
 
 export type TelegramUser = {
   id: number;
@@ -20,6 +21,40 @@ declare global {
       telegramUserId?: string;
     }
   }
+}
+
+function isDevBypassEnabled(): boolean {
+  return env.TELEGRAM_AUTH_DEV_BYPASS_ENABLED && env.RUNTIME_ENV !== 'production';
+}
+
+function parseDevBypassUserId(value: string | undefined): number | null {
+  if (!value) return null;
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return parsed;
+}
+
+function buildDevBypassUser(req: Request): TelegramUser {
+  const idFromHeader = parseDevBypassUserId(req.header('x-dev-telegram-user-id'));
+  const idFromEnv = parseDevBypassUserId(env.TELEGRAM_AUTH_DEV_BYPASS_USER_ID);
+  const id = idFromHeader ?? idFromEnv ?? 900000001;
+
+  const firstName = req.header('x-dev-telegram-first-name') ?? env.TELEGRAM_AUTH_DEV_BYPASS_FIRST_NAME;
+  const username = req.header('x-dev-telegram-username') ?? env.TELEGRAM_AUTH_DEV_BYPASS_USERNAME;
+
+  return {
+    id,
+    first_name: firstName,
+    username
+  };
+}
+
+function applyDevBypass(req: Request, res: Response, next: NextFunction): void {
+  const user = buildDevBypassUser(req);
+  req.telegramUser = user;
+  req.telegramUserId = String(user.id);
+  res.setHeader('x-telegram-auth-mode', 'dev_bypass');
+  next();
 }
 
 /**
@@ -70,7 +105,12 @@ function validateInitData(initData: string, botToken: string): TelegramUser | nu
 export function telegramAuthMiddleware(req: Request, res: Response, next: NextFunction): void {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('tma ')) {
-    res.status(401).json({ error: 'Missing Telegram auth', code: 'TG_AUTH_MISSING' });
+    if (isDevBypassEnabled()) {
+      applyDevBypass(req, res, next);
+      return;
+    }
+
+    sendApiError(req, res, 401, 'TG_AUTH_MISSING', 'Missing Telegram init data.', false);
     return;
   }
 
@@ -78,11 +118,17 @@ export function telegramAuthMiddleware(req: Request, res: Response, next: NextFu
   const user = validateInitData(initData, env.TELEGRAM_BOT_TOKEN);
 
   if (!user) {
-    res.status(401).json({ error: 'Invalid Telegram auth', code: 'TG_AUTH_INVALID' });
+    if (isDevBypassEnabled()) {
+      applyDevBypass(req, res, next);
+      return;
+    }
+
+    sendApiError(req, res, 401, 'TG_AUTH_INVALID', 'Invalid Telegram init data.', false);
     return;
   }
 
   req.telegramUser = user;
   req.telegramUserId = String(user.id);
+  res.setHeader('x-telegram-auth-mode', 'telegram');
   next();
 }

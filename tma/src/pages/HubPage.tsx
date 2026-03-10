@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Radio, AlertTriangle, Users, Send } from 'lucide-react';
+import { Radio, AlertTriangle, Users, Send, CheckCircle2, Clock3 } from 'lucide-react';
 import { api, type UserProfile } from '../lib/api';
 import { triggerHaptic } from '../lib/telegram';
 
@@ -55,22 +55,29 @@ export default function HubPage({ profile }: Props) {
   ];
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex-shrink-0 flex items-center gap-2 px-4 pt-4 pb-3 border-b border-hub/30">
-        <Radio size={18} className="text-hub" />
-        <h2 className="text-hub font-mono font-semibold tracking-wide">THE HUB</h2>
+    <div className="flex flex-col h-full scroll-area px-4 pb-6">
+      <div className="pt-5 pb-3">
+        <p className="text-hub text-xs font-mono uppercase tracking-[0.18em]">Territory</p>
+        <h2 className="text-white text-2xl font-semibold mt-1 leading-none">The Hub</h2>
+        <p className="text-white/65 text-sm mt-2">
+          Transmission and coordination layer for {profile.firstName}.
+        </p>
       </div>
 
-      {/* Tabs */}
-      <div className="flex-shrink-0 flex border-b border-white/10">
+      <div className="flex rounded-xl border border-white/18 bg-white/[0.06] p-1.5">
         {tabs.map(({ id, icon: Icon, label }) => (
           <button
             key={id}
-            onClick={() => { triggerHaptic('selection'); setActiveTab(id); }}
+            onClick={() => {
+              triggerHaptic('selection');
+              setActiveTab(id);
+            }}
             className={`
-              flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-mono transition-colors
-              ${activeTab === id ? 'text-hub border-b-2 border-hub' : 'text-white/40 hover:text-white/70'}
+              lf-button lf-button--secondary
+              flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-mono transition-colors rounded-lg
+              ${activeTab === id
+                ? 'text-hub bg-hub/20 border border-hub/45'
+                : 'text-white/55 hover:text-white/80 border border-transparent'}
             `}
           >
             <Icon size={13} />
@@ -79,70 +86,66 @@ export default function HubPage({ profile }: Props) {
         ))}
       </div>
 
-      {/* Tab content */}
-      <div className="flex-1 scroll-area p-4">
-
-        {/* Broadcast tab */}
+      <div className="mt-3.5 space-y-3.5">
         {activeTab === 'broadcast' && (
-          <div className="space-y-4">
-            <p className="text-white/60 text-xs">
-              Send a message to all members of the global sphere.
-            </p>
+          <div className="territory-card lf-card p-3.5 border-hub/35 bg-hub/10">
+            <p className="text-hub text-xs font-mono uppercase tracking-[0.16em] mb-2">Global Broadcast</p>
             <textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              placeholder="Type your broadcast message..."
+              placeholder="Write a short transmission to all sphere members..."
               rows={5}
-              className="w-full bg-void-light border border-white/20 text-white text-sm px-3 py-2 rounded-sm outline-none focus:border-hub/60 resize-none"
+              className="lf-input w-full bg-void-light/70 border border-white/20 text-white text-sm px-3 py-2.5 rounded-lg outline-none focus:border-hub/60 resize-none"
             />
             <button
               onClick={handleBroadcast}
               disabled={sending || !message.trim()}
-              className="w-full bg-hub text-white font-mono text-sm py-3 rounded-sm font-bold disabled:opacity-50 flex items-center justify-center gap-2"
+              className="lf-button lf-button--primary w-full mt-2 bg-hub/90 text-white font-mono text-sm py-2.5 rounded-lg font-bold disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {sending ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                  BROADCASTING...
+                  Broadcasting...
                 </>
               ) : (
                 <>
                   <Send size={16} />
-                  BROADCAST
+                  Send Broadcast
                 </>
               )}
             </button>
             {sent && (
-              <div className="border border-hub/40 bg-hub/10 rounded-sm p-3 text-center">
-                <p className="text-hub text-sm font-mono">Message broadcast successfully</p>
+              <div className="mt-2 border border-hub/40 bg-hub/20 rounded-lg p-2.5 text-center flex items-center justify-center gap-1.5">
+                <CheckCircle2 size={14} className="text-hub" />
+                <p className="text-hub text-sm">Message broadcast successfully</p>
               </div>
             )}
           </div>
         )}
 
-        {/* Escalations tab */}
         {activeTab === 'escalations' && (
           <div className="space-y-3">
             {loading && (
               <div className="flex items-center justify-center py-8">
-                <div className="w-6 h-6 border border-hub rounded-sm animate-spin" />
+                <div className="w-7 h-7 border-2 border-hub/45 border-t-hub rounded-full animate-spin" />
               </div>
             )}
             {!loading && escalations.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-12 gap-3">
+              <div className="territory-card lf-card p-6 flex flex-col items-center justify-center gap-3 border-hub/30">
                 <AlertTriangle size={32} className="text-white/20" />
-                <p className="text-white/40 text-sm font-mono">No escalations</p>
-                <p className="text-white/30 text-xs">All clear</p>
+                <p className="text-white/70 text-sm font-medium">No escalations</p>
+                <p className="text-white/45 text-xs">Channel is stable.</p>
               </div>
             )}
             {escalations.map((e) => (
-              <div key={e.id} className="border border-red-500/40 bg-red-500/5 rounded-sm p-3">
+              <div key={e.id} className="territory-card lf-card border-red-500/40 bg-red-500/8 p-3.5">
                 <div className="flex items-center gap-2 mb-1">
-                  <AlertTriangle size={12} className="text-red-400" />
-                  <p className="text-red-400 text-xs font-mono uppercase">{e.eventType}</p>
+                  <AlertTriangle size={12} className="text-red-300" />
+                  <p className="text-red-300 text-xs font-mono uppercase tracking-wide">{e.eventType}</p>
                 </div>
-                <p className="text-white/70 text-xs">{e.sphereId}</p>
-                <p className="text-white/40 text-[10px] mt-1">
+                <p className="text-white/80 text-xs">{e.sphereId}</p>
+                <p className="text-white/50 text-[11px] mt-1 flex items-center gap-1.5">
+                  <Clock3 size={11} />
                   {new Date(e.createdAt).toLocaleString()}
                 </p>
               </div>
@@ -150,29 +153,28 @@ export default function HubPage({ profile }: Props) {
           </div>
         )}
 
-        {/* Members tab */}
         {activeTab === 'members' && (
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             {loading && (
               <div className="flex items-center justify-center py-8">
-                <div className="w-6 h-6 border border-hub rounded-sm animate-spin" />
+                <div className="w-7 h-7 border-2 border-hub/45 border-t-hub rounded-full animate-spin" />
               </div>
             )}
             {!loading && members.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-12 gap-3">
+              <div className="territory-card lf-card p-6 flex flex-col items-center justify-center gap-3 border-hub/30">
                 <Users size={32} className="text-white/20" />
-                <p className="text-white/40 text-sm font-mono">No active game</p>
-                <p className="text-white/30 text-xs">Join a game to see members</p>
+                <p className="text-white/70 text-sm font-medium">No active game</p>
+                <p className="text-white/45 text-xs">Join a cycle to view members.</p>
               </div>
             )}
             {members.map((m: any) => (
-              <div key={m.id} className="flex items-center gap-3 border border-white/10 rounded-sm p-3">
-                <div className="w-8 h-8 rounded-sm bg-hub/20 flex items-center justify-center text-xs font-mono text-hub">
+              <div key={m.id} className="territory-card lf-card flex items-center gap-3 p-3 border-white/15">
+                <div className="w-9 h-9 rounded-lg bg-hub/20 border border-hub/35 flex items-center justify-center text-xs font-mono text-hub">
                   {m.seatNumber ?? '?'}
                 </div>
-                <div>
-                  <p className="text-white text-sm">{m.name ?? m.avatarName}</p>
-                  <div className="flex gap-2 mt-0.5">
+                <div className="flex-1">
+                  <p className="text-white text-sm font-medium">{m.name ?? m.avatarName}</p>
+                  <div className="flex gap-2 mt-1">
                     <span className={`text-[10px] font-mono ${m.round1Complete ? 'text-green-400' : 'text-white/30'}`}>
                       R1{m.round1Complete ? '✓' : '○'}
                     </span>
@@ -181,6 +183,7 @@ export default function HubPage({ profile }: Props) {
                     </span>
                   </div>
                 </div>
+                <div className="text-[10px] text-white/45 font-mono uppercase tracking-wide">Seat</div>
               </div>
             ))}
           </div>
