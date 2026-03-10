@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { env } from '../../config/env.js';
 import type { GovernancePolicies } from '../../governance/policyLoader.js';
 import type { DidRegistry } from '../../sphere/didRegistry.js';
-import { ConductorError, SphereConductor } from '../../sphere/conductor.js';
+import { ConductorError, SphereConductor, type ConductorKeyRecord } from '../../sphere/conductor.js';
 import {
   CYCLE_EVENT_TYPES,
   allowedCycleTransitionsFrom,
@@ -206,6 +206,14 @@ const rotateConductorKeySchema = z.object({
   verificationGraceDays: z.number().int().min(0).max(3650).optional()
 });
 
+const conductorKeyParamsSchema = z.object({
+  keyId: z
+    .string()
+    .trim()
+    .min(1)
+    .max(160)
+});
+
 const retireConductorKeySchema = z.object({
   keyId: z
     .string()
@@ -268,6 +276,18 @@ const ackWriteRequiredFields = [
 type CycleEventType = (typeof CYCLE_EVENT_TYPES)[number];
 type LensUpgradePayload = z.infer<typeof cycleLensUpgradePayloadSchema>;
 const lensUpgradeRuleTupleFields = ['ruleId', 'previousLensVersion', 'nextLensVersion'] as const;
+
+function summarizeConductorKeyAudit(keys: ConductorKeyRecord[]) {
+  return {
+    generatedAt: new Date().toISOString(),
+    total: keys.length,
+    active: keys.filter((key) => key.status === 'ACTIVE').length,
+    retiredWithinGrace: keys.filter((key) => key.verificationState === 'retired_within_grace').length,
+    retiredExpired: keys.filter((key) => key.verificationState === 'retired_expired').length,
+    withEncryptedPrivateMaterial: keys.filter((key) => key.hasEncryptedPrivateMaterial).length,
+    withoutEncryptedPrivateMaterial: keys.filter((key) => !key.hasEncryptedPrivateMaterial).length
+  };
+}
 const cycleStateStartEventTypes: CycleEventType[] = ['seat_taken'];
 
 type LensProgressionUpgrade = {
@@ -819,6 +839,7 @@ function registerUnifiedRoutes(
     cycleState: RequestHandler;
     verifyLedger: RequestHandler;
     conductorKeyList: RequestHandler;
+    conductorKeyGet: RequestHandler;
     rotateConductorKey: RequestHandler;
     retireConductorKey: RequestHandler;
     lensProgression: RequestHandler;
@@ -842,6 +863,7 @@ function registerUnifiedRoutes(
   registerGet(router, bases, '/threads/:threadId/cycle-state', handler.cycleState);
   registerGet(router, bases, '/threads/:threadId/verify-ledger', handler.verifyLedger);
   registerGet(router, bases, '/conductor-keys', handler.conductorKeyList);
+  registerGet(router, bases, '/conductor-keys/:keyId', handler.conductorKeyGet);
   registerPost(router, bases, '/rotate-conductor-key', handler.rotateConductorKey);
   registerPost(router, bases, '/retire-conductor-key', handler.retireConductorKey);
   registerGet(router, bases, '/threads/:threadId/lens-progression', handler.lensProgression);
@@ -946,6 +968,7 @@ export function createSphereRoutes(options: SphereRouteOptions): Router {
         cycleState: true,
         ledgerVerification: true,
         conductorKeyRegistry: true,
+        conductorKeyLookup: true,
         conductorKeyRotation: true,
         conductorKeyRetirement: true
       },
@@ -1523,11 +1546,46 @@ export function createSphereRoutes(options: SphereRouteOptions): Router {
   const conductorKeyListHandler: RequestHandler = async (req, res) => {
     try {
       const keys = await options.conductor.listConductorKeys();
+      const activeKeyId =
+        keys.find((key) => key.status === 'ACTIVE')?.keyId ??
+        options.conductor.getConductorSignatureProfile().ed25519KeyId;
       return res.json({
         keys,
-        activeKeyId:
-          keys.find((key) => key.status === 'ACTIVE')?.keyId ??
-          options.conductor.getConductorSignatureProfile().ed25519KeyId,
+        activeKeyId,
+        audit: summarizeConductorKeyAudit(keys),
+        traceId: req.sphereTraceId
+      });
+    } catch (err) {
+      return sendRouteError(req, res, err);
+    }
+  };
+
+  const conductorKeyGetHandler: RequestHandler = async (req, res) => {
+    const parsed = conductorKeyParamsSchema.safeParse(req.params ?? {});
+    if (!parsed.success) {
+      return sendSphereError(req, res, 400, {
+        code: 'SPHERE_ERR_INVALID_SCHEMA',
+        message: 'Invalid conductor key lookup payload.',
+        retryable: false,
+        details: parsed.error.flatten()
+      });
+    }
+
+    try {
+      const key = await options.conductor.getConductorKey(parsed.data.keyId);
+      if (!key) {
+        return sendSphereError(req, res, 404, {
+          code: 'SPHERE_ERR_CONDUCTOR_KEY_NOT_FOUND',
+          message: 'Conductor key not found.',
+          retryable: false
+        });
+      }
+
+      const activeKeyId = options.conductor.getConductorSignatureProfile().ed25519KeyId;
+      return res.json({
+        key,
+        activeKeyId,
+        isActiveSigningKey: key.keyId === activeKeyId,
         traceId: req.sphereTraceId
       });
     } catch (err) {
@@ -1900,6 +1958,7 @@ export function createSphereRoutes(options: SphereRouteOptions): Router {
     cycleState: cycleStateHandler,
     verifyLedger: verifyLedgerHandler,
     conductorKeyList: conductorKeyListHandler,
+    conductorKeyGet: conductorKeyGetHandler,
     rotateConductorKey: rotateConductorKeyHandler,
     retireConductorKey: retireConductorKeyHandler,
     lensProgression: lensProgressionHandler,

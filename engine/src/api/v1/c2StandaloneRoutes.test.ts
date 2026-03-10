@@ -97,6 +97,7 @@ describe('createC2StandaloneRoutes', () => {
     expect(response.body.features?.lensProgression).toBe(false);
     expect(response.body.features?.ledgerVerification).toBe(false);
     expect(response.body.features?.conductorKeyRegistry).toBe(false);
+    expect(response.body.features?.conductorKeyLookup).toBe(false);
     expect(response.body.features?.conductorKeyRotation).toBe(false);
     expect(response.body.features?.conductorKeyRetirement).toBe(false);
   });
@@ -270,6 +271,16 @@ describe('createC2StandaloneRoutes', () => {
   it('returns SPHERE_THREAD_DISABLED for conductor key registry path', async () => {
     const response = await request
       .get('/api/v1/sphere/conductor-keys')
+      .set('authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(503);
+    expect(response.body.code).toBe('SPHERE_THREAD_DISABLED');
+    expect(response.body.sphereThreadEnabled).toBe(false);
+  });
+
+  it('returns SPHERE_THREAD_DISABLED for conductor key lookup path', async () => {
+    const response = await request
+      .get('/api/v1/sphere/conductor-keys/conductor-key-legacy')
       .set('authorization', `Bearer ${token}`);
 
     expect(response.status).toBe(503);

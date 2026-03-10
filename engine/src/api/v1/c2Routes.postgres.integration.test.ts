@@ -332,12 +332,30 @@ describe.runIf(runPgIntegration)('Sphere routes Postgres integration', () => {
 
     expect(keyRegistryResponse.status).toBe(200)
     expect(Array.isArray(keyRegistryResponse.body.keys)).toBe(true)
+    expect(keyRegistryResponse.body.audit).toEqual(
+      expect.objectContaining({
+        total: expect.any(Number),
+        active: expect.any(Number),
+        retiredWithinGrace: expect.any(Number),
+        retiredExpired: expect.any(Number)
+      })
+    )
     expect(
       keyRegistryResponse.body.keys.some(
         (key: { keyId: string; status: string }) =>
           key.keyId === 'conductor-key-api-rotation-1' && key.status === 'ACTIVE'
       )
     ).toBe(true)
+
+    const keyLookupResponse = await request
+      .get('/api/v1/sphere/conductor-keys/conductor-key-api-rotation-1')
+      .set('authorization', `Bearer ${serviceToken}`)
+
+    expect(keyLookupResponse.status).toBe(200)
+    expect(keyLookupResponse.body.key?.keyId).toBe('conductor-key-api-rotation-1')
+    expect(keyLookupResponse.body.key?.verificationState).toBe('active')
+    expect(keyLookupResponse.body.key?.hasEncryptedPrivateMaterial).toBe(true)
+    expect(keyLookupResponse.body.isActiveSigningKey).toBe(true)
   })
 
   it('retires non-active conductor keys through API and rejects active-key retirement', async () => {

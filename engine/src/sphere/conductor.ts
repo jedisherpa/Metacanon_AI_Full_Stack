@@ -106,6 +106,7 @@ export type AckRecord = {
 };
 
 export type ConductorKeyStatus = 'ACTIVE' | 'RETIRED';
+export type ConductorKeyVerificationState = 'active' | 'retired_within_grace' | 'retired_expired';
 
 export type ConductorKeyRecord = {
   keyId: string;
@@ -116,6 +117,10 @@ export type ConductorKeyRecord = {
   verificationGraceDays: number;
   createdAt: string;
   updatedAt: string;
+  hasEncryptedPrivateMaterial: boolean;
+  gracePeriodEndsAt: string | null;
+  verificationState: ConductorKeyVerificationState;
+  verificationExpired: boolean;
 };
 
 export type RotateConductorKeyResult = {
@@ -524,15 +529,35 @@ export class SphereConductor extends EventEmitter {
   }
 
   private rowToConductorKeyRecord(row: ConductorDbKeyRow): ConductorKeyRecord {
+    const retirementDate = row.retirement_date ? toIsoString(row.retirement_date) : null;
+    const verificationGraceDays = Number(row.verification_grace_days ?? 0);
+    const graceMs = Math.max(0, verificationGraceDays) * 24 * 60 * 60 * 1000;
+    const retirementMs = retirementDate ? Date.parse(retirementDate) : Number.NaN;
+    const hasRetirementDate = !Number.isNaN(retirementMs);
+    const gracePeriodEndsAt = hasRetirementDate ? new Date(retirementMs + graceMs).toISOString() : null;
+    const verificationExpired =
+      row.status === 'RETIRED' && hasRetirementDate ? Date.now() > retirementMs + graceMs : false;
+    const verificationState: ConductorKeyVerificationState =
+      row.status === 'ACTIVE'
+        ? 'active'
+        : verificationExpired
+          ? 'retired_expired'
+          : 'retired_within_grace';
+
     return {
       keyId: row.key_id,
       publicKey: row.public_key,
       status: row.status,
       activationDate: toIsoString(row.activation_date),
-      retirementDate: row.retirement_date ? toIsoString(row.retirement_date) : null,
-      verificationGraceDays: Number(row.verification_grace_days ?? 0),
+      retirementDate,
+      verificationGraceDays,
       createdAt: toIsoString(row.created_at),
-      updatedAt: toIsoString(row.updated_at)
+      updatedAt: toIsoString(row.updated_at),
+      hasEncryptedPrivateMaterial:
+        Boolean(row.private_key_ciphertext) && Boolean(row.private_key_iv) && Boolean(row.private_key_tag),
+      gracePeriodEndsAt,
+      verificationState,
+      verificationExpired
     };
   }
 
@@ -830,6 +855,37 @@ export class SphereConductor extends EventEmitter {
     );
 
     return result.rows.map((row) => this.rowToConductorKeyRecord(row));
+  }
+
+  async getConductorKey(keyId: string): Promise<ConductorKeyRecord | null> {
+    await this.ensureReady();
+
+    const result = await pool.query<ConductorDbKeyRow>(
+      `
+        SELECT
+          key_id,
+          public_key,
+          status,
+          activation_date,
+          retirement_date,
+          verification_grace_days,
+          private_key_ciphertext,
+          private_key_iv,
+          private_key_tag,
+          created_at,
+          updated_at
+        FROM conductor_keys
+        WHERE key_id = $1
+        LIMIT 1
+      `,
+      [keyId]
+    );
+
+    if (result.rowCount === 0) {
+      return null;
+    }
+
+    return this.rowToConductorKeyRecord(result.rows[0]);
   }
 
   async rotateConductorKey(input?: {

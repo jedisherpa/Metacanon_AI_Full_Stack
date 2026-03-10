@@ -52,6 +52,7 @@ describe('createSphereRoutes boundary hardening', () => {
     getConductorSignatureProfile: ReturnType<typeof vi.fn>;
     getConductorSignatureVerificationPolicy: ReturnType<typeof vi.fn>;
     listConductorKeys: ReturnType<typeof vi.fn>;
+    getConductorKey: ReturnType<typeof vi.fn>;
     rotateConductorKey: ReturnType<typeof vi.fn>;
     retireConductorKey: ReturnType<typeof vi.fn>;
     on: ReturnType<typeof vi.fn>;
@@ -174,6 +175,7 @@ describe('createSphereRoutes boundary hardening', () => {
         graceDays: 0
       })),
       listConductorKeys: vi.fn(async () => []),
+      getConductorKey: vi.fn(async () => null),
       rotateConductorKey: vi.fn(async () => ({
         key: {
           keyId: 'conductor-key-2026-03',
@@ -183,7 +185,11 @@ describe('createSphereRoutes boundary hardening', () => {
           retirementDate: null,
           verificationGraceDays: 0,
           createdAt: '2026-03-10T00:00:00.000Z',
-          updatedAt: '2026-03-10T00:00:00.000Z'
+          updatedAt: '2026-03-10T00:00:00.000Z',
+          hasEncryptedPrivateMaterial: true,
+          gracePeriodEndsAt: null,
+          verificationState: 'active',
+          verificationExpired: false
         },
         previousActiveKeyId: 'conductor-key-legacy',
         gracePeriodEndsAt: '2026-03-17T00:00:00.000Z',
@@ -198,7 +204,11 @@ describe('createSphereRoutes boundary hardening', () => {
           retirementDate: '2026-03-10T00:00:00.000Z',
           verificationGraceDays: 7,
           createdAt: '2026-01-01T00:00:00.000Z',
-          updatedAt: '2026-03-10T00:00:00.000Z'
+          updatedAt: '2026-03-10T00:00:00.000Z',
+          hasEncryptedPrivateMaterial: false,
+          gracePeriodEndsAt: '2026-03-17T00:00:00.000Z',
+          verificationState: 'retired_within_grace',
+          verificationExpired: false
         },
         gracePeriodEndsAt: '2026-03-17T00:00:00.000Z'
       })),
@@ -250,6 +260,7 @@ describe('createSphereRoutes boundary hardening', () => {
     conductor.getConductorSignatureProfile.mockReset();
     conductor.getConductorSignatureVerificationPolicy.mockReset();
     conductor.listConductorKeys.mockReset();
+    conductor.getConductorKey.mockReset();
     conductor.rotateConductorKey.mockReset();
     conductor.retireConductorKey.mockReset();
     conductor.on.mockReset();
@@ -293,6 +304,7 @@ describe('createSphereRoutes boundary hardening', () => {
       graceDays: 0
     });
     conductor.listConductorKeys.mockResolvedValue([]);
+    conductor.getConductorKey.mockResolvedValue(null);
     conductor.rotateConductorKey.mockResolvedValue({
       key: {
         keyId: 'conductor-key-2026-03',
@@ -302,7 +314,11 @@ describe('createSphereRoutes boundary hardening', () => {
         retirementDate: null,
         verificationGraceDays: 0,
         createdAt: '2026-03-10T00:00:00.000Z',
-        updatedAt: '2026-03-10T00:00:00.000Z'
+        updatedAt: '2026-03-10T00:00:00.000Z',
+        hasEncryptedPrivateMaterial: true,
+        gracePeriodEndsAt: null,
+        verificationState: 'active',
+        verificationExpired: false
       },
       previousActiveKeyId: 'conductor-key-legacy',
       gracePeriodEndsAt: '2026-03-17T00:00:00.000Z',
@@ -317,7 +333,11 @@ describe('createSphereRoutes boundary hardening', () => {
         retirementDate: '2026-03-10T00:00:00.000Z',
         verificationGraceDays: 7,
         createdAt: '2026-01-01T00:00:00.000Z',
-        updatedAt: '2026-03-10T00:00:00.000Z'
+        updatedAt: '2026-03-10T00:00:00.000Z',
+        hasEncryptedPrivateMaterial: false,
+        gracePeriodEndsAt: '2026-03-17T00:00:00.000Z',
+        verificationState: 'retired_within_grace',
+        verificationExpired: false
       },
       gracePeriodEndsAt: '2026-03-17T00:00:00.000Z'
     });
@@ -701,6 +721,7 @@ describe('createSphereRoutes boundary hardening', () => {
     expect(response.body.features?.cycleState).toBe(true);
     expect(response.body.features?.ledgerVerification).toBe(true);
     expect(response.body.features?.conductorKeyRegistry).toBe(true);
+    expect(response.body.features?.conductorKeyLookup).toBe(true);
     expect(response.body.features?.conductorKeyRotation).toBe(true);
     expect(response.body.features?.conductorKeyRetirement).toBe(true);
     expect(response.body.surface?.legacyAliasDeprecated).toBe(true);
@@ -1030,7 +1051,11 @@ describe('createSphereRoutes boundary hardening', () => {
         retirementDate: null,
         verificationGraceDays: 0,
         createdAt: '2026-03-10T00:00:00.000Z',
-        updatedAt: '2026-03-10T00:00:00.000Z'
+        updatedAt: '2026-03-10T00:00:00.000Z',
+        hasEncryptedPrivateMaterial: true,
+        gracePeriodEndsAt: null,
+        verificationState: 'active',
+        verificationExpired: false
       }
     ]);
 
@@ -1042,6 +1067,55 @@ describe('createSphereRoutes boundary hardening', () => {
     expect(Array.isArray(response.body.keys)).toBe(true);
     expect(response.body.keys).toHaveLength(1);
     expect(response.body.activeKeyId).toBe('conductor-key-2026-03');
+    expect(response.body.audit).toEqual(
+      expect.objectContaining({
+        total: 1,
+        active: 1,
+        retiredWithinGrace: 0,
+        retiredExpired: 0
+      })
+    );
+  });
+
+  it('returns conductor key lookup payload', async () => {
+    conductor.getConductorKey.mockResolvedValueOnce({
+      keyId: 'conductor-key-2026-03',
+      publicKey: '-----BEGIN PUBLIC KEY-----fake-----END PUBLIC KEY-----',
+      status: 'ACTIVE',
+      activationDate: '2026-03-10T00:00:00.000Z',
+      retirementDate: null,
+      verificationGraceDays: 0,
+      createdAt: '2026-03-10T00:00:00.000Z',
+      updatedAt: '2026-03-10T00:00:00.000Z',
+      hasEncryptedPrivateMaterial: true,
+      gracePeriodEndsAt: null,
+      verificationState: 'active',
+      verificationExpired: false
+    });
+    conductor.getConductorSignatureProfile.mockReturnValueOnce({
+      mode: 'dual_hmac_sha256_plus_ed25519',
+      algorithms: ['hmac_sha256', 'ed25519'],
+      ed25519KeyId: 'conductor-key-2026-03'
+    });
+
+    const response = await request
+      .get('/api/v1/sphere/conductor-keys/conductor-key-2026-03')
+      .set('authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.key?.keyId).toBe('conductor-key-2026-03');
+    expect(response.body.isActiveSigningKey).toBe(true);
+  });
+
+  it('returns 404 for unknown conductor key lookup', async () => {
+    conductor.getConductorKey.mockResolvedValueOnce(null);
+
+    const response = await request
+      .get('/api/v1/sphere/conductor-keys/conductor-key-missing')
+      .set('authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(404);
+    expect(response.body.code).toBe('SPHERE_ERR_CONDUCTOR_KEY_NOT_FOUND');
   });
 
   it('rotates conductor key through route', async () => {
@@ -1054,7 +1128,11 @@ describe('createSphereRoutes boundary hardening', () => {
         retirementDate: null,
         verificationGraceDays: 0,
         createdAt: '2026-03-11T00:00:00.000Z',
-        updatedAt: '2026-03-11T00:00:00.000Z'
+        updatedAt: '2026-03-11T00:00:00.000Z',
+        hasEncryptedPrivateMaterial: true,
+        gracePeriodEndsAt: null,
+        verificationState: 'active',
+        verificationExpired: false
       },
       previousActiveKeyId: 'conductor-key-2026-03',
       gracePeriodEndsAt: '2026-03-18T00:00:00.000Z',
@@ -1087,7 +1165,11 @@ describe('createSphereRoutes boundary hardening', () => {
         retirementDate: '2026-03-11T00:00:00.000Z',
         verificationGraceDays: 7,
         createdAt: '2026-03-01T00:00:00.000Z',
-        updatedAt: '2026-03-11T00:00:00.000Z'
+        updatedAt: '2026-03-11T00:00:00.000Z',
+        hasEncryptedPrivateMaterial: false,
+        gracePeriodEndsAt: '2026-03-18T00:00:00.000Z',
+        verificationState: 'retired_within_grace',
+        verificationExpired: false
       },
       gracePeriodEndsAt: '2026-03-18T00:00:00.000Z'
     });
