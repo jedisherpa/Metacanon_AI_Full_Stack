@@ -164,6 +164,7 @@ This overlay is now a first-class track and gates release readiness. Feature wor
 22. `DONE`: Rotation concurrency hardening added in conductor runtime. `rotateConductorKey` now executes on a single DB client transaction and takes a transaction-scoped advisory lock (`metacanon_conductor_keys_rotation`) so concurrent rotations cannot leave multiple `ACTIVE` keys.
 23. `DONE`: New Postgres integration coverage for key custody resilience: legacy `TEXT/base64 -> BYTEA` migration integrity checks, concurrent-rotation single-active invariant checks, and corrupted encrypted-private-key row tolerance checks (loader remains fail-safe and dispatch/verifier stay operational).
 24. `DONE`: Material-impact quorum now supports strict verified counselor ACK mode with rollout controls. New env gates (`SPHERE_ACK_REQUIRE_VERIFIED_SIGNATURES`, activation timestamp, grace days) enforce that quorum counts only counselor ACKs with verifiable Ed25519 signatures (did:key or registered key), surfaced via capabilities metadata and covered by unit + Postgres integration tests.
+25. `DONE`: Bypass elimination expanded to ACK writes. `sphere_acks` now uses a security-definer append function (`metacanon_append_sphere_ack`) plus transaction-token trigger guards that block direct `INSERT/UPDATE` paths, with app-role grants tightened to function execution + read-only table access and adversarial integration tests proving direct DB writes are rejected.
 
 ### 8.3 Enterprise Readiness Work Packages
 

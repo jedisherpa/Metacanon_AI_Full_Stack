@@ -117,6 +117,7 @@ describe.runIf(runPgIntegration)('Sphere routes Postgres integration', () => {
         sphere_threads,
         counselors,
         did_registry,
+        sphere_ack_write_tokens,
         sphere_event_write_tokens
       RESTART IDENTITY CASCADE
     `)

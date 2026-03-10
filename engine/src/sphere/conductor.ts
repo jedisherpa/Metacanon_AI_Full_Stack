@@ -2039,78 +2039,23 @@ export class SphereConductor extends EventEmitter {
         context: 'ack'
       });
 
-      const ackResult = await client.query<AckRow>(
-        `
-          INSERT INTO sphere_acks (
-            thread_id,
-            target_sequence,
-            target_message_id,
-            actor_did,
-            ack_message_id,
-            trace_id,
-            intent,
-            schema_version,
-            attestation,
-            agent_signature,
-            client_received_at,
-            acknowledged_at
-          )
-          VALUES (
-            $1,
-            $2,
-            $3,
-            $4,
-            $5,
-            $6,
-            $7,
-            $8,
-            $9::jsonb,
-            $10,
-            $11,
-            NOW()
-          )
-          ON CONFLICT (thread_id, actor_did, target_sequence) DO UPDATE SET
-            ack_message_id = EXCLUDED.ack_message_id,
-            trace_id = EXCLUDED.trace_id,
-            intent = EXCLUDED.intent,
-            schema_version = EXCLUDED.schema_version,
-            attestation = EXCLUDED.attestation,
-            agent_signature = EXCLUDED.agent_signature,
-            client_received_at = EXCLUDED.client_received_at,
-            acknowledged_at = NOW()
-          RETURNING
-            ack_id,
-            thread_id,
-            target_sequence,
-            target_message_id,
-            actor_did,
-            ack_message_id,
-            trace_id,
-            intent,
-            schema_version,
-            attestation,
-            agent_signature,
-            client_received_at,
-            acknowledged_at
-        `,
-        [
-          input.threadId,
-          targetSequence,
-          targetMessageId,
-          input.actorDid,
-          ackMessageId,
-          traceId,
-          normalizedIntent,
-          schemaVersion,
-          JSON.stringify(attestation),
-          agentSignature,
-          receivedAt
-        ]
-      );
+      const ackRow = await this.appendSphereAck(client, {
+        threadId: input.threadId,
+        targetSequence,
+        targetMessageId,
+        actorDid: input.actorDid,
+        ackMessageId,
+        traceId,
+        intent: normalizedIntent,
+        schemaVersion,
+        attestation,
+        agentSignature,
+        receivedAt
+      });
 
       await client.query('COMMIT');
 
-      const ackRecord = this.rowToAckRecord(ackResult.rows[0]);
+      const ackRecord = this.rowToAckRecord(ackRow);
       const event: ThreadAckEntryEvent = { threadId: ackRecord.threadId, ack: ackRecord };
       this.emit('ack_entry', event);
       this.emit(`thread:${ackRecord.threadId}:ack`, ackRecord);
@@ -2733,6 +2678,74 @@ export class SphereConductor extends EventEmitter {
     );
   }
 
+  private async appendSphereAck(
+    client: PoolClient,
+    params: {
+      threadId: string;
+      targetSequence: number;
+      targetMessageId: string;
+      actorDid: string;
+      ackMessageId: string;
+      traceId: string;
+      intent: string;
+      schemaVersion: string;
+      attestation: string[];
+      agentSignature: string;
+      receivedAt: string | null;
+    }
+  ): Promise<AckRow> {
+    const result = await client.query<AckRow>(
+      `
+        SELECT
+          ack_id,
+          thread_id,
+          target_sequence,
+          target_message_id,
+          actor_did,
+          ack_message_id,
+          trace_id,
+          intent,
+          schema_version,
+          attestation,
+          agent_signature,
+          client_received_at,
+          acknowledged_at
+        FROM metacanon_append_sphere_ack(
+          $1::uuid,
+          $2::bigint,
+          $3::uuid,
+          $4::text,
+          $5::uuid,
+          $6::uuid,
+          $7::text,
+          $8::text,
+          $9::jsonb,
+          $10::text,
+          $11::timestamptz
+        )
+      `,
+      [
+        params.threadId,
+        params.targetSequence,
+        params.targetMessageId,
+        params.actorDid,
+        params.ackMessageId,
+        params.traceId,
+        params.intent,
+        params.schemaVersion,
+        JSON.stringify(params.attestation),
+        params.agentSignature,
+        params.receivedAt
+      ]
+    );
+
+    if (result.rowCount === 0) {
+      throw new ConductorError(500, 'STM_ERR_INTERNAL', 'Failed to append sphere ACK entry.');
+    }
+
+    return result.rows[0];
+  }
+
   private async ensureSchema(): Promise<void> {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS sphere_threads (
@@ -2881,7 +2894,16 @@ export class SphereConductor extends EventEmitter {
 
         EXECUTE format('GRANT SELECT, INSERT, UPDATE ON TABLE sphere_threads TO %I', target_role);
         EXECUTE format('GRANT SELECT ON TABLE counselors TO %I', target_role);
-        EXECUTE format('GRANT SELECT, INSERT ON TABLE sphere_acks TO %I', target_role);
+        EXECUTE format('REVOKE ALL ON TABLE sphere_acks FROM %I', target_role);
+        EXECUTE format('GRANT SELECT ON TABLE sphere_acks TO %I', target_role);
+        EXECUTE format(
+          'REVOKE ALL ON FUNCTION metacanon_append_sphere_ack(UUID, BIGINT, UUID, TEXT, UUID, UUID, TEXT, TEXT, JSONB, TEXT, TIMESTAMPTZ) FROM %I',
+          target_role
+        );
+        EXECUTE format(
+          'GRANT EXECUTE ON FUNCTION metacanon_append_sphere_ack(UUID, BIGINT, UUID, TEXT, UUID, UUID, TEXT, TEXT, JSONB, TEXT, TIMESTAMPTZ) TO %I',
+          target_role
+        );
         EXECUTE format('GRANT USAGE, SELECT ON SEQUENCE sphere_acks_ack_id_seq TO %I', target_role);
         EXECUTE format('GRANT SELECT, INSERT, UPDATE ON TABLE conductor_keys TO %I', target_role);
       END;
@@ -2944,6 +2966,135 @@ export class SphereConductor extends EventEmitter {
         ON sphere_acks(thread_id, target_sequence DESC);
       CREATE INDEX IF NOT EXISTS idx_sphere_acks_actor
         ON sphere_acks(actor_did);
+
+      CREATE TABLE IF NOT EXISTS sphere_ack_write_tokens (
+        txid BIGINT PRIMARY KEY,
+        issued_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      REVOKE ALL ON sphere_ack_write_tokens FROM PUBLIC;
+
+      DROP FUNCTION IF EXISTS metacanon_append_sphere_ack(
+        UUID,
+        BIGINT,
+        UUID,
+        TEXT,
+        UUID,
+        UUID,
+        TEXT,
+        TEXT,
+        JSONB,
+        TEXT,
+        TIMESTAMPTZ
+      );
+
+      CREATE OR REPLACE FUNCTION metacanon_append_sphere_ack(
+        p_thread_id UUID,
+        p_target_sequence BIGINT,
+        p_target_message_id UUID,
+        p_actor_did TEXT,
+        p_ack_message_id UUID,
+        p_trace_id UUID,
+        p_intent TEXT,
+        p_schema_version TEXT,
+        p_attestation JSONB,
+        p_agent_signature TEXT,
+        p_client_received_at TIMESTAMPTZ
+      )
+      RETURNS SETOF sphere_acks
+      LANGUAGE plpgsql
+      SECURITY DEFINER
+      SET search_path = public, pg_temp
+      AS $$
+      BEGIN
+        INSERT INTO sphere_ack_write_tokens (txid)
+        VALUES (txid_current())
+        ON CONFLICT (txid) DO NOTHING;
+
+        RETURN QUERY
+        INSERT INTO sphere_acks (
+          thread_id,
+          target_sequence,
+          target_message_id,
+          actor_did,
+          ack_message_id,
+          trace_id,
+          intent,
+          schema_version,
+          attestation,
+          agent_signature,
+          client_received_at,
+          acknowledged_at
+        )
+        VALUES (
+          p_thread_id,
+          p_target_sequence,
+          p_target_message_id,
+          p_actor_did,
+          p_ack_message_id,
+          p_trace_id,
+          p_intent,
+          p_schema_version,
+          p_attestation,
+          p_agent_signature,
+          p_client_received_at,
+          NOW()
+        )
+        ON CONFLICT (thread_id, actor_did, target_sequence) DO UPDATE SET
+          ack_message_id = EXCLUDED.ack_message_id,
+          trace_id = EXCLUDED.trace_id,
+          intent = EXCLUDED.intent,
+          schema_version = EXCLUDED.schema_version,
+          attestation = EXCLUDED.attestation,
+          agent_signature = EXCLUDED.agent_signature,
+          client_received_at = EXCLUDED.client_received_at,
+          acknowledged_at = NOW()
+        RETURNING *;
+
+        DELETE FROM sphere_ack_write_tokens
+        WHERE txid = txid_current();
+      END;
+      $$;
+
+      REVOKE ALL ON FUNCTION metacanon_append_sphere_ack(
+        UUID,
+        BIGINT,
+        UUID,
+        TEXT,
+        UUID,
+        UUID,
+        TEXT,
+        TEXT,
+        JSONB,
+        TEXT,
+        TIMESTAMPTZ
+      ) FROM PUBLIC;
+
+      CREATE OR REPLACE FUNCTION enforce_sphere_acks_conductor_guard()
+      RETURNS trigger AS $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM sphere_ack_write_tokens
+          WHERE txid = txid_current()
+        ) THEN
+          RAISE EXCEPTION 'Direct sphere_acks writes are blocked; use conductor acknowledge path.'
+            USING ERRCODE = '42501';
+        END IF;
+
+        IF NEW.agent_signature IS NULL OR btrim(NEW.agent_signature) = '' THEN
+          RAISE EXCEPTION 'ACK entries require non-empty agent_signature.'
+            USING ERRCODE = '23514';
+        END IF;
+
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+
+      DROP TRIGGER IF EXISTS trg_sphere_acks_conductor_guard ON sphere_acks;
+      CREATE TRIGGER trg_sphere_acks_conductor_guard
+      BEFORE INSERT OR UPDATE ON sphere_acks
+      FOR EACH ROW
+      EXECUTE FUNCTION enforce_sphere_acks_conductor_guard();
 
       CREATE TABLE IF NOT EXISTS conductor_keys (
         key_id TEXT PRIMARY KEY,

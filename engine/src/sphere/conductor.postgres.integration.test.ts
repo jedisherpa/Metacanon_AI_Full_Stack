@@ -197,6 +197,7 @@ describe.runIf(runPgIntegration)('SphereConductor Postgres integration', () => {
         sphere_events,
         sphere_threads,
         counselors,
+        sphere_ack_write_tokens,
         sphere_event_write_tokens
       RESTART IDENTITY CASCADE
     `)
@@ -1075,6 +1076,139 @@ describe.runIf(runPgIntegration)('SphereConductor Postgres integration', () => {
         [threadId]
       )
       expect(inserted.rows[0]?.count).toBe(1)
+    } finally {
+      await pool.query(`DROP OWNED BY ${quoteIdentifier(roleName)}`)
+      await pool.query(`DROP ROLE IF EXISTS ${quoteIdentifier(roleName)}`)
+    }
+  })
+
+  it('enforces sphere_acks bypass guard: direct writes blocked, append function allowed', async () => {
+    const roleName = `sphere_app_${randomUUID().replace(/-/g, '').slice(0, 12)}`
+    const rolePassword = `pw_${randomUUID().replace(/-/g, '')}`
+    const threadId = randomUUID()
+    const missionId = randomUUID()
+
+    await conductor.createThread({
+      threadId,
+      missionId,
+      createdBy: 'did:example:owner-ack'
+    })
+    const targetEntry = await conductor.dispatchIntent({
+      threadId,
+      missionId,
+      authorAgentId: 'did:example:owner-ack',
+      intent: 'MISSION_REPORT',
+      payload: { body: 'target for ack guard' },
+      prismHolderApproved: true
+    })
+
+    await pool.query(
+      `CREATE ROLE ${quoteIdentifier(roleName)} LOGIN PASSWORD '${rolePassword.replace(/'/g, "''")}'`
+    )
+
+    try {
+      await pool.query('SELECT metacanon_apply_sphere_app_role_grants($1)', [roleName])
+
+      const appUrl = new URL(process.env.DATABASE_URL as string)
+      appUrl.username = roleName
+      appUrl.password = rolePassword
+      const appPool = new Pool({ connectionString: appUrl.toString() })
+
+      try {
+        await expect(
+          appPool.query(
+            `
+              INSERT INTO sphere_acks (
+                thread_id,
+                target_sequence,
+                target_message_id,
+                actor_did,
+                ack_message_id,
+                trace_id,
+                intent,
+                schema_version,
+                attestation,
+                agent_signature
+              )
+              VALUES (
+                $1,
+                $2,
+                $3,
+                'did:example:app-role-ack',
+                $4,
+                $5,
+                'ACK_ENTRY',
+                '3.0',
+                '[]'::jsonb,
+                'sig:direct-insert'
+              )
+            `,
+            [
+              threadId,
+              targetEntry.ledgerEnvelope.sequence,
+              targetEntry.clientEnvelope.messageId,
+              randomUUID(),
+              randomUUID()
+            ]
+          )
+        ).rejects.toMatchObject({
+          code: '42501'
+        })
+
+        await appPool.query(
+          `
+            SELECT ack_id
+            FROM metacanon_append_sphere_ack(
+              $1::uuid,
+              $2::bigint,
+              $3::uuid,
+              $4::text,
+              $5::uuid,
+              $6::uuid,
+              'ACK_ENTRY'::text,
+              '3.0'::text,
+              '[]'::jsonb,
+              'sig:app-role-function'::text,
+              NULL::timestamptz
+            )
+          `,
+          [
+            threadId,
+            targetEntry.ledgerEnvelope.sequence,
+            targetEntry.clientEnvelope.messageId,
+            'did:example:app-role-ack',
+            randomUUID(),
+            randomUUID()
+          ]
+        )
+
+        await expect(
+          appPool.query(
+            `
+              UPDATE sphere_acks
+              SET agent_signature = 'sig:tampered-update'
+              WHERE thread_id = $1
+                AND actor_did = 'did:example:app-role-ack'
+            `,
+            [threadId]
+          )
+        ).rejects.toMatchObject({
+          code: '42501'
+        })
+      } finally {
+        await appPool.end()
+      }
+
+      const ackRows = await pool.query(
+        `
+          SELECT COUNT(*)::int AS count
+          FROM sphere_acks
+          WHERE thread_id = $1
+            AND actor_did = 'did:example:app-role-ack'
+        `,
+        [threadId]
+      )
+      expect(ackRows.rows[0]?.count).toBe(1)
     } finally {
       await pool.query(`DROP OWNED BY ${quoteIdentifier(roleName)}`)
       await pool.query(`DROP ROLE IF EXISTS ${quoteIdentifier(roleName)}`)
