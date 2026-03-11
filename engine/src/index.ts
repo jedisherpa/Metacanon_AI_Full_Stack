@@ -25,6 +25,7 @@ import { loadGovernanceConfig } from './governance/governanceConfig.js';
 import { createIntentValidator } from './governance/contactLensValidator.js';
 import { DidRegistry } from './sphere/didRegistry.js';
 import { SphereConductor } from './sphere/conductor.js';
+import { PrometheusConductorMetrics } from './sphere/prometheusMetrics.js';
 import { ThreadAccessRegistry } from './sphere/threadAccessRegistry.js';
 import { ensureSphereDbRoleSeparationOnStartup } from './db/client.js';
 import { WebSocketHub } from './ws/hub.js';
@@ -105,6 +106,7 @@ app.use(
 
 const lensPack = await loadLensPack(env.LENS_PACK);
 await ensureSphereDbRoleSeparationOnStartup();
+const prometheusConductorMetrics = new PrometheusConductorMetrics();
 let liveConductor: SphereConductor | null = null;
 const sphereRoutes = env.SPHERE_THREAD_ENABLED
   ? await (async () => {
@@ -131,6 +133,7 @@ const sphereRoutes = env.SPHERE_THREAD_ENABLED
         requireVerifiedCounselorAckSignatures: env.SPHERE_ACK_REQUIRE_VERIFIED_SIGNATURES,
         counselorAckSignatureActivationAt: env.SPHERE_ACK_VERIFIED_SIGNATURES_ACTIVATION_AT,
         counselorAckSignatureGraceDays: env.SPHERE_ACK_VERIFIED_SIGNATURES_GRACE_DAYS,
+        prometheusMetrics: prometheusConductorMetrics,
         validateIntent,
         governanceConfigPath: governanceConfig.configPath,
         governanceHashes: {
@@ -252,6 +255,17 @@ app.get('/health', (_req, res) => {
 
 app.get('/api/config/lenses', (_req, res) => {
   res.json(lensPack);
+});
+
+app.get('/metrics', async (_req, res) => {
+  try {
+    const body = await prometheusConductorMetrics.renderMetrics();
+    res.setHeader('Content-Type', prometheusConductorMetrics.contentType);
+    res.status(200).send(body);
+  } catch (error) {
+    logger.error({ error }, 'Failed to render Prometheus metrics');
+    res.status(500).send('metrics_unavailable');
+  }
 });
 
 if (sentryDsn && sentryDsn !== '__REPLACE__') {

@@ -305,6 +305,7 @@ type ConductorOptions = {
   requireVerifiedCounselorAckSignatures?: boolean;
   counselorAckSignatureActivationAt?: string;
   counselorAckSignatureGraceDays?: number;
+  prometheusMetrics?: ConductorPrometheusMetrics;
   validateIntent: IntentValidator;
   governanceConfigPath?: string;
   governanceHashes?: Partial<GovernanceHashSnapshot>;
@@ -324,6 +325,28 @@ export type ConductorSignatureVerificationPolicy = {
   requireV2: boolean;
   activationAt: string | null;
   graceDays: number;
+};
+
+export type QuorumAttemptMetric = {
+  outcome: 'success' | 'fail';
+  reason:
+    | 'signed_quorum_met'
+    | 'verified_quorum_met'
+    | 'missing_approval_refs'
+    | 'insufficient_signed_quorum'
+    | 'insufficient_verified_quorum';
+};
+
+export type SignatureVerificationMetric = {
+  context: 'dispatch' | 'ack';
+  source: 'did_key' | 'registered_key' | 'strict_policy';
+  outcome: 'success' | 'fail';
+  reason: 'none' | 'missing_signature' | 'invalid_signature' | 'unresolvable_key';
+};
+
+export type ConductorPrometheusMetrics = {
+  recordQuorumAttempt(metric: QuorumAttemptMetric): void;
+  recordSignatureVerification(metric: SignatureVerificationMetric): void;
 };
 
 export type CounselorAckSignatureVerificationPolicy = {
@@ -454,6 +477,7 @@ export class SphereConductor extends EventEmitter {
   private readonly requireVerifiedCounselorAckSignatures: boolean;
   private readonly counselorAckSignatureActivationAt: string | null;
   private readonly counselorAckSignatureGraceDays: number;
+  private readonly prometheusMetrics?: ConductorPrometheusMetrics;
   private readonly validateIntent: IntentValidator;
   private readonly governanceHashes: GovernanceHashSnapshot;
   private readonly governanceConfigPath?: string;
@@ -476,6 +500,7 @@ export class SphereConductor extends EventEmitter {
       options.requireVerifiedCounselorAckSignatures ?? false;
     this.counselorAckSignatureActivationAt = options.counselorAckSignatureActivationAt ?? null;
     this.counselorAckSignatureGraceDays = Math.max(0, options.counselorAckSignatureGraceDays ?? 0);
+    this.prometheusMetrics = options.prometheusMetrics;
     this.conductorRotationGraceDaysDefault = Math.max(
       0,
       options.conductorRotationGraceDaysDefault ?? this.conductorSignatureV2GraceDays
@@ -2197,6 +2222,10 @@ export class SphereConductor extends EventEmitter {
       : `Material-impact intent requires ${this.governanceConfig.quorumCount} signed counselor ACK approvals.`;
 
     if (approvalRefs.length === 0) {
+      this.prometheusMetrics?.recordQuorumAttempt({
+        outcome: 'fail',
+        reason: 'missing_approval_refs'
+      });
       throw new ConductorError(
         412,
         'STM_ERR_MISSING_ATTESTATION',
@@ -2265,12 +2294,23 @@ export class SphereConductor extends EventEmitter {
     }
 
     if (approvedCounselors.size < this.governanceConfig.quorumCount) {
+      this.prometheusMetrics?.recordQuorumAttempt({
+        outcome: 'fail',
+        reason: requireVerifiedAckSignatures
+          ? 'insufficient_verified_quorum'
+          : 'insufficient_signed_quorum'
+      });
       throw new ConductorError(
         412,
         'STM_ERR_MISSING_ATTESTATION',
         quorumErrorMessage
       );
     }
+
+    this.prometheusMetrics?.recordQuorumAttempt({
+      outcome: 'success',
+      reason: requireVerifiedAckSignatures ? 'verified_quorum_met' : 'signed_quorum_met'
+    });
   }
 
   private async resolveAgentSignature(params: {
@@ -2288,6 +2328,12 @@ export class SphereConductor extends EventEmitter {
 
     if (isDidKey(params.signerDid)) {
       if (!signature) {
+        this.prometheusMetrics?.recordSignatureVerification({
+          context: params.context,
+          source: 'did_key',
+          outcome: 'fail',
+          reason: 'missing_signature'
+        });
         throw new ConductorError(
           401,
           'STM_ERR_INVALID_SIGNATURE',
@@ -2298,7 +2344,9 @@ export class SphereConductor extends EventEmitter {
         signerDid: params.signerDid,
         compactJws: signature,
         canonicalPayload: params.canonicalPayload,
-        publicKeyRef: params.signerDid
+        publicKeyRef: params.signerDid,
+        context: params.context,
+        source: 'did_key'
       });
       return signature;
     }
@@ -2307,6 +2355,12 @@ export class SphereConductor extends EventEmitter {
     const normalizedPublicKeyRef = publicKeyRef?.trim() ? publicKeyRef.trim() : null;
     if (normalizedPublicKeyRef) {
       if (!signature) {
+        this.prometheusMetrics?.recordSignatureVerification({
+          context: params.context,
+          source: 'registered_key',
+          outcome: 'fail',
+          reason: 'missing_signature'
+        });
         throw new ConductorError(
           401,
           'STM_ERR_INVALID_SIGNATURE',
@@ -2318,7 +2372,9 @@ export class SphereConductor extends EventEmitter {
         signerDid: params.signerDid,
         compactJws: signature,
         canonicalPayload: params.canonicalPayload,
-        publicKeyRef: normalizedPublicKeyRef
+        publicKeyRef: normalizedPublicKeyRef,
+        context: params.context,
+        source: 'registered_key'
       });
       return signature;
     }
@@ -2327,6 +2383,12 @@ export class SphereConductor extends EventEmitter {
       if (params.allowInternalFallback) {
         return this.signPayload(params.legacyPayload);
       }
+      this.prometheusMetrics?.recordSignatureVerification({
+        context: params.context,
+        source: 'strict_policy',
+        outcome: 'fail',
+        reason: 'unresolvable_key'
+      });
       throw new ConductorError(
         401,
         'STM_ERR_INVALID_SIGNATURE',
@@ -2344,6 +2406,8 @@ export class SphereConductor extends EventEmitter {
     compactJws: string;
     canonicalPayload: string;
     publicKeyRef: string;
+    context: 'dispatch' | 'ack';
+    source: 'did_key' | 'registered_key' | 'strict_policy';
   }): void {
     try {
       verifyCompactJwsEdDsa({
@@ -2351,7 +2415,19 @@ export class SphereConductor extends EventEmitter {
         canonicalPayload: params.canonicalPayload,
         publicKey: publicKeyStringToKeyObject(params.publicKeyRef)
       });
+      this.prometheusMetrics?.recordSignatureVerification({
+        context: params.context,
+        source: params.source,
+        outcome: 'success',
+        reason: 'none'
+      });
     } catch (error) {
+      this.prometheusMetrics?.recordSignatureVerification({
+        context: params.context,
+        source: params.source,
+        outcome: 'fail',
+        reason: 'invalid_signature'
+      });
       if (error instanceof SignatureVerificationError) {
         throw new ConductorError(
           401,
@@ -2439,7 +2515,9 @@ export class SphereConductor extends EventEmitter {
           signerDid: actorDid,
           compactJws,
           canonicalPayload: canonicalAckPayload,
-          publicKeyRef: actorDid
+          publicKeyRef: actorDid,
+          context: 'ack',
+          source: 'did_key'
         });
         return true;
       } catch {
@@ -2465,7 +2543,9 @@ export class SphereConductor extends EventEmitter {
         signerDid: actorDid,
         compactJws,
         canonicalPayload: canonicalAckPayload,
-        publicKeyRef: normalizedPublicKeyRef
+        publicKeyRef: normalizedPublicKeyRef,
+        context: 'ack',
+        source: 'registered_key'
       });
       return true;
     } catch {

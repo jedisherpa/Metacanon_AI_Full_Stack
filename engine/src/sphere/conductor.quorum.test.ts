@@ -194,4 +194,67 @@ describe('SphereConductor material-impact quorum enforcement', () => {
 
     expect(conductor.verifyCounselorAckSignatureForQuorum).toHaveBeenCalledTimes(3);
   });
+
+  it('emits quorum metrics for missing approval refs and successful quorum', async () => {
+    const conductor = makeConductor(1);
+    conductor.prometheusMetrics = {
+      recordQuorumAttempt: vi.fn(),
+      recordSignatureVerification: vi.fn()
+    };
+
+    await expect(
+      conductor.enforceCounselQuorum(
+        {
+          query: vi.fn()
+        } as any,
+        {
+          threadId: '11111111-1111-4111-8111-111111111111',
+          approvalRefs: []
+        }
+      )
+    ).rejects.toMatchObject({
+      code: 'STM_ERR_MISSING_ATTESTATION'
+    });
+
+    expect(conductor.prometheusMetrics.recordQuorumAttempt).toHaveBeenCalledWith({
+      outcome: 'fail',
+      reason: 'missing_approval_refs'
+    });
+
+    const successClient = {
+      query: vi
+        .fn()
+        .mockResolvedValueOnce({
+          rows: [{ counselor_did: 'did:example:counselor-1' }]
+        })
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              actor_did: 'did:example:counselor-1',
+              target_sequence: 1,
+              target_message_id: '22222222-2222-4222-8222-222222222222',
+              ack_message_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+              trace_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+              intent: 'ACK_ENTRY',
+              schema_version: '3.0',
+              attestation: ['approve'],
+              agent_signature: 'sig:1',
+              client_received_at: null
+            }
+          ]
+        })
+    };
+
+    await expect(
+      conductor.enforceCounselQuorum(successClient as any, {
+        threadId: '11111111-1111-4111-8111-111111111111',
+        approvalRefs: ['22222222-2222-4222-8222-222222222222']
+      })
+    ).resolves.toBeUndefined();
+
+    expect(conductor.prometheusMetrics.recordQuorumAttempt).toHaveBeenCalledWith({
+      outcome: 'success',
+      reason: 'signed_quorum_met'
+    });
+  });
 });
