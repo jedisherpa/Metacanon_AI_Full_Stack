@@ -1052,6 +1052,160 @@ describe.runIf(runPgIntegration)('SphereConductor Postgres integration', () => {
     }
   })
 
+  it('accepts mixed verified/unverified counselor ACKs during grace and rejects partial legacy quorum after grace', async () => {
+    const priorRequire = conductor['requireVerifiedCounselorAckSignatures']
+    const priorActivationAt = conductor['counselorAckSignatureActivationAt']
+    const priorGraceDays = conductor['counselorAckSignatureGraceDays']
+
+    conductor['requireVerifiedCounselorAckSignatures'] = true
+    conductor['counselorAckSignatureActivationAt'] = new Date(Date.now() - 60_000).toISOString()
+    conductor['counselorAckSignatureGraceDays'] = 1
+
+    try {
+      const counselorOne = generateKeyPairSync('ed25519')
+      const counselorTwo = generateKeyPairSync('ed25519')
+      const counselorOneDid = toDidKeyFromPublicKeyDer(
+        counselorOne.publicKey.export({ format: 'der', type: 'spki' }) as Buffer
+      )
+      const counselorTwoDid = toDidKeyFromPublicKeyDer(
+        counselorTwo.publicKey.export({ format: 'der', type: 'spki' }) as Buffer
+      )
+
+      await pool.query(
+        `
+          INSERT INTO counselors (counselor_did, counselor_set, is_active)
+          VALUES
+            ($1, 'security_council', TRUE),
+            ($2, 'security_council', TRUE)
+        `,
+        [counselorOneDid, counselorTwoDid]
+      )
+
+      const threadId = randomUUID()
+      const missionId = randomUUID()
+      await conductor.createThread({
+        threadId,
+        missionId,
+        createdBy: 'did:example:agent-grace-quorum'
+      })
+
+      const targetEntry = await conductor.dispatchIntent({
+        threadId,
+        missionId,
+        authorAgentId: 'did:example:agent-grace-quorum',
+        intent: 'MISSION_REPORT',
+        payload: { body: 'target for grace-quorum behavior' },
+        prismHolderApproved: true
+      })
+
+      // ACK #1 is legacy/unverified (no caller-provided JWS, internal fallback signature).
+      await conductor.acknowledgeEntry({
+        threadId,
+        actorDid: counselorOneDid,
+        targetMessageId: targetEntry.clientEnvelope.messageId,
+        attestation: ['approve-force-evict']
+      })
+
+      // ACK #2 is explicitly verifiable Ed25519 JWS.
+      const verifiedAckMessageId = randomUUID()
+      const verifiedAckTraceId = randomUUID()
+      const verifiedAckCanonical = buildCanonicalAckPayload({
+        threadId,
+        actorDid: counselorTwoDid,
+        targetSequence: targetEntry.ledgerEnvelope.sequence,
+        targetMessageId: targetEntry.clientEnvelope.messageId,
+        ackMessageId: verifiedAckMessageId,
+        traceId: verifiedAckTraceId,
+        intent: 'ACK_ENTRY',
+        schemaVersion: '3.0',
+        attestation: ['approve-force-evict'],
+        receivedAt: null
+      })
+
+      await conductor.acknowledgeEntry({
+        threadId,
+        actorDid: counselorTwoDid,
+        targetMessageId: targetEntry.clientEnvelope.messageId,
+        ackMessageId: verifiedAckMessageId,
+        traceId: verifiedAckTraceId,
+        attestation: ['approve-force-evict'],
+        agentSignature: createEdDsaCompactJws(verifiedAckCanonical, counselorTwo.privateKey)
+      })
+
+      // During grace, mixed legacy+verified counselor ACKs still satisfy quorum.
+      const duringGrace = await conductor.dispatchIntent({
+        threadId,
+        missionId,
+        authorAgentId: 'did:example:agent-grace-quorum',
+        intent: 'FORCE_EVICT',
+        payload: { reason: 'mixed acknowledgements during grace' },
+        attestation: [targetEntry.clientEnvelope.messageId],
+        prismHolderApproved: true
+      })
+      expect(duringGrace.clientEnvelope.intent).toBe('FORCE_EVICT')
+
+      // Move to post-grace strict enforcement window.
+      conductor['counselorAckSignatureGraceDays'] = 0
+      conductor['counselorAckSignatureActivationAt'] = new Date(Date.now() - 60_000).toISOString()
+
+      // Same mixed quorum must now fail because one counselor ACK is unverifiable.
+      await expect(
+        conductor.dispatchIntent({
+          threadId,
+          missionId,
+          authorAgentId: 'did:example:agent-grace-quorum',
+          intent: 'FORCE_EVICT',
+          payload: { reason: 'mixed acknowledgements after grace should fail' },
+          attestation: [targetEntry.clientEnvelope.messageId],
+          prismHolderApproved: true
+        })
+      ).rejects.toMatchObject({
+        code: 'STM_ERR_MISSING_ATTESTATION'
+      })
+
+      // Upgrade counselor #1 ACK to a verifiable signature, then strict quorum should pass.
+      const upgradedAckMessageId = randomUUID()
+      const upgradedAckTraceId = randomUUID()
+      const upgradedAckCanonical = buildCanonicalAckPayload({
+        threadId,
+        actorDid: counselorOneDid,
+        targetSequence: targetEntry.ledgerEnvelope.sequence,
+        targetMessageId: targetEntry.clientEnvelope.messageId,
+        ackMessageId: upgradedAckMessageId,
+        traceId: upgradedAckTraceId,
+        intent: 'ACK_ENTRY',
+        schemaVersion: '3.0',
+        attestation: ['approve-force-evict'],
+        receivedAt: null
+      })
+
+      await conductor.acknowledgeEntry({
+        threadId,
+        actorDid: counselorOneDid,
+        targetMessageId: targetEntry.clientEnvelope.messageId,
+        ackMessageId: upgradedAckMessageId,
+        traceId: upgradedAckTraceId,
+        attestation: ['approve-force-evict'],
+        agentSignature: createEdDsaCompactJws(upgradedAckCanonical, counselorOne.privateKey)
+      })
+
+      const afterUpgrade = await conductor.dispatchIntent({
+        threadId,
+        missionId,
+        authorAgentId: 'did:example:agent-grace-quorum',
+        intent: 'FORCE_EVICT',
+        payload: { reason: 'strict window with fully verifiable quorum' },
+        attestation: [targetEntry.clientEnvelope.messageId],
+        prismHolderApproved: true
+      })
+      expect(afterUpgrade.clientEnvelope.intent).toBe('FORCE_EVICT')
+    } finally {
+      conductor['requireVerifiedCounselorAckSignatures'] = priorRequire
+      conductor['counselorAckSignatureActivationAt'] = priorActivationAt
+      conductor['counselorAckSignatureGraceDays'] = priorGraceDays
+    }
+  })
+
   it('rejects direct sphere_events insert outside conductor-owned write path', async () => {
     const threadId = randomUUID()
     const missionId = randomUUID()
