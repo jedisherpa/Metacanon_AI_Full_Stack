@@ -1206,6 +1206,171 @@ describe.runIf(runPgIntegration)('SphereConductor Postgres integration', () => {
     }
   })
 
+  it('enforces explicit 3-of-5 quorum threshold across grace transition with mixed ACK signatures', async () => {
+    const priorRequire = conductor['requireVerifiedCounselorAckSignatures']
+    const priorActivationAt = conductor['counselorAckSignatureActivationAt']
+    const priorGraceDays = conductor['counselorAckSignatureGraceDays']
+    const priorQuorumCount = conductor['governanceConfig']?.quorumCount
+
+    conductor['requireVerifiedCounselorAckSignatures'] = true
+    conductor['counselorAckSignatureActivationAt'] = new Date(Date.now() - 60_000).toISOString()
+    conductor['counselorAckSignatureGraceDays'] = 1
+    conductor['governanceConfig'].quorumCount = 3
+
+    try {
+      const counselors = Array.from({ length: 5 }, () => {
+        const keyPair = generateKeyPairSync('ed25519')
+        const did = toDidKeyFromPublicKeyDer(
+          keyPair.publicKey.export({ format: 'der', type: 'spki' }) as Buffer
+        )
+        return { did, keyPair }
+      })
+
+      await pool.query(
+        `
+          INSERT INTO counselors (counselor_did, counselor_set, is_active)
+          VALUES
+            ($1, 'security_council', TRUE),
+            ($2, 'security_council', TRUE),
+            ($3, 'security_council', TRUE),
+            ($4, 'security_council', TRUE),
+            ($5, 'security_council', TRUE)
+        `,
+        counselors.map((counselor) => counselor.did)
+      )
+
+      const threadId = randomUUID()
+      const missionId = randomUUID()
+      await conductor.createThread({
+        threadId,
+        missionId,
+        createdBy: 'did:example:agent-grace-quorum-3-of-5'
+      })
+
+      const targetEntry = await conductor.dispatchIntent({
+        threadId,
+        missionId,
+        authorAgentId: 'did:example:agent-grace-quorum-3-of-5',
+        intent: 'MISSION_REPORT',
+        payload: { body: 'target for explicit 3-of-5 grace-threshold behavior' },
+        prismHolderApproved: true
+      })
+
+      for (let index = 0; index < counselors.length; index += 1) {
+        const counselor = counselors[index]
+        const shouldUseVerifiedSignature = index >= 3 // 3 legacy + 2 verified
+
+        if (!shouldUseVerifiedSignature) {
+          await conductor.acknowledgeEntry({
+            threadId,
+            actorDid: counselor.did,
+            targetMessageId: targetEntry.clientEnvelope.messageId,
+            attestation: ['approve-force-evict']
+          })
+          continue
+        }
+
+        const ackMessageId = randomUUID()
+        const traceId = randomUUID()
+        const canonicalPayload = buildCanonicalAckPayload({
+          threadId,
+          actorDid: counselor.did,
+          targetSequence: targetEntry.ledgerEnvelope.sequence,
+          targetMessageId: targetEntry.clientEnvelope.messageId,
+          ackMessageId,
+          traceId,
+          intent: 'ACK_ENTRY',
+          schemaVersion: '3.0',
+          attestation: ['approve-force-evict'],
+          receivedAt: null
+        })
+
+        await conductor.acknowledgeEntry({
+          threadId,
+          actorDid: counselor.did,
+          targetMessageId: targetEntry.clientEnvelope.messageId,
+          ackMessageId,
+          traceId,
+          attestation: ['approve-force-evict'],
+          agentSignature: createEdDsaCompactJws(canonicalPayload, counselor.keyPair.privateKey)
+        })
+      }
+
+      // During grace, mixed legacy + verified ACKs can satisfy 3-of-5 quorum.
+      const duringGrace = await conductor.dispatchIntent({
+        threadId,
+        missionId,
+        authorAgentId: 'did:example:agent-grace-quorum-3-of-5',
+        intent: 'FORCE_EVICT',
+        payload: { reason: '3-of-5 mixed counselor ACKs during grace should pass' },
+        attestation: [targetEntry.clientEnvelope.messageId],
+        prismHolderApproved: true
+      })
+      expect(duringGrace.clientEnvelope.intent).toBe('FORCE_EVICT')
+
+      // Post-grace strict mode: only 2 verified ACKs remain, so 3-of-5 must fail.
+      conductor['counselorAckSignatureGraceDays'] = 0
+      conductor['counselorAckSignatureActivationAt'] = new Date(Date.now() - 60_000).toISOString()
+
+      await expect(
+        conductor.dispatchIntent({
+          threadId,
+          missionId,
+          authorAgentId: 'did:example:agent-grace-quorum-3-of-5',
+          intent: 'FORCE_EVICT',
+          payload: { reason: '3-of-5 with only 2 verified ACKs after grace should fail' },
+          attestation: [targetEntry.clientEnvelope.messageId],
+          prismHolderApproved: true
+        })
+      ).rejects.toMatchObject({
+        code: 'STM_ERR_MISSING_ATTESTATION'
+      })
+
+      // Upgrade one legacy counselor ACK to verified; strict 3-of-5 quorum should pass.
+      const upgradedCounselor = counselors[2]
+      const upgradedAckMessageId = randomUUID()
+      const upgradedTraceId = randomUUID()
+      const upgradedCanonical = buildCanonicalAckPayload({
+        threadId,
+        actorDid: upgradedCounselor.did,
+        targetSequence: targetEntry.ledgerEnvelope.sequence,
+        targetMessageId: targetEntry.clientEnvelope.messageId,
+        ackMessageId: upgradedAckMessageId,
+        traceId: upgradedTraceId,
+        intent: 'ACK_ENTRY',
+        schemaVersion: '3.0',
+        attestation: ['approve-force-evict'],
+        receivedAt: null
+      })
+
+      await conductor.acknowledgeEntry({
+        threadId,
+        actorDid: upgradedCounselor.did,
+        targetMessageId: targetEntry.clientEnvelope.messageId,
+        ackMessageId: upgradedAckMessageId,
+        traceId: upgradedTraceId,
+        attestation: ['approve-force-evict'],
+        agentSignature: createEdDsaCompactJws(upgradedCanonical, upgradedCounselor.keyPair.privateKey)
+      })
+
+      const afterUpgrade = await conductor.dispatchIntent({
+        threadId,
+        missionId,
+        authorAgentId: 'did:example:agent-grace-quorum-3-of-5',
+        intent: 'FORCE_EVICT',
+        payload: { reason: '3-of-5 strict window after ACK upgrade should pass' },
+        attestation: [targetEntry.clientEnvelope.messageId],
+        prismHolderApproved: true
+      })
+      expect(afterUpgrade.clientEnvelope.intent).toBe('FORCE_EVICT')
+    } finally {
+      conductor['requireVerifiedCounselorAckSignatures'] = priorRequire
+      conductor['counselorAckSignatureActivationAt'] = priorActivationAt
+      conductor['counselorAckSignatureGraceDays'] = priorGraceDays
+      conductor['governanceConfig'].quorumCount = priorQuorumCount
+    }
+  })
+
   it('rejects direct sphere_events insert outside conductor-owned write path', async () => {
     const threadId = randomUUID()
     const missionId = randomUUID()
