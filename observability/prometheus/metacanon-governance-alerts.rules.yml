@@ -1,0 +1,53 @@
+groups:
+  - name: metacanon-governance
+    interval: 30s
+    rules:
+      - alert: MetaCanonSignatureVerificationFailureRateHigh
+        expr: max without(instance, job) (metacanon_signature_verify_fail_rate) > 0.10
+        for: 5m
+        labels:
+          severity: critical
+          service: sphere-thread-engine
+        annotations:
+          summary: Signature verification failure rate is above 10%
+          description: >
+            Metacanon signature verification failures remain above the configured threshold
+            for at least 5 minutes. Inspect /metrics, /api/v1/sphere/status, and recent
+            ledger or ACK verification events.
+
+      - alert: MetaCanonQuorumFailuresBurst
+        expr: sum(increase(metacanon_quorum_attempt_total{outcome="fail"}[5m])) >= 3
+        for: 2m
+        labels:
+          severity: critical
+          service: sphere-thread-engine
+        annotations:
+          summary: Material-impact quorum failures are spiking
+          description: >
+            Three or more material-impact quorum evaluations failed in the last 5 minutes.
+            Inspect counselor ACK signature verification, quorum policy rollout windows, and
+            thread replay history.
+
+      - alert: MetaCanonStrictPolicyKeyResolutionFailures
+        expr: sum(increase(metacanon_signature_verification_total{outcome="fail",source="strict_policy",reason="unresolvable_key"}[10m])) >= 1
+        for: 1m
+        labels:
+          severity: critical
+          service: sphere-thread-engine
+        annotations:
+          summary: Strict signature policy cannot resolve a signer key
+          description: >
+            A dispatch or ACK attempted to run in strict mode without a resolvable Ed25519 key.
+            Validate DID registry entries and conductor key registry state immediately.
+
+      - alert: MetaCanonInvalidSignatureBurst
+        expr: sum(increase(metacanon_signature_verification_total{outcome="fail",reason="invalid_signature"}[10m])) >= 5
+        for: 2m
+        labels:
+          severity: warn
+          service: sphere-thread-engine
+        annotations:
+          summary: Invalid signature failures detected
+          description: >
+            Five or more invalid signatures were observed in the last 10 minutes. This can
+            indicate client drift, stale keys, or adversarial traffic.

@@ -25,6 +25,7 @@ import { loadGovernanceConfig } from './governance/governanceConfig.js';
 import { createIntentValidator } from './governance/contactLensValidator.js';
 import { DidRegistry } from './sphere/didRegistry.js';
 import { SphereConductor } from './sphere/conductor.js';
+import { WebhookGovernanceAlertNotifier } from './sphere/governanceAlertNotifier.js';
 import { PrometheusConductorMetrics } from './sphere/prometheusMetrics.js';
 import { ThreadAccessRegistry } from './sphere/threadAccessRegistry.js';
 import { ensureSphereDbRoleSeparationOnStartup } from './db/client.js';
@@ -107,6 +108,13 @@ app.use(
 const lensPack = await loadLensPack(env.LENS_PACK);
 await ensureSphereDbRoleSeparationOnStartup();
 const prometheusConductorMetrics = new PrometheusConductorMetrics();
+const governanceAlertNotifier = env.SPHERE_GOVERNANCE_ALERT_WEBHOOK_URL
+  ? new WebhookGovernanceAlertNotifier({
+      webhookUrl: env.SPHERE_GOVERNANCE_ALERT_WEBHOOK_URL,
+      secretToken: env.SPHERE_GOVERNANCE_ALERT_WEBHOOK_TOKEN,
+      timeoutMs: env.SPHERE_GOVERNANCE_ALERT_WEBHOOK_TIMEOUT_MS
+    })
+  : undefined;
 let liveConductor: SphereConductor | null = null;
 const sphereRoutes = env.SPHERE_THREAD_ENABLED
   ? await (async () => {
@@ -134,6 +142,7 @@ const sphereRoutes = env.SPHERE_THREAD_ENABLED
         counselorAckSignatureActivationAt: env.SPHERE_ACK_VERIFIED_SIGNATURES_ACTIVATION_AT,
         counselorAckSignatureGraceDays: env.SPHERE_ACK_VERIFIED_SIGNATURES_GRACE_DAYS,
         prometheusMetrics: prometheusConductorMetrics,
+        governanceAlertNotifier,
         validateIntent,
         governanceConfigPath: governanceConfig.configPath,
         governanceHashes: {
@@ -152,6 +161,7 @@ const sphereRoutes = env.SPHERE_THREAD_ENABLED
         {
           governanceRoot: governancePolicies.governanceRoot,
           contactLensCount: governancePolicies.contactLensesByDid.size,
+          governanceAlertWebhookEnabled: Boolean(governanceAlertNotifier),
           governanceHashSnapshot: {
             highRiskRegistryHash: governancePolicies.checksums.highRiskRegistry,
             contactLensPackHash: governancePolicies.checksums.contactLensPack,

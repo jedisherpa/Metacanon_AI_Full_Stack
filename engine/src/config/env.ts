@@ -58,6 +58,9 @@ const envSchema = z.object({
   SPHERE_ACK_REQUIRE_VERIFIED_SIGNATURES: strictBoolEnv.default(false),
   SPHERE_ACK_VERIFIED_SIGNATURES_ACTIVATION_AT: optionalIsoDatetimeString,
   SPHERE_ACK_VERIFIED_SIGNATURES_GRACE_DAYS: z.coerce.number().int().min(0).default(0),
+  SPHERE_GOVERNANCE_ALERT_WEBHOOK_URL: z.string().url().optional(),
+  SPHERE_GOVERNANCE_ALERT_WEBHOOK_TOKEN: optionalNonEmptyString,
+  SPHERE_GOVERNANCE_ALERT_WEBHOOK_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   SPHERE_DB_ENFORCE_ROLE_SEPARATION: strictBoolEnv.default(false),
   SPHERE_DB_APP_ROLE: z
     .string()

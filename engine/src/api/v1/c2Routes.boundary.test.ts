@@ -43,6 +43,7 @@ describe('createSphereRoutes boundary hardening', () => {
     getSystemState: ReturnType<typeof vi.fn>;
     getDegradedNoLlmReason: ReturnType<typeof vi.fn>;
     getGovernanceMetricsSnapshot: ReturnType<typeof vi.fn>;
+    getGovernanceAlertDeliveryStatus: ReturnType<typeof vi.fn>;
     dispatchIntent: ReturnType<typeof vi.fn>;
     createThread: ReturnType<typeof vi.fn>;
     getThread: ReturnType<typeof vi.fn>;
@@ -158,6 +159,16 @@ describe('createSphereRoutes boundary hardening', () => {
         },
         alerts: []
       })),
+      getGovernanceAlertDeliveryStatus: vi.fn(() => ({
+        enabled: false,
+        destination: 'none',
+        destinationHost: null,
+        lastAttemptAt: null,
+        lastSuccessAt: null,
+        lastError: null,
+        lastEventType: null,
+        lastDeliveredAlertCodes: []
+      })),
       dispatchIntent: vi.fn(),
       createThread: vi.fn(),
       getThread: vi.fn(),
@@ -251,6 +262,7 @@ describe('createSphereRoutes boundary hardening', () => {
     conductor.getSystemState.mockReset();
     conductor.getDegradedNoLlmReason.mockReset();
     conductor.getGovernanceMetricsSnapshot.mockReset();
+    conductor.getGovernanceAlertDeliveryStatus.mockReset();
     conductor.dispatchIntent.mockReset();
     conductor.createThread.mockReset();
     conductor.getThread.mockReset();
@@ -290,6 +302,16 @@ describe('createSphereRoutes boundary hardening', () => {
       },
       latencyMs: { sampleCount: 1, min: 4, max: 4, avg: 4, p95: 4 },
       alerts: []
+    });
+    conductor.getGovernanceAlertDeliveryStatus.mockReturnValue({
+      enabled: false,
+      destination: 'none',
+      destinationHost: null,
+      lastAttemptAt: null,
+      lastSuccessAt: null,
+      lastError: null,
+      lastEventType: null,
+      lastDeliveredAlertCodes: []
     });
     conductor.getThreadAcks.mockResolvedValue({ acks: [], nextCursor: 0 });
     conductor.verifyThreadLedger.mockResolvedValue(null);
@@ -427,6 +449,7 @@ describe('createSphereRoutes boundary hardening', () => {
     expect(response.body.systemState).toBe('ACTIVE');
     expect(response.body.threadCount).toBe(0);
     expect(response.body.governanceMetrics?.counters?.intentAttemptTotal).toBe(1);
+    expect(response.body.governanceAlertDelivery?.enabled).toBe(false);
     expect(response.headers['deprecation']).toBe('true');
     expect(response.headers['x-sphere-canonical-base']).toBe('/api/v1/sphere');
     expect(String(response.headers['link'] ?? '')).toContain('/api/v1/sphere');

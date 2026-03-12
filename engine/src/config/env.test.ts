@@ -176,4 +176,19 @@ describe('env boolean parsing', () => {
     expect(env.SPHERE_LEDGER_V2_GRACE_DAYS).toBe(7);
   });
 
+  it('accepts governance alert webhook configuration', async () => {
+    applyEnv({
+      SPHERE_GOVERNANCE_ALERT_WEBHOOK_URL: 'https://alerts.example.com/metacanon',
+      SPHERE_GOVERNANCE_ALERT_WEBHOOK_TOKEN: 'alert-token-123',
+      SPHERE_GOVERNANCE_ALERT_WEBHOOK_TIMEOUT_MS: '9000'
+    });
+
+    const env = await loadEnvModule();
+    expect(env.SPHERE_GOVERNANCE_ALERT_WEBHOOK_URL).toBe(
+      'https://alerts.example.com/metacanon'
+    );
+    expect(env.SPHERE_GOVERNANCE_ALERT_WEBHOOK_TOKEN).toBe('alert-token-123');
+    expect(env.SPHERE_GOVERNANCE_ALERT_WEBHOOK_TIMEOUT_MS).toBe(9000);
+  });
+
 });

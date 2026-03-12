@@ -976,7 +976,9 @@ export function createSphereRoutes(options: SphereRouteOptions): Router {
         conductorKeyRegistry: true,
         conductorKeyLookup: true,
         conductorKeyRotation: true,
-        conductorKeyRetirement: true
+        conductorKeyRetirement: true,
+        governanceAlertWebhook:
+          options.conductor.getGovernanceAlertDeliveryStatus?.().enabled ?? false
       },
       protocol: {
         stream: {
@@ -1062,6 +1064,8 @@ export function createSphereRoutes(options: SphereRouteOptions): Router {
       const degradedThreads = threads.filter((thread) => thread.state === 'DEGRADED_NO_LLM').length;
       const haltedThreads = threads.filter((thread) => thread.state === 'HALTED').length;
       const governanceMetrics = options.conductor.getGovernanceMetricsSnapshot?.() ?? null;
+      const governanceAlertDelivery =
+        options.conductor.getGovernanceAlertDeliveryStatus?.() ?? null;
 
       return res.json({
         systemState: options.conductor.getSystemState(),
@@ -1070,6 +1074,7 @@ export function createSphereRoutes(options: SphereRouteOptions): Router {
         degradedThreads,
         haltedThreads,
         governanceMetrics,
+        governanceAlertDelivery,
         traceId: req.sphereTraceId
       });
     } catch (err) {

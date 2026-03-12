@@ -168,6 +168,7 @@ This overlay is now a first-class track and gates release readiness. Feature wor
 26. `DONE`: Added operational load baselines in Postgres integration suite: 100-concurrent ACK throughput benchmark (single target event, unique actors) and 10k-key conductor registry benchmark (`listConductorKeys` + registry reload path), both with correctness assertions and regression thresholds.
 27. `DONE`: Added explicit mid-grace partial-quorum coverage for verified counselor ACK policy transitions: mixed legacy+verified ACKs satisfy quorum during grace window, fail after grace expiry when legacy ACKs remain, and pass again after upgrading all counselor ACKs to verifiable signatures.
 28. `DONE`: Added Phase 3 Prometheus governance metrics baseline. Conductor now emits `metacanon_quorum_attempt_total`, `metacanon_signature_verification_total`, and `metacanon_signature_verify_fail_rate`; metrics are exposed at `GET /metrics` and covered by unit tests plus quorum-path metric assertions.
+29. `DONE`: Added Phase 3 alert delivery artifacts and runtime sink. Threshold-crossing governance alerts now support outbound webhook delivery with status visibility on `/api/v1/sphere/status`, and the repo includes Prometheus alert rules plus a Grafana governance dashboard matching the exported metrics.
 
 ### 8.3 Enterprise Readiness Work Packages
 

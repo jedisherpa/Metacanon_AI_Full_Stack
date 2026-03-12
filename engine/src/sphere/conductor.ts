@@ -37,6 +37,11 @@ import {
   type GovernanceTelemetrySnapshot,
   type SignatureVerificationMode
 } from './governanceTelemetry.js';
+import {
+  GovernanceAlertStateTracker,
+  type GovernanceAlertDeliveryStatus,
+  type GovernanceAlertNotifier
+} from './governanceAlertNotifier.js';
 
 export type C2Intent = string;
 
@@ -306,6 +311,7 @@ type ConductorOptions = {
   counselorAckSignatureActivationAt?: string;
   counselorAckSignatureGraceDays?: number;
   prometheusMetrics?: ConductorPrometheusMetrics;
+  governanceAlertNotifier?: GovernanceAlertNotifier;
   validateIntent: IntentValidator;
   governanceConfigPath?: string;
   governanceHashes?: Partial<GovernanceHashSnapshot>;
@@ -478,16 +484,19 @@ export class SphereConductor extends EventEmitter {
   private readonly counselorAckSignatureActivationAt: string | null;
   private readonly counselorAckSignatureGraceDays: number;
   private readonly prometheusMetrics?: ConductorPrometheusMetrics;
+  private readonly governanceAlertNotifier?: GovernanceAlertNotifier;
   private readonly validateIntent: IntentValidator;
   private readonly governanceHashes: GovernanceHashSnapshot;
   private readonly governanceConfigPath?: string;
   private readonly signatureVerificationMode: SignatureVerificationMode;
   private readonly resolveDidPublicKey?: (did: string) => Promise<string | null>;
   private readonly governanceTelemetry: GovernanceTelemetry;
+  private readonly governanceAlertStateTracker: GovernanceAlertStateTracker;
   private globalState: 'ACTIVE' | 'DEGRADED_NO_LLM' = 'ACTIVE';
   private degradedNoLlmReason: string | null = null;
   private governanceConfig!: GovernanceConfig;
   private readonly ready: Promise<void>;
+  private governanceAlertNotificationQueue: Promise<void> = Promise.resolve();
 
   private constructor(options: ConductorOptions) {
     super();
@@ -501,6 +510,7 @@ export class SphereConductor extends EventEmitter {
     this.counselorAckSignatureActivationAt = options.counselorAckSignatureActivationAt ?? null;
     this.counselorAckSignatureGraceDays = Math.max(0, options.counselorAckSignatureGraceDays ?? 0);
     this.prometheusMetrics = options.prometheusMetrics;
+    this.governanceAlertNotifier = options.governanceAlertNotifier;
     this.conductorRotationGraceDaysDefault = Math.max(
       0,
       options.conductorRotationGraceDaysDefault ?? this.conductorSignatureV2GraceDays
@@ -537,6 +547,7 @@ export class SphereConductor extends EventEmitter {
     this.signatureVerificationMode = options.signatureVerificationMode ?? 'did_key';
     this.resolveDidPublicKey = options.resolveDidPublicKey;
     this.governanceTelemetry = new GovernanceTelemetry();
+    this.governanceAlertStateTracker = new GovernanceAlertStateTracker();
     this.ready = this.bootstrap();
   }
 
@@ -872,6 +883,23 @@ export class SphereConductor extends EventEmitter {
 
   getGovernanceMetricsSnapshot(): GovernanceTelemetrySnapshot {
     return this.governanceTelemetry.getSnapshot();
+  }
+
+  getGovernanceAlertDeliveryStatus(): GovernanceAlertDeliveryStatus {
+    if (!this.governanceAlertNotifier) {
+      return {
+        enabled: false,
+        destination: 'none',
+        destinationHost: null,
+        lastAttemptAt: null,
+        lastSuccessAt: null,
+        lastError: null,
+        lastEventType: null,
+        lastDeliveredAlertCodes: []
+      };
+    }
+
+    return this.governanceAlertNotifier.getStatus();
   }
 
   getConductorSignatureProfile(): ConductorSignatureProfile {
@@ -1857,7 +1885,24 @@ export class SphereConductor extends EventEmitter {
       throw normalizedError;
     } finally {
       client.release();
+      this.scheduleGovernanceAlertNotifications();
     }
+  }
+
+  private scheduleGovernanceAlertNotifications(): void {
+    if (!this.governanceAlertNotifier?.isEnabled()) {
+      return;
+    }
+
+    this.governanceAlertNotificationQueue = this.governanceAlertNotificationQueue
+      .catch(() => undefined)
+      .then(async () => {
+        const snapshot = this.governanceTelemetry.getSnapshot();
+        const events = this.governanceAlertStateTracker.diff(snapshot);
+        for (const event of events) {
+          await this.governanceAlertNotifier?.notify(event);
+        }
+      });
   }
 
   async haltAllThreads(input: {

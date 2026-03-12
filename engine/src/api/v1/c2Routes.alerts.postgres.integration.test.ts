@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const runPgIntegration = process.env.RUN_PG_INTEGRATION === '1'
 
@@ -30,6 +30,7 @@ describe.runIf(runPgIntegration)('Sphere status governance alerts integration', 
   let request: any
   let pool: QueryablePool
   let conductor: any
+  let alertWebhookFetch: ReturnType<typeof vi.fn>
   const serviceToken = 'sphere-alerts-token-123456'
   const didKeyActor = 'did:key:z6Mkr4R8NnqYv6Uqv8n3n2Vg7p7c1Xb2HqW5fW3r8jN8H1xQ'
 
@@ -54,7 +55,9 @@ describe.runIf(runPgIntegration)('Sphere status governance alerts integration', 
     const routesMod = await import('./c2Routes.js')
     const { SphereConductor } = await import('../../sphere/conductor.js')
     const { DidRegistry } = await import('../../sphere/didRegistry.js')
+    const { WebhookGovernanceAlertNotifier } = await import('../../sphere/governanceAlertNotifier.js')
     ;({ pool } = await import('../../db/client.js'))
+    alertWebhookFetch = vi.fn().mockResolvedValue({ ok: true, status: 202 })
 
     const validateIntent = (input: {
       intent: string
@@ -97,6 +100,11 @@ describe.runIf(runPgIntegration)('Sphere status governance alerts integration', 
     conductor = await SphereConductor.create({
       conductorSecret: 'alerts-integration-secret',
       signatureVerificationMode: 'did_key',
+      governanceAlertNotifier: new WebhookGovernanceAlertNotifier({
+        webhookUrl: 'https://alerts.example.com/metacanon',
+        secretToken: 'test-alert-secret',
+        fetchImpl: alertWebhookFetch as unknown as typeof fetch
+      }),
       governanceConfigPath,
       validateIntent
     })
@@ -117,6 +125,7 @@ describe.runIf(runPgIntegration)('Sphere status governance alerts integration', 
   })
 
   beforeEach(async () => {
+    alertWebhookFetch.mockClear()
     await pool.query(`
       TRUNCATE TABLE
         conductor_keys,
@@ -239,5 +248,13 @@ describe.runIf(runPgIntegration)('Sphere status governance alerts integration', 
     expect(alertCodes.has('signature_verification_failure_total')).toBe(true)
     expect(alertCodes.has('material_impact_quorum_failure_total')).toBe(true)
     expect(alertCodes.has('audit_failure_total')).toBe(true)
+
+    await vi.waitFor(() => {
+      expect(alertWebhookFetch).toHaveBeenCalled()
+    })
+
+    expect(status.body.governanceAlertDelivery?.enabled).toBe(true)
+    expect(status.body.governanceAlertDelivery?.destination).toBe('webhook')
+    expect(status.body.governanceAlertDelivery?.destinationHost).toBe('alerts.example.com')
   })
 })
