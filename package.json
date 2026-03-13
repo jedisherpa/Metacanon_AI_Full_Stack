@@ -11,6 +11,7 @@
     "check:bridge-parity": "node scripts/check-runtime-bridge-parity.mjs",
     "hooks:install": "git config core.hooksPath .githooks",
     "test:integration:pg": "npm run test:integration:pg -w engine",
+    "test:redteam:pg": "npm run test:redteam:pg -w engine",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },

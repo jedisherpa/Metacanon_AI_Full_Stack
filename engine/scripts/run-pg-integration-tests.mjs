@@ -44,6 +44,7 @@ const vitestBin = path.resolve(engineRoot, '../node_modules/vitest/vitest.mjs')
 const testFiles = [
   'src/sphere/conductor.postgres.integration.test.ts',
   'src/api/v1/c2Routes.postgres.integration.test.ts',
+  'src/api/v1/c2Routes.redteam.postgres.integration.test.ts',
   'src/api/v1/c2Routes.breakglass.postgres.integration.test.ts',
   'src/api/v1/c2Routes.signature.postgres.integration.test.ts',
   'src/api/v1/c2Routes.alerts.postgres.integration.test.ts'
