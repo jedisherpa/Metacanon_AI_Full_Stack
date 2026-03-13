@@ -576,6 +576,95 @@ main {
   color: var(--muted);
 }
 
+.redteam-report__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.redteam-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+}
+
+.redteam-metric {
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(4, 4, 10, 0.88);
+  display: grid;
+  gap: 8px;
+}
+
+.redteam-metric strong {
+  font-size: 1.15rem;
+}
+
+.redteam-metric__label {
+  color: var(--muted);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.redteam-report__meta,
+.redteam-report__empty {
+  display: grid;
+  gap: 10px;
+}
+
+.redteam-report__path {
+  display: block;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--accent-cyan);
+  overflow-wrap: anywhere;
+}
+
+.redteam-attack-classes {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.redteam-scenarios {
+  display: grid;
+  gap: 14px;
+}
+
+.redteam-scenario {
+  padding: 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(5, 6, 12, 0.92);
+  display: grid;
+  gap: 14px;
+}
+
+.redteam-scenario__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.redteam-scenario__payload {
+  margin: 0;
+  padding: 14px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--muted);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .pill {
   display: inline-flex;
   align-items: center;

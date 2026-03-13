@@ -3,6 +3,53 @@ import { getAdminWsToken } from './session';
 const API_BASE = import.meta.env.VITE_ENGINE_URL || 'http://localhost:3001';
 
 export type ApiError = { error: string; detail?: string };
+export type AdminRedTeamAttackClass =
+  | 'signature_validation'
+  | 'quorum_and_breakglass'
+  | 'db_write_bypass'
+  | 'replay_idempotency'
+  | 'mixed_key_rotation'
+  | 'counselor_ack_forgery'
+  | 'degraded_mode_abuse'
+  | string;
+
+export type AdminRedTeamScenario = {
+  scenarioId: string;
+  attackClass: AdminRedTeamAttackClass;
+  status: 'passed' | 'failed';
+  expected: Record<string, unknown>;
+  observed: Record<string, unknown>;
+  capturedAt: string;
+};
+
+export type AdminRedTeamReport = {
+  generatedAt: string;
+  suite: string;
+  metrics: {
+    totalScenarios: number;
+    passedScenarios: number;
+    failedScenarios: number;
+    blockedProbeScenarios: number;
+    attackClassCounts: Record<string, number>;
+  };
+  scenarios: AdminRedTeamScenario[];
+  runner?: {
+    command?: string;
+    startedAt?: string;
+    completedAt?: string;
+    durationMs?: number;
+    exitCode?: number;
+    status?: string;
+    reportPath?: string;
+  };
+};
+
+export type AdminRedTeamReportResponse = {
+  reportAvailable: boolean;
+  reportPath: string;
+  updatedAt: string | null;
+  report: AdminRedTeamReport | null;
+};
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers({
@@ -72,6 +119,10 @@ export function adminCreateGame(payload: {
 
 export function adminListGames() {
   return request<{ games: any[] }>('/api/v2/admin/games');
+}
+
+export function adminGetRedTeamReport() {
+  return request<AdminRedTeamReportResponse>('/api/v2/admin/redteam-report');
 }
 
 export function adminGetGame(gameId: string) {

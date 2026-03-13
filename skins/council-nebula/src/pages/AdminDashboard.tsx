@@ -2,8 +2,35 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import StageHeader from '../components/StageHeader';
 import { Button, Field } from '../components/Field';
-import { adminCreateGame, adminListGames, adminLock, adminSession } from '../lib/api';
+import {
+  adminCreateGame,
+  adminGetRedTeamReport,
+  adminListGames,
+  adminLock,
+  adminSession,
+  type AdminRedTeamReportResponse,
+  type AdminRedTeamScenario
+} from '../lib/api';
 import { clearAdminWsToken } from '../lib/session';
+
+function formatTimestamp(value?: string | null) {
+  if (!value) return 'Unavailable';
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return parsed.toLocaleString();
+}
+
+function formatAttackClass(value: string) {
+  return value
+    .split('_')
+    .filter(Boolean)
+    .map((segment) => segment[0].toUpperCase() + segment.slice(1))
+    .join(' ');
+}
 
 export default function AdminDashboard() {
   const [, navigate] = useLocation();
@@ -16,20 +43,41 @@ export default function AdminDashboard() {
   const [inviteUrl, setInviteUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [redTeamReport, setRedTeamReport] = useState<AdminRedTeamReportResponse | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
 
   useEffect(() => {
     adminSession()
       .then((result) => {
-        if (!result.ok) navigate('/admin/unlock');
+        if (!result.ok) {
+          navigate('/admin/unlock');
+          return;
+        }
+
+        void loadGames();
+        void loadRedTeamReport();
       })
       .catch(() => navigate('/admin/unlock'));
-
-    void load();
   }, []);
 
-  async function load() {
+  async function loadGames() {
     const data = await adminListGames();
     setGames(data.games);
+  }
+
+  async function loadRedTeamReport() {
+    setReportLoading(true);
+    setReportError(null);
+
+    try {
+      const response = await adminGetRedTeamReport();
+      setRedTeamReport(response);
+    } catch (err) {
+      setReportError((err as Error).message);
+    } finally {
+      setReportLoading(false);
+    }
   }
 
   async function create(event: React.FormEvent) {
@@ -47,7 +95,7 @@ export default function AdminDashboard() {
       });
       setInviteUrl(response.inviteUrl);
       setQuestion('');
-      await load();
+      await loadGames();
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -60,6 +108,11 @@ export default function AdminDashboard() {
     clearAdminWsToken();
     navigate('/admin/unlock');
   }
+
+  const report = redTeamReport?.report;
+  const recentScenarios = [...(report?.scenarios ?? [])]
+    .sort((left, right) => right.capturedAt.localeCompare(left.capturedAt))
+    .slice(0, 6);
 
   return (
     <div className="page">
@@ -129,6 +182,105 @@ export default function AdminDashboard() {
 
         {inviteUrl ? <code className="code-block">Invite URL: {inviteUrl}</code> : null}
       </form>
+
+      <section className="panel panel--glow">
+        <div className="redteam-report__header">
+          <div>
+            <h3>Governance Red-Team</h3>
+            <p className="muted">
+              Latest PG-backed adversarial run artifact for signature, quorum, replay, rotation, and
+              degraded-mode defenses.
+            </p>
+          </div>
+          <div className="button-row">
+            <Button variant="ghost" onClick={() => void loadRedTeamReport()} disabled={reportLoading}>
+              {reportLoading ? 'Refreshing...' : 'Refresh Report'}
+            </Button>
+          </div>
+        </div>
+
+        {reportError ? <p className="error">{reportError}</p> : null}
+
+        {report ? (
+          <>
+            <div className="redteam-metrics">
+              <div className="redteam-metric">
+                <span className="redteam-metric__label">Scenarios</span>
+                <strong>{report.metrics.totalScenarios}</strong>
+              </div>
+              <div className="redteam-metric">
+                <span className="redteam-metric__label">Passed</span>
+                <strong>{report.metrics.passedScenarios}</strong>
+              </div>
+              <div className="redteam-metric">
+                <span className="redteam-metric__label">Blocked Probes</span>
+                <strong>{report.metrics.blockedProbeScenarios}</strong>
+              </div>
+              <div className="redteam-metric">
+                <span className="redteam-metric__label">Last Run</span>
+                <strong>{formatTimestamp(redTeamReport?.updatedAt ?? report.generatedAt)}</strong>
+              </div>
+            </div>
+
+            <div className="redteam-report__meta">
+              <span className="muted">
+                Runner status: {report.runner?.status ?? 'unknown'} | Suite: {report.suite}
+              </span>
+              <code className="redteam-report__path">{redTeamReport?.reportPath}</code>
+            </div>
+
+            <div className="redteam-attack-classes">
+              {Object.entries(report.metrics.attackClassCounts)
+                .sort(([left], [right]) => left.localeCompare(right))
+                .map(([attackClass, count]) => (
+                  <span key={attackClass} className="pill pill--assignment">
+                    {formatAttackClass(attackClass)}: {count}
+                  </span>
+                ))}
+            </div>
+
+            <div className="redteam-scenarios">
+              {recentScenarios.map((scenario: AdminRedTeamScenario) => (
+                <article key={scenario.scenarioId} className="redteam-scenario">
+                  <div className="redteam-scenario__header">
+                    <div>
+                      <strong>{scenario.scenarioId}</strong>
+                      <div className="muted">
+                        {formatAttackClass(scenario.attackClass)} | Captured {formatTimestamp(scenario.capturedAt)}
+                      </div>
+                    </div>
+                    <span className={`pill pill--${scenario.status === 'passed' ? 'completed' : 'failed'}`}>
+                      {scenario.status}
+                    </span>
+                  </div>
+                  <pre className="redteam-scenario__payload">
+                    {JSON.stringify(
+                      {
+                        expected: scenario.expected,
+                        observed: scenario.observed
+                      },
+                      null,
+                      2
+                    )}
+                  </pre>
+                </article>
+              ))}
+            </div>
+          </>
+        ) : reportLoading ? (
+          <p className="muted">Loading latest red-team artifact...</p>
+        ) : (
+          <div className="redteam-report__empty">
+            <p className="muted">
+              No red-team report artifact is available yet. Run the PG red-team harness to populate this
+              panel.
+            </p>
+            <code className="redteam-report__path">
+              {redTeamReport?.reportPath ?? 'artifacts/redteam/governance-redteam-report.json'}
+            </code>
+          </div>
+        )}
+      </section>
 
       <section className="panel">
         <h3>Games</h3>

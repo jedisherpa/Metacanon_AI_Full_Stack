@@ -1,3 +1,6 @@
+import { readFile, stat } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Router } from 'express';
 import { z } from 'zod';
 import type { LensPack } from '../../config/lensPack.js';
@@ -26,6 +29,63 @@ import { generateHint } from '../../llm/service.js';
 import type { ProviderChoice } from '../../llm/providers.js';
 import type { WebSocketHub } from '../../ws/hub.js';
 import { buildGameExport } from '../../export/jsonExport.js';
+
+const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+const projectRoot = path.resolve(moduleDir, '../../../../');
+const defaultRedTeamReportPath = path.join(
+  projectRoot,
+  'artifacts',
+  'redteam',
+  'governance-redteam-report.json'
+);
+
+type AdminRedTeamReport = {
+  generatedAt: string;
+  suite: string;
+  metrics: {
+    totalScenarios: number;
+    passedScenarios: number;
+    failedScenarios: number;
+    blockedProbeScenarios: number;
+    attackClassCounts: Record<string, number>;
+  };
+  scenarios: Array<{
+    scenarioId: string;
+    attackClass: string;
+    status: 'passed' | 'failed';
+    expected: Record<string, unknown>;
+    observed: Record<string, unknown>;
+    capturedAt: string;
+  }>;
+  runner?: {
+    command?: string;
+    startedAt?: string;
+    completedAt?: string;
+    durationMs?: number;
+    exitCode?: number;
+    status?: string;
+    reportPath?: string;
+  };
+};
+
+function resolveRedTeamReportPath(configuredPath?: string): string {
+  if (!configuredPath?.trim()) {
+    return defaultRedTeamReportPath;
+  }
+
+  return path.isAbsolute(configuredPath)
+    ? configuredPath
+    : path.resolve(projectRoot, configuredPath);
+}
+
+function isMissingFile(errorValue: unknown): boolean {
+  return (
+    typeof errorValue === 'object' &&
+    errorValue !== null &&
+    'code' in errorValue &&
+    errorValue.code === 'ENOENT'
+  );
+}
 
 const createGameSchema = z.object({
   question: z.string().min(3),
@@ -102,6 +162,7 @@ export function createAdminGameRoutes(params: { lensPack: LensPack; wsHub?: WebS
   const router = Router();
 
   router.use('/api/v2/admin/games', requireAdminSession);
+  router.use('/api/v2/admin/redteam-report', requireAdminSession);
 
   router.post('/api/v2/admin/games', async (req, res) => {
     const parsed = createGameSchema.safeParse(req.body);
@@ -138,6 +199,41 @@ export function createAdminGameRoutes(params: { lensPack: LensPack; wsHub?: WebS
     );
 
     res.json({ games: withCounts });
+  });
+
+  router.get('/api/v2/admin/redteam-report', async (_req, res) => {
+    const reportPath = resolveRedTeamReportPath(env.SPHERE_REDTEAM_REPORT_PATH);
+
+    try {
+      const [rawReport, metadata] = await Promise.all([
+        readFile(reportPath, 'utf8'),
+        stat(reportPath)
+      ]);
+      const report = JSON.parse(rawReport) as AdminRedTeamReport;
+
+      return res.json({
+        reportAvailable: true,
+        reportPath,
+        updatedAt: metadata.mtime.toISOString(),
+        report
+      });
+    } catch (cause) {
+      if (isMissingFile(cause)) {
+        return res.json({
+          reportAvailable: false,
+          reportPath,
+          updatedAt: null,
+          report: null
+        });
+      }
+
+      return error(
+        res,
+        500,
+        'Failed to load red-team report',
+        cause instanceof Error ? cause.message : 'unknown error'
+      );
+    }
   });
 
   router.get('/api/v2/admin/games/:id', async (req, res) => {

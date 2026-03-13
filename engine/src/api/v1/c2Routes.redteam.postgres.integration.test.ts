@@ -22,6 +22,8 @@ type RedTeamScenarioResult = {
     | 'db_write_bypass'
     | 'replay_idempotency'
     | 'mixed_key_rotation'
+    | 'counselor_ack_forgery'
+    | 'degraded_mode_abuse'
   status: ScenarioStatus
   expected: Record<string, unknown>
   observed: Record<string, unknown>
@@ -115,6 +117,32 @@ function buildCanonicalDispatchPayload(input: {
       ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {})
     },
     payload: input.payload
+  })
+}
+
+function buildCanonicalAckPayload(input: {
+  threadId: string
+  actorDid: string
+  targetSequence: number
+  targetMessageId: string
+  ackMessageId: string
+  traceId: string
+  attestation: string[]
+  receivedAt: string
+}): string {
+  return canonicalize({
+    threadId: input.threadId,
+    actorDid: input.actorDid,
+    targetSequence: input.targetSequence,
+    targetMessageId: input.targetMessageId,
+    ackMessageId: input.ackMessageId,
+    traceId: input.traceId,
+    intent: 'ACK_ENTRY',
+    schemaVersion: '3.0',
+    attestation: [...new Set(input.attestation.map((value) => value.trim()).filter(Boolean))].sort((left, right) =>
+      left.localeCompare(right)
+    ),
+    receivedAt: input.receivedAt
   })
 }
 
@@ -227,6 +255,51 @@ describe.runIf(runPgIntegration)('Sphere routes governance red-team harness', ()
       })
   }
 
+  async function postSignedAck(input: {
+    threadId: string
+    actorDid: string
+    signer: RegisteredSigner
+    targetSequence: number
+    targetMessageId: string
+    attestation: string[]
+    ackMessageId?: string
+    traceId?: string
+    receivedAt?: string
+  }): Promise<any> {
+    const ackMessageId = input.ackMessageId ?? randomUUID()
+    const traceId = input.traceId ?? randomUUID()
+    const receivedAt = input.receivedAt ?? new Date().toISOString()
+    const agentSignature = createEdDsaCompactJws(
+      buildCanonicalAckPayload({
+        threadId: input.threadId,
+        actorDid: input.actorDid,
+        targetSequence: input.targetSequence,
+        targetMessageId: input.targetMessageId,
+        ackMessageId,
+        traceId,
+        attestation: input.attestation,
+        receivedAt
+      }),
+      input.signer.keyPair.privateKey
+    )
+
+    return request
+      .post(`/api/v1/sphere/threads/${input.threadId}/ack`)
+      .set('authorization', `Bearer ${serviceToken}`)
+      .send({
+        actorDid: input.actorDid,
+        targetSequence: input.targetSequence,
+        targetMessageId: input.targetMessageId,
+        ackMessageId,
+        traceId,
+        intent: 'ACK_ENTRY',
+        schemaVersion: '3.0',
+        attestation: input.attestation,
+        receivedAt,
+        agentSignature
+      })
+  }
+
   beforeAll(async () => {
     setEnv(serviceToken)
 
@@ -251,6 +324,7 @@ describe.runIf(runPgIntegration)('Sphere routes governance red-team harness', ()
     const { SphereConductor } = await import('../../sphere/conductor.js')
     const { DidRegistry } = await import('../../sphere/didRegistry.js')
     ;({ pool } = await import('../../db/client.js'))
+    const didRegistry = await DidRegistry.create()
 
     const validateIntent = (input: {
       intent: string
@@ -259,6 +333,16 @@ describe.runIf(runPgIntegration)('Sphere routes governance red-team harness', ()
       prismHolderApproved: boolean
     }) => {
       const normalized = input.intent.trim().toUpperCase()
+
+      if (input.threadState === 'DEGRADED_NO_LLM' && normalized === 'DISPATCH_MISSION') {
+        return {
+          allowed: false,
+          code: 'INTENT_BLOCKED_IN_DEGRADED_MODE' as const,
+          message: 'Synthetic degraded-mode dispatch block for red-team harness.',
+          requiresApproval: false,
+          highRisk: false
+        }
+      }
 
       if (normalized === 'EMERGENCY_SHUTDOWN') {
         return {
@@ -284,12 +368,15 @@ describe.runIf(runPgIntegration)('Sphere routes governance red-team harness', ()
         .toString(),
       conductorEd25519KeyId: 'conductor-key-redteam-bootstrap',
       requireConductorSignatureV2: true,
+      requireVerifiedCounselorAckSignatures: true,
       signatureVerificationMode: 'did_key',
       governanceConfigPath,
+      resolveDidPublicKey: async (did: string) => {
+        const identity = await didRegistry.get(did)
+        return identity?.publicKey ?? null
+      },
       validateIntent
     })
-
-    const didRegistry = await DidRegistry.create()
 
     const app = expressMod.default()
     app.use(expressMod.default.json())
@@ -702,6 +789,285 @@ describe.runIf(runPgIntegration)('Sphere routes governance red-team harness', ()
         capturedAt: new Date().toISOString()
       })
       throw error
+    }
+  })
+
+  it('rejects counselor ACK forgery variants until verified active quorum is satisfied', async () => {
+    const threadId = randomUUID()
+    const missionId = randomUUID()
+    let observed: Record<string, unknown> = {}
+
+    try {
+      await conductor.createThread({
+        threadId,
+        missionId,
+        createdBy: didKeyActor
+      })
+
+      const operatorSigner: RegisteredSigner = {
+        did: 'did:example:redteam-operator',
+        keyPair: generateKeyPairSync('ed25519')
+      }
+      const validCounselor: RegisteredSigner = {
+        did: 'did:example:redteam-counselor-valid',
+        keyPair: generateKeyPairSync('ed25519')
+      }
+      const forgedCounselor: RegisteredSigner = {
+        did: 'did:example:redteam-counselor-forged',
+        keyPair: generateKeyPairSync('ed25519')
+      }
+      const outsiderSigner: RegisteredSigner = {
+        did: 'did:example:redteam-outsider',
+        keyPair: generateKeyPairSync('ed25519')
+      }
+
+      await registerSigner(operatorSigner)
+      await registerSigner(validCounselor)
+      await registerSigner(forgedCounselor)
+      await registerSigner(outsiderSigner)
+
+      await pool.query(
+        `
+          INSERT INTO counselors (counselor_did, counselor_set, is_active)
+          VALUES
+            ($1, 'security_council', TRUE),
+            ($2, 'security_council', TRUE)
+        `,
+        [validCounselor.did, forgedCounselor.did]
+      )
+
+      const baselineMessageId = randomUUID()
+      const baselineResponse = await postSignedMessage({
+        threadId,
+        authorAgentId: operatorSigner.did,
+        signer: operatorSigner,
+        messageId: baselineMessageId,
+        intent: 'MISSION_REPORT',
+        attestation: ['did:example:operator'],
+        payload: { body: 'target entry for quorum approvals' }
+      })
+      expect(baselineResponse.status).toBe(201)
+
+      const targetSequence = baselineResponse.body.sequence as number
+      const targetMessageId = baselineMessageId
+
+      const validCounselorAck = await postSignedAck({
+        threadId,
+        actorDid: validCounselor.did,
+        signer: validCounselor,
+        targetSequence,
+        targetMessageId,
+        attestation: ['did:example:valid-counselor']
+      })
+
+      const outsiderAck = await postSignedAck({
+        threadId,
+        actorDid: outsiderSigner.did,
+        signer: outsiderSigner,
+        targetSequence,
+        targetMessageId,
+        attestation: ['did:example:outsider']
+      })
+
+      const forgedAckPayload = {
+        actorDid: forgedCounselor.did,
+        targetSequence,
+        targetMessageId,
+        ackMessageId: randomUUID(),
+        traceId: randomUUID(),
+        intent: 'ACK_ENTRY',
+        schemaVersion: '3.0',
+        attestation: ['did:example:forged-counselor'],
+        receivedAt: new Date().toISOString()
+      }
+      const forgedAck = await request
+        .post(`/api/v1/sphere/threads/${threadId}/ack`)
+        .set('authorization', `Bearer ${serviceToken}`)
+        .send({
+          ...forgedAckPayload,
+          agentSignature: createEdDsaCompactJws(
+            buildCanonicalAckPayload({
+              threadId,
+              actorDid: forgedAckPayload.actorDid,
+              targetSequence: forgedAckPayload.targetSequence,
+              targetMessageId: forgedAckPayload.targetMessageId,
+              ackMessageId: forgedAckPayload.ackMessageId,
+              traceId: forgedAckPayload.traceId,
+              attestation: forgedAckPayload.attestation,
+              receivedAt: forgedAckPayload.receivedAt
+            }),
+            outsiderSigner.keyPair.privateKey
+          )
+        })
+
+      const insufficientQuorumResponse = await postSignedMessage({
+        threadId,
+        authorAgentId: operatorSigner.did,
+        signer: operatorSigner,
+        intent: 'FORCE_EVICT',
+        attestation: [targetMessageId],
+        payload: { reason: 'red-team quorum enforcement check' }
+      })
+
+      observed = {
+        validCounselorAck: { status: validCounselorAck.status },
+        outsiderAck: { status: outsiderAck.status },
+        forgedAck: { status: forgedAck.status, code: forgedAck.body.code },
+        insufficientQuorumResponse: {
+          status: insufficientQuorumResponse.status,
+          code: insufficientQuorumResponse.body.code
+        }
+      }
+
+      expect(observed).toMatchObject({
+        validCounselorAck: { status: 201 },
+        outsiderAck: { status: 201 },
+        forgedAck: { status: 401, code: 'STM_ERR_INVALID_SIGNATURE' },
+        insufficientQuorumResponse: {
+          status: 412,
+          code: 'STM_ERR_MISSING_ATTESTATION'
+        }
+      })
+
+      recordScenario({
+        scenarioId: 'counselor_ack_forgery_chain',
+        attackClass: 'counselor_ack_forgery',
+        status: 'passed',
+        expected: {
+          forgedAck: 'STM_ERR_INVALID_SIGNATURE',
+          insufficientQuorumResponse: 'STM_ERR_MISSING_ATTESTATION'
+        },
+        observed,
+        capturedAt: new Date().toISOString()
+      })
+    } catch (error) {
+      recordScenario({
+        scenarioId: 'counselor_ack_forgery_chain',
+        attackClass: 'counselor_ack_forgery',
+        status: 'failed',
+        expected: {
+          forgedAck: 'STM_ERR_INVALID_SIGNATURE',
+          insufficientQuorumResponse: 'STM_ERR_MISSING_ATTESTATION'
+        },
+        observed,
+        capturedAt: new Date().toISOString()
+      })
+      throw error
+    }
+  })
+
+  it('blocks degraded-mode abuse chains until the system recovers', async () => {
+    const threadId = randomUUID()
+    const missionId = randomUUID()
+    let observed: Record<string, unknown> = {}
+
+    try {
+      conductor.enterGlobalDegradedNoLlm('synthetic red-team outage')
+
+      await conductor.createThread({
+        threadId,
+        missionId,
+        createdBy: didKeyActor
+      })
+
+      const operatorSigner: RegisteredSigner = {
+        did: 'did:example:redteam-degraded-operator',
+        keyPair: generateKeyPairSync('ed25519')
+      }
+      const breakGlassSigner: RegisteredSigner = {
+        did: 'did:example:redteam-degraded-breakglass',
+        keyPair: generateKeyPairSync('ed25519')
+      }
+
+      await registerSigner(operatorSigner)
+      await registerSigner(breakGlassSigner)
+
+      const blockedDispatch = await postSignedMessage({
+        threadId,
+        authorAgentId: operatorSigner.did,
+        signer: operatorSigner,
+        intent: 'DISPATCH_MISSION',
+        attestation: ['did:example:operator'],
+        payload: { body: 'attempt dispatch during degraded mode' }
+      })
+
+      const breakGlassProbe = await postSignedMessage({
+        threadId,
+        authorAgentId: breakGlassSigner.did,
+        signer: breakGlassSigner,
+        intent: 'EMERGENCY_SHUTDOWN',
+        attestation: [breakGlassSigner.did],
+        payload: { reason: 'unauthorized shutdown probe while degraded' }
+      })
+
+      const statusDuringDegraded = await request
+        .get('/api/v1/sphere/status')
+        .set('authorization', `Bearer ${serviceToken}`)
+
+      conductor['globalState'] = 'ACTIVE'
+      conductor['degradedNoLlmReason'] = null
+
+      const recoveredDispatch = await postSignedMessage({
+        threadId,
+        authorAgentId: operatorSigner.did,
+        signer: operatorSigner,
+        intent: 'MISSION_REPORT',
+        attestation: ['did:example:operator'],
+        payload: { body: 'dispatch after degraded-mode recovery' }
+      })
+
+      observed = {
+        blockedDispatch: { status: blockedDispatch.status, code: blockedDispatch.body.code },
+        breakGlassProbe: { status: breakGlassProbe.status, code: breakGlassProbe.body.code },
+        statusDuringDegraded: {
+          systemState: statusDuringDegraded.body.systemState,
+          degradedReason: statusDuringDegraded.body.degradedNoLlmReason
+        },
+        recoveredDispatch: {
+          status: recoveredDispatch.status,
+          sequence: recoveredDispatch.body.sequence
+        }
+      }
+
+      expect(observed).toMatchObject({
+        blockedDispatch: { status: 400, code: 'INTENT_BLOCKED_IN_DEGRADED_MODE' },
+        breakGlassProbe: { status: 403, code: 'BREAK_GLASS_AUTH_FAILED' },
+        statusDuringDegraded: {
+          systemState: 'DEGRADED_NO_LLM',
+          degradedReason: 'synthetic red-team outage'
+        },
+        recoveredDispatch: { status: 201 }
+      })
+
+      recordScenario({
+        scenarioId: 'degraded_mode_abuse_chain',
+        attackClass: 'degraded_mode_abuse',
+        status: 'passed',
+        expected: {
+          blockedDispatch: 'INTENT_BLOCKED_IN_DEGRADED_MODE',
+          breakGlassProbe: 'BREAK_GLASS_AUTH_FAILED',
+          recoveredDispatch: 201
+        },
+        observed,
+        capturedAt: new Date().toISOString()
+      })
+    } catch (error) {
+      recordScenario({
+        scenarioId: 'degraded_mode_abuse_chain',
+        attackClass: 'degraded_mode_abuse',
+        status: 'failed',
+        expected: {
+          blockedDispatch: 'INTENT_BLOCKED_IN_DEGRADED_MODE',
+          breakGlassProbe: 'BREAK_GLASS_AUTH_FAILED',
+          recoveredDispatch: 201
+        },
+        observed,
+        capturedAt: new Date().toISOString()
+      })
+      throw error
+    } finally {
+      conductor['globalState'] = 'ACTIVE'
+      conductor['degradedNoLlmReason'] = null
     }
   })
 })

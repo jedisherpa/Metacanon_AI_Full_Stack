@@ -61,6 +61,7 @@ const envSchema = z.object({
   SPHERE_GOVERNANCE_ALERT_WEBHOOK_URL: z.string().url().optional(),
   SPHERE_GOVERNANCE_ALERT_WEBHOOK_TOKEN: optionalNonEmptyString,
   SPHERE_GOVERNANCE_ALERT_WEBHOOK_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+  SPHERE_REDTEAM_REPORT_PATH: optionalNonEmptyString,
   SPHERE_DB_ENFORCE_ROLE_SEPARATION: strictBoolEnv.default(false),
   SPHERE_DB_APP_ROLE: z
     .string()
