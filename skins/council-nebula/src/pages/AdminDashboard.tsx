@@ -9,7 +9,8 @@ import {
   adminLock,
   adminSession,
   type AdminRedTeamReportResponse,
-  type AdminRedTeamScenario
+  type AdminRedTeamScenario,
+  type AdminRedTeamTrendPoint
 } from '../lib/api';
 import { clearAdminWsToken } from '../lib/session';
 
@@ -30,6 +31,91 @@ function formatAttackClass(value: string) {
     .filter(Boolean)
     .map((segment) => segment[0].toUpperCase() + segment.slice(1))
     .join(' ');
+}
+
+function buildTrendPoints(values: number[], width: number, height: number, padding = 10) {
+  if (values.length === 0) {
+    return '';
+  }
+
+  const minValue = Math.min(...values);
+  const maxValue = Math.max(...values);
+  const range = maxValue - minValue || 1;
+  const usableWidth = width - padding * 2;
+  const usableHeight = height - padding * 2;
+
+  return values
+    .map((value, index) => {
+      const x = padding + (values.length === 1 ? usableWidth / 2 : (index / (values.length - 1)) * usableWidth);
+      const normalized = (value - minValue) / range;
+      const y = height - padding - normalized * usableHeight;
+      return `${x},${y}`;
+    })
+    .join(' ');
+}
+
+function formatChartValue(value: number | null, formatter: (value: number) => string) {
+  if (value === null || Number.isNaN(value)) {
+    return 'n/a';
+  }
+
+  return formatter(value);
+}
+
+function RedTeamTrendChart(props: {
+  title: string;
+  subtitle: string;
+  series: AdminRedTeamTrendPoint[];
+  valueAccessor: (point: AdminRedTeamTrendPoint) => number | null;
+  formatter: (value: number) => string;
+  stroke: string;
+}) {
+  const values = props.series
+    .map((point) => props.valueAccessor(point))
+    .filter((value): value is number => value !== null && Number.isFinite(value));
+
+  if (values.length === 0) {
+    return (
+      <div className="redteam-chart">
+        <div className="redteam-chart__header">
+          <div>
+            <strong>{props.title}</strong>
+            <div className="muted">{props.subtitle}</div>
+          </div>
+        </div>
+        <p className="muted">No chartable history yet.</p>
+      </div>
+    );
+  }
+
+  const points = buildTrendPoints(values, 320, 96);
+  const latestValue = values.length > 0 ? values[values.length - 1] : null;
+  const peakValue = Math.max(...values);
+
+  return (
+    <div className="redteam-chart">
+      <div className="redteam-chart__header">
+        <div>
+          <strong>{props.title}</strong>
+          <div className="muted">{props.subtitle}</div>
+        </div>
+        <div className="redteam-chart__stats">
+          <span>{formatChartValue(latestValue, props.formatter)}</span>
+          <span className="muted">peak {formatChartValue(peakValue, props.formatter)}</span>
+        </div>
+      </div>
+      <svg viewBox="0 0 320 96" className="redteam-chart__svg" aria-hidden="true">
+        <polyline
+          fill="none"
+          stroke={props.stroke}
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          points={points}
+        />
+      </svg>
+    </div>
+  );
 }
 
 export default function AdminDashboard() {
@@ -111,6 +197,7 @@ export default function AdminDashboard() {
 
   const report = redTeamReport?.report;
   const trend = redTeamReport?.trend;
+  const trendSeries = trend?.series ?? [];
   const recentRuns = redTeamReport?.history?.runs.slice(0, 5) ?? [];
   const recentScenarios = [...(report?.scenarios ?? [])]
     .sort((left, right) => right.capturedAt.localeCompare(left.capturedAt))
@@ -226,7 +313,8 @@ export default function AdminDashboard() {
 
             <div className="redteam-report__meta">
               <span className="muted">
-                Runner status: {report.runner?.status ?? 'unknown'} | Suite: {report.suite}
+                Runner status: {report.runner?.status ?? 'unknown'} | Suite: {report.suite} | Source:{' '}
+                {redTeamReport?.storageSource ?? 'unavailable'}
               </span>
               <code className="redteam-report__path">{redTeamReport?.reportPath}</code>
             </div>
@@ -255,6 +343,27 @@ export default function AdminDashboard() {
                       : 'n/a'}
                   </strong>
                 </div>
+              </div>
+            ) : null}
+
+            {trendSeries.length > 0 ? (
+              <div className="redteam-chart-grid">
+                <RedTeamTrendChart
+                  title="Scenario Pass Rate"
+                  subtitle="Per-run scenario success ratio across the retained trend window."
+                  series={trendSeries}
+                  valueAccessor={(point) => (point.scenarioPassRate !== null ? point.scenarioPassRate * 100 : null)}
+                  formatter={(value) => `${Math.round(value)}%`}
+                  stroke="var(--accent-cyan)"
+                />
+                <RedTeamTrendChart
+                  title="Run Duration"
+                  subtitle="PG-backed harness wall-clock duration, oldest to newest."
+                  series={trendSeries}
+                  valueAccessor={(point) => point.durationMs}
+                  formatter={(value) => `${Math.round(value)} ms`}
+                  stroke="var(--accent-gold)"
+                />
               </div>
             ) : null}
 

@@ -16,6 +16,7 @@ import {
   api,
   ApiRequestError,
   type EngineRoomRedTeamReportResponse,
+  type EngineRoomRedTeamTrendPoint,
   type RuntimeBridgeState,
   type RuntimeComputeOption,
   type RuntimeHealth,
@@ -623,6 +624,91 @@ function formatAttackClass(value: string): string {
     .join(' ');
 }
 
+function buildSparklinePoints(values: number[], width: number, height: number, padding = 8): string {
+  if (values.length === 0) {
+    return '';
+  }
+
+  const minValue = Math.min(...values);
+  const maxValue = Math.max(...values);
+  const range = maxValue - minValue || 1;
+  const usableWidth = width - padding * 2;
+  const usableHeight = height - padding * 2;
+
+  return values
+    .map((value, index) => {
+      const x = padding + (values.length === 1 ? usableWidth / 2 : (index / (values.length - 1)) * usableWidth);
+      const normalized = (value - minValue) / range;
+      const y = height - padding - normalized * usableHeight;
+      return `${x},${y}`;
+    })
+    .join(' ');
+}
+
+function formatChartMetric(value: number | null, formatter: (value: number) => string): string {
+  if (value === null || Number.isNaN(value)) {
+    return 'n/a';
+  }
+
+  return formatter(value);
+}
+
+function RedTeamSparkline(props: {
+  title: string;
+  subtitle: string;
+  series: EngineRoomRedTeamTrendPoint[];
+  valueAccessor: (point: EngineRoomRedTeamTrendPoint) => number | null;
+  formatter: (value: number) => string;
+  stroke: string;
+}) {
+  const values = props.series
+    .map((point) => props.valueAccessor(point))
+    .filter((value): value is number => value !== null && Number.isFinite(value));
+
+  if (values.length === 0) {
+    return (
+      <div className="border border-white/10 rounded-sm px-2 py-2 bg-white/[0.03]">
+        <p className="text-white/80 text-[11px] font-mono">{props.title}</p>
+        <p className="text-white/40 text-[10px]">{props.subtitle}</p>
+        <p className="text-white/35 text-[10px] mt-2">No chartable run history yet.</p>
+      </div>
+    );
+  }
+
+  const points = buildSparklinePoints(values, 220, 68);
+  const latestValue = values.length > 0 ? values[values.length - 1] : null;
+  const peakValue = Math.max(...values);
+
+  return (
+    <div className="border border-white/10 rounded-sm px-2 py-2 bg-white/[0.03] space-y-2">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-white/80 text-[11px] font-mono">{props.title}</p>
+          <p className="text-white/40 text-[10px]">{props.subtitle}</p>
+        </div>
+        <div className="text-right">
+          <p className="text-white text-[11px] font-mono">
+            {formatChartMetric(latestValue, props.formatter)}
+          </p>
+          <p className="text-white/35 text-[10px] font-mono">
+            peak {formatChartMetric(peakValue, props.formatter)}
+          </p>
+        </div>
+      </div>
+      <svg viewBox="0 0 220 68" className="w-full h-[68px] rounded-sm bg-white/[0.02]" aria-hidden="true">
+        <polyline
+          fill="none"
+          points={points}
+          stroke={props.stroke}
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </div>
+  );
+}
+
 export default function EngineRoomPage({ defaultTab = 'status' }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>(defaultTab);
   const [status, setStatus] = useState<any>({});
@@ -965,6 +1051,7 @@ export default function EngineRoomPage({ defaultTab = 'status' }: Props) {
   ];
   const recentRedTeamRuns = redTeamReport?.history?.runs.slice(0, 4) ?? [];
   const redTeamTrend = redTeamReport?.trend ?? null;
+  const redTeamTrendSeries = redTeamTrend?.series ?? [];
 
   return (
     <div className="flex flex-col h-full">
@@ -1160,6 +1247,10 @@ export default function EngineRoomPage({ defaultTab = 'status' }: Props) {
                       <p className="text-white/40">History Window</p>
                       <p className="text-white font-mono">{redTeamTrend?.runCount ?? 0}</p>
                     </div>
+                    <div>
+                      <p className="text-white/40">Storage</p>
+                      <p className="text-white font-mono">{redTeamReport.storageSource.toUpperCase()}</p>
+                    </div>
                   </div>
 
                   {redTeamTrend ? (
@@ -1178,6 +1269,29 @@ export default function EngineRoomPage({ defaultTab = 'status' }: Props) {
                             : 'n/a'}
                         </p>
                       </div>
+                    </div>
+                  ) : null}
+
+                  {redTeamTrendSeries.length > 0 ? (
+                    <div className="grid grid-cols-1 gap-2">
+                      <RedTeamSparkline
+                        title="Scenario Pass Rate"
+                        subtitle="Oldest to newest retained run."
+                        series={redTeamTrendSeries}
+                        valueAccessor={(point) =>
+                          point.scenarioPassRate !== null ? point.scenarioPassRate * 100 : null
+                        }
+                        formatter={(value) => `${Math.round(value)}%`}
+                        stroke="#1de9b6"
+                      />
+                      <RedTeamSparkline
+                        title="Run Duration"
+                        subtitle="Wall-clock PG harness duration."
+                        series={redTeamTrendSeries}
+                        valueAccessor={(point) => point.durationMs}
+                        formatter={(value) => `${Math.round(value)} ms`}
+                        stroke="#7dd3fc"
+                      />
                     </div>
                   ) : null}
 

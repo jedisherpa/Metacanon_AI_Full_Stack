@@ -1018,6 +1018,19 @@ export type EngineRoomRedTeamRunSummary = {
   snapshotPath?: string;
 };
 
+export type EngineRoomRedTeamTrendPoint = {
+  runId: string;
+  generatedAt: string;
+  status: 'passed' | 'failed';
+  durationMs: number | null;
+  totalScenarios: number;
+  passedScenarios: number;
+  failedScenarios: number;
+  blockedProbeScenarios: number;
+  scenarioPassRate: number | null;
+  attackClassCounts: Record<string, number>;
+};
+
 export type EngineRoomRedTeamHistory = {
   updatedAt: string;
   latestReportPath: string;
@@ -1035,10 +1048,13 @@ export type EngineRoomRedTeamTrend = {
   averageBlockedProbeScenarios: number | null;
   latestRunAt: string | null;
   attackClassTotals: Record<string, number>;
+  series: EngineRoomRedTeamTrendPoint[];
 };
 
 export type EngineRoomRedTeamReportResponse = {
   ok: boolean;
+  storageMode: 'auto' | 'file' | 'database';
+  storageSource: 'unavailable' | 'filesystem' | 'database';
   reportAvailable: boolean;
   reportPath: string;
   updatedAt: string | null;

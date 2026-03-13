@@ -248,6 +248,35 @@ export const counselors = pgTable(
   })
 );
 
+export const redTeamRuns = pgTable(
+  'redteam_runs',
+  {
+    runId: varchar('run_id', { length: 96 }).primaryKey(),
+    suite: varchar('suite', { length: 80 }).notNull(),
+    status: varchar('status', { length: 20 }).notNull(),
+    generatedAt: timestamp('generated_at', { withTimezone: true }).notNull(),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    durationMs: integer('duration_ms'),
+    totalScenarios: integer('total_scenarios').notNull().default(0),
+    passedScenarios: integer('passed_scenarios').notNull().default(0),
+    failedScenarios: integer('failed_scenarios').notNull().default(0),
+    blockedProbeScenarios: integer('blocked_probe_scenarios').notNull().default(0),
+    attackClassCounts: jsonb('attack_class_counts')
+      .$type<Record<string, number>>()
+      .notNull()
+      .default({}),
+    report: jsonb('report').$type<Record<string, unknown>>().notNull(),
+    reportPath: text('report_path'),
+    snapshotPath: text('snapshot_path'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => ({
+    suiteGeneratedAtIdx: index('redteam_runs_suite_generated_at_idx').on(table.suite, table.generatedAt),
+    statusIdx: index('redteam_runs_status_idx').on(table.status)
+  })
+);
+
 export type Game = typeof games.$inferSelect;
 export type GamePlayer = typeof gamePlayers.$inferSelect;
 export type Round1Response = typeof round1Responses.$inferSelect;
@@ -260,3 +289,4 @@ export type AdminSession = typeof adminSessions.$inferSelect;
 export type SphereThread = typeof sphereThreads.$inferSelect;
 export type SphereEvent = typeof sphereEvents.$inferSelect;
 export type Counselor = typeof counselors.$inferSelect;
+export type RedTeamRun = typeof redTeamRuns.$inferSelect;

@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { Pool } from 'pg'
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const engineRoot = path.resolve(scriptDir, '..')
@@ -48,6 +49,7 @@ if (result.error) {
 const completedAt = new Date().toISOString()
 const durationMs = Date.parse(completedAt) - Date.parse(startedAt)
 const runId = startedAt.replace(/[:.]/g, '-')
+const snapshotPath = path.join(snapshotDir, `${runId}.json`)
 
 let report = {
   generatedAt: completedAt,
@@ -97,14 +99,14 @@ function buildRunSummary() {
     failedScenarios: finalReport.metrics?.failedScenarios ?? 0,
     blockedProbeScenarios: finalReport.metrics?.blockedProbeScenarios ?? 0,
     attackClassCounts: finalReport.metrics?.attackClassCounts ?? {},
-    snapshotPath: path.join(snapshotDir, `${runId}.json`)
+    snapshotPath
   }
 }
 
 let history = {
   updatedAt: completedAt,
   latestReportPath: reportPath,
-  latestSnapshotPath: path.join(snapshotDir, `${runId}.json`),
+  latestSnapshotPath: snapshotPath,
   runs: []
 }
 
@@ -134,8 +136,85 @@ history = {
 
 fs.writeFileSync(reportPath, JSON.stringify(finalReport, null, 2))
 fs.mkdirSync(snapshotDir, { recursive: true })
-fs.writeFileSync(path.join(snapshotDir, `${runId}.json`), JSON.stringify(finalReport, null, 2))
+fs.writeFileSync(snapshotPath, JSON.stringify(finalReport, null, 2))
 fs.writeFileSync(historyPath, JSON.stringify(history, null, 2))
 console.log(`[redteam] Report written to ${reportPath}`)
+
+async function persistRunToDatabase() {
+  const pool = new Pool({
+    connectionString: databaseUrl
+  })
+
+  try {
+    await pool.query(
+      `
+        INSERT INTO redteam_runs (
+          run_id,
+          suite,
+          status,
+          generated_at,
+          started_at,
+          completed_at,
+          duration_ms,
+          total_scenarios,
+          passed_scenarios,
+          failed_scenarios,
+          blocked_probe_scenarios,
+          attack_class_counts,
+          report,
+          report_path,
+          snapshot_path
+        )
+        VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13::jsonb, $14, $15
+        )
+        ON CONFLICT (run_id) DO UPDATE
+        SET
+          suite = EXCLUDED.suite,
+          status = EXCLUDED.status,
+          generated_at = EXCLUDED.generated_at,
+          started_at = EXCLUDED.started_at,
+          completed_at = EXCLUDED.completed_at,
+          duration_ms = EXCLUDED.duration_ms,
+          total_scenarios = EXCLUDED.total_scenarios,
+          passed_scenarios = EXCLUDED.passed_scenarios,
+          failed_scenarios = EXCLUDED.failed_scenarios,
+          blocked_probe_scenarios = EXCLUDED.blocked_probe_scenarios,
+          attack_class_counts = EXCLUDED.attack_class_counts,
+          report = EXCLUDED.report,
+          report_path = EXCLUDED.report_path,
+          snapshot_path = EXCLUDED.snapshot_path
+      `,
+      [
+        runId,
+        finalReport.suite ?? 'governance_redteam',
+        finalReport.runner?.status === 'passed' ? 'passed' : 'failed',
+        finalReport.generatedAt ?? completedAt,
+        startedAt,
+        completedAt,
+        finalReport.runner?.durationMs ?? durationMs,
+        finalReport.metrics?.totalScenarios ?? 0,
+        finalReport.metrics?.passedScenarios ?? 0,
+        finalReport.metrics?.failedScenarios ?? 0,
+        finalReport.metrics?.blockedProbeScenarios ?? 0,
+        JSON.stringify(finalReport.metrics?.attackClassCounts ?? {}),
+        JSON.stringify(finalReport),
+        reportPath,
+        snapshotPath
+      ]
+    )
+    console.log('[redteam] Report persisted to Postgres')
+  } finally {
+    await pool.end().catch(() => undefined)
+  }
+}
+
+try {
+  await persistRunToDatabase()
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error)
+  console.error(`[redteam] Failed to persist report to Postgres: ${message}`)
+  process.exit(1)
+}
 
 process.exit(result.status ?? 1)

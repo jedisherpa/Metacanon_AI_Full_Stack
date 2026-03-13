@@ -167,7 +167,13 @@ export function createAdminGameRoutes(params: { lensPack: LensPack; wsHub?: WebS
     const reportPath = resolveRedTeamReportPath(env.SPHERE_REDTEAM_REPORT_PATH);
 
     try {
-      return res.json(await loadRedTeamArtifacts({ reportPath }));
+      return res.json(
+        await loadRedTeamArtifacts({
+          reportPath,
+          storageMode: env.SPHERE_REDTEAM_STORAGE_MODE,
+          trendWindowSize: env.SPHERE_REDTEAM_TREND_WINDOW
+        })
+      );
     } catch (cause) {
       return error(
         res,

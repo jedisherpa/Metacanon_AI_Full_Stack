@@ -204,7 +204,9 @@ describe('engineRoomRoutes skill runtime endpoints', () => {
     const historyPath = path.join(tempDir, 'governance-redteam-history.json');
 
     applyBaseEnv({
-      SPHERE_REDTEAM_REPORT_PATH: reportPath
+      SPHERE_REDTEAM_REPORT_PATH: reportPath,
+      SPHERE_REDTEAM_STORAGE_MODE: 'file',
+      SPHERE_REDTEAM_TREND_WINDOW: '10'
     });
 
     await writeFile(
@@ -291,6 +293,8 @@ describe('engineRoomRoutes skill runtime endpoints', () => {
     const response = await request(app).get('/api/v1/engine-room/redteam-report');
     expect(response.status).toBe(200);
     expect(response.body.ok).toBe(true);
+    expect(response.body.storageMode).toBe('file');
+    expect(response.body.storageSource).toBe('filesystem');
     expect(response.body.reportAvailable).toBe(true);
     expect(response.body.historyAvailable).toBe(true);
     expect(response.body.reportPath).toBe(reportPath);
@@ -300,6 +304,16 @@ describe('engineRoomRoutes skill runtime endpoints', () => {
       passedRuns: 1,
       failedRuns: 1,
       latestRunAt: '2026-03-12T03:05:00.000Z',
+      series: [
+        expect.objectContaining({
+          runId: '2026-03-11T03-05-00-000Z',
+          scenarioPassRate: 1
+        }),
+        expect.objectContaining({
+          runId: '2026-03-12T03-05-00-000Z',
+          scenarioPassRate: 6 / 7
+        })
+      ],
       attackClassTotals: {
         replay_idempotency: 2,
         degraded_mode_abuse: 1

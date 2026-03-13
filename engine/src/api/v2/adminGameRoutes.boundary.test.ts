@@ -10,7 +10,9 @@ const mockEnv = {
   CORS_ORIGINS: 'http://localhost:5173',
   LLM_PROVIDER_DEFAULT: 'auto' as const,
   POSITION_REVEAL_SECONDS: 15,
-  SPHERE_REDTEAM_REPORT_PATH: undefined as string | undefined
+  SPHERE_REDTEAM_REPORT_PATH: undefined as string | undefined,
+  SPHERE_REDTEAM_STORAGE_MODE: 'file' as const,
+  SPHERE_REDTEAM_TREND_WINDOW: 10
 };
 
 const mockRequireAdminSession: RequestHandler = (_req, _res, next) => {
@@ -74,6 +76,8 @@ describe('adminGameRoutes red-team report endpoint', () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({
+      storageMode: 'file',
+      storageSource: 'unavailable',
       reportAvailable: false,
       reportPath: mockEnv.SPHERE_REDTEAM_REPORT_PATH,
       updatedAt: null,
@@ -162,6 +166,8 @@ describe('adminGameRoutes red-team report endpoint', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.reportAvailable).toBe(true);
+    expect(response.body.storageMode).toBe('file');
+    expect(response.body.storageSource).toBe('filesystem');
     expect(response.body.reportPath).toBe(reportPath);
     expect(response.body.updatedAt).toEqual(expect.any(String));
     expect(response.body.report).toMatchObject({
@@ -199,6 +205,13 @@ describe('adminGameRoutes red-team report endpoint', () => {
       passedRuns: 1,
       failedRuns: 0,
       latestRunAt: '2026-03-12T01:02:03.000Z',
+      series: [
+        expect.objectContaining({
+          runId: '2026-03-12T01-02-03-000Z',
+          scenarioPassRate: 1,
+          blockedProbeScenarios: 5
+        })
+      ],
       attackClassTotals: {
         replay_idempotency: 1,
         mixed_key_rotation: 1

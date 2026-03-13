@@ -62,6 +62,8 @@ const envSchema = z.object({
   SPHERE_GOVERNANCE_ALERT_WEBHOOK_TOKEN: optionalNonEmptyString,
   SPHERE_GOVERNANCE_ALERT_WEBHOOK_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   SPHERE_REDTEAM_REPORT_PATH: optionalNonEmptyString,
+  SPHERE_REDTEAM_STORAGE_MODE: z.enum(['auto', 'file', 'database']).default('auto'),
+  SPHERE_REDTEAM_TREND_WINDOW: z.coerce.number().int().min(1).max(100).default(10),
   SPHERE_DB_ENFORCE_ROLE_SEPARATION: strictBoolEnv.default(false),
   SPHERE_DB_APP_ROLE: z
     .string()

@@ -196,7 +196,11 @@ export function createEngineRoomRoutes(deps: { lensPack: LensPack; skillRuntime?
       const reportPath = resolveRedTeamReportPath(env.SPHERE_REDTEAM_REPORT_PATH);
       res.json({
         ok: true,
-        ...(await loadRedTeamArtifacts({ reportPath })),
+        ...(await loadRedTeamArtifacts({
+          reportPath,
+          storageMode: env.SPHERE_REDTEAM_STORAGE_MODE,
+          trendWindowSize: env.SPHERE_REDTEAM_TREND_WINDOW
+        })),
         hapticTrigger: null
       });
     } catch (err) {

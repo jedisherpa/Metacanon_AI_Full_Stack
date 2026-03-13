@@ -57,6 +57,19 @@ export type AdminRedTeamRunSummary = {
   snapshotPath?: string;
 };
 
+export type AdminRedTeamTrendPoint = {
+  runId: string;
+  generatedAt: string;
+  status: 'passed' | 'failed';
+  durationMs: number | null;
+  totalScenarios: number;
+  passedScenarios: number;
+  failedScenarios: number;
+  blockedProbeScenarios: number;
+  scenarioPassRate: number | null;
+  attackClassCounts: Record<string, number>;
+};
+
 export type AdminRedTeamHistory = {
   updatedAt: string;
   latestReportPath: string;
@@ -74,9 +87,12 @@ export type AdminRedTeamTrend = {
   averageBlockedProbeScenarios: number | null;
   latestRunAt: string | null;
   attackClassTotals: Record<string, number>;
+  series: AdminRedTeamTrendPoint[];
 };
 
 export type AdminRedTeamReportResponse = {
+  storageMode: 'auto' | 'file' | 'database';
+  storageSource: 'unavailable' | 'filesystem' | 'database';
   reportAvailable: boolean;
   reportPath: string;
   updatedAt: string | null;

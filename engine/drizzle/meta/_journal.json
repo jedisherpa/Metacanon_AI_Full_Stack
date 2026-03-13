@@ -36,6 +36,13 @@
       "when": 1774444444444,
       "tag": "0004_sphere_event_role_separation",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1775555555555,
+      "tag": "0005_redteam_runs",
+      "breakpoints": true
     }
   ]
 }
