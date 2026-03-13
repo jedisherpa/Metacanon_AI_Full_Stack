@@ -1,15 +1,39 @@
 import { generateKeyPairSync, randomUUID, sign } from 'node:crypto'
-import { mkdtemp, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 const runPgIntegration = process.env.RUN_PG_INTEGRATION === '1'
+const redTeamReportPath = process.env.METACANON_REDTEAM_REPORT_PATH?.trim() || null
 
 type QueryablePool = {
   query: (sql: string, params?: unknown[]) => Promise<{ rowCount: number; rows: Array<Record<string, unknown>> }>
   end: () => Promise<void>
 }
+
+type ScenarioStatus = 'passed' | 'failed'
+
+type RedTeamScenarioResult = {
+  scenarioId: string
+  attackClass:
+    | 'signature_validation'
+    | 'quorum_and_breakglass'
+    | 'db_write_bypass'
+    | 'replay_idempotency'
+    | 'mixed_key_rotation'
+  status: ScenarioStatus
+  expected: Record<string, unknown>
+  observed: Record<string, unknown>
+  capturedAt: string
+}
+
+type RegisteredSigner = {
+  did: string
+  keyPair: ReturnType<typeof generateKeyPairSync>
+}
+
+const scenarioResults: RedTeamScenarioResult[] = []
 
 function setEnv(serviceToken: string): void {
   process.env.DATABASE_URL =
@@ -66,7 +90,6 @@ function createEdDsaCompactJws(
 
 function buildCanonicalDispatchPayload(input: {
   threadId: string
-  missionId: string
   authorAgentId: string
   messageId: string
   traceId: string
@@ -75,6 +98,7 @@ function buildCanonicalDispatchPayload(input: {
   schemaVersion: string
   protocolVersion: string
   causationId: string[]
+  idempotencyKey?: string
   payload: Record<string, unknown>
 }): string {
   return canonicalize({
@@ -87,10 +111,44 @@ function buildCanonicalDispatchPayload(input: {
       schemaVersion: input.schemaVersion,
       traceId: input.traceId,
       causationId: input.causationId,
-      attestation: input.attestation
+      attestation: input.attestation,
+      ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {})
     },
     payload: input.payload
   })
+}
+
+function recordScenario(result: RedTeamScenarioResult): void {
+  scenarioResults.push(result)
+}
+
+async function flushRedTeamReport(): Promise<void> {
+  if (!redTeamReportPath) {
+    return
+  }
+
+  const attackClassCounts = scenarioResults.reduce<Record<string, number>>((counts, scenario) => {
+    counts[scenario.attackClass] = (counts[scenario.attackClass] ?? 0) + 1
+    return counts
+  }, {})
+  const passedScenarios = scenarioResults.filter((scenario) => scenario.status === 'passed').length
+  const failedScenarios = scenarioResults.length - passedScenarios
+
+  const report = {
+    generatedAt: new Date().toISOString(),
+    suite: 'governance_redteam',
+    metrics: {
+      totalScenarios: scenarioResults.length,
+      passedScenarios,
+      failedScenarios,
+      blockedProbeScenarios: passedScenarios,
+      attackClassCounts
+    },
+    scenarios: scenarioResults
+  }
+
+  await mkdir(path.dirname(redTeamReportPath), { recursive: true })
+  await writeFile(redTeamReportPath, JSON.stringify(report, null, 2), 'utf8')
 }
 
 describe.runIf(runPgIntegration)('Sphere routes governance red-team harness', () => {
@@ -99,6 +157,75 @@ describe.runIf(runPgIntegration)('Sphere routes governance red-team harness', ()
   let conductor: any
   const serviceToken = 'sphere-redteam-token-123456'
   const didKeyActor = 'did:key:z6Mkr4R8NnqYv6Uqv8n3n2Vg7p7c1Xb2HqW5fW3r8jN8H1xQ'
+
+  async function registerSigner(signer: RegisteredSigner): Promise<void> {
+    const response = await request
+      .post('/api/v1/sphere/dids')
+      .set('authorization', `Bearer ${serviceToken}`)
+      .send({
+        did: signer.did,
+        publicKey: signer.keyPair.publicKey.export({ type: 'spki', format: 'pem' }).toString()
+      })
+
+    expect(response.status).toBe(201)
+  }
+
+  async function postSignedMessage(input: {
+    threadId: string
+    authorAgentId: string
+    signer: RegisteredSigner
+    intent: string
+    attestation: string[]
+    payload: Record<string, unknown>
+    messageId?: string
+    traceId?: string
+    idempotencyKey?: string
+  }): Promise<any> {
+    const messageId = input.messageId ?? randomUUID()
+    const traceId = input.traceId ?? randomUUID()
+    const schemaVersion = '3.0'
+    const protocolVersion = '3.0'
+    const causationId: string[] = []
+
+    const payload = {
+      threadId: input.threadId,
+      authorAgentId: input.authorAgentId,
+      messageId,
+      traceId,
+      schemaVersion,
+      protocolVersion,
+      causationId,
+      intent: input.intent,
+      attestation: input.attestation,
+      ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
+      payload: input.payload
+    }
+
+    const agentSignature = createEdDsaCompactJws(
+      buildCanonicalDispatchPayload({
+        threadId: input.threadId,
+        authorAgentId: input.authorAgentId,
+        messageId,
+        traceId,
+        intent: input.intent,
+        attestation: input.attestation,
+        schemaVersion,
+        protocolVersion,
+        causationId,
+        idempotencyKey: input.idempotencyKey,
+        payload: input.payload
+      }),
+      input.signer.keyPair.privateKey
+    )
+
+    return request
+      .post('/api/v1/sphere/messages')
+      .set('authorization', `Bearer ${serviceToken}`)
+      .send({
+        ...payload,
+        agentSignature
+      })
+  }
 
   beforeAll(async () => {
     setEnv(serviceToken)
@@ -115,6 +242,8 @@ describe.runIf(runPgIntegration)('Sphere routes governance red-team harness', ()
       ].join('\n'),
       'utf8'
     )
+
+    const bootstrapKeyPair = generateKeyPairSync('ed25519')
 
     const expressMod = await import('express')
     const supertestMod = await import('supertest')
@@ -150,6 +279,11 @@ describe.runIf(runPgIntegration)('Sphere routes governance red-team harness', ()
 
     conductor = await SphereConductor.create({
       conductorSecret: 'redteam-harness-secret',
+      conductorEd25519PrivateKey: bootstrapKeyPair.privateKey
+        .export({ type: 'pkcs8', format: 'pem' })
+        .toString(),
+      conductorEd25519KeyId: 'conductor-key-redteam-bootstrap',
+      requireConductorSignatureV2: true,
       signatureVerificationMode: 'did_key',
       governanceConfigPath,
       validateIntent
@@ -183,234 +317,391 @@ describe.runIf(runPgIntegration)('Sphere routes governance red-team harness', ()
         sphere_event_write_tokens
       RESTART IDENTITY CASCADE
     `)
+
+    await conductor['ensureCurrentSigningKeyPersistedForRotation']()
+    await conductor['loadConductorKeyRegistryFromDb']()
   })
 
   afterAll(async () => {
+    await flushRedTeamReport()
     await pool.end()
   })
 
-  it('blocks common adversarial API and DB attack paths and surfaces detections', async () => {
+  it('blocks signature, quorum, break-glass, and direct DB bypass probes', async () => {
     const threadId = randomUUID()
     const missionId = randomUUID()
-    await conductor.createThread({
-      threadId,
-      missionId,
-      createdBy: didKeyActor
-    })
+    let observed: Record<string, unknown> = {}
 
-    const postMessage = async (input: {
-      authorAgentId: string
-      messageId?: string
-      traceId?: string
-      intent: string
-      attestation: string[]
-      agentSignature: string
-      payload: Record<string, unknown>
-    }) =>
-      request
+    try {
+      await conductor.createThread({
+        threadId,
+        missionId,
+        createdBy: didKeyActor
+      })
+
+      const quorumSigner: RegisteredSigner = {
+        did: 'did:example:redteam-quorum',
+        keyPair: generateKeyPairSync('ed25519')
+      }
+      const breakGlassSigner: RegisteredSigner = {
+        did: 'did:example:redteam-breakglass',
+        keyPair: generateKeyPairSync('ed25519')
+      }
+      await registerSigner(quorumSigner)
+      await registerSigner(breakGlassSigner)
+
+      const invalidSignature = await request
         .post('/api/v1/sphere/messages')
         .set('authorization', `Bearer ${serviceToken}`)
         .send({
           threadId,
-          missionId,
-          messageId: input.messageId ?? randomUUID(),
-          traceId: input.traceId ?? randomUUID(),
+          messageId: randomUUID(),
+          traceId: randomUUID(),
+          authorAgentId: didKeyActor,
+          intent: 'MISSION_REPORT',
+          attestation: ['did:example:operator'],
           schemaVersion: '3.0',
           protocolVersion: '3.0',
           causationId: [],
-          ...input
+          agentSignature: 'invalid.signature.payload',
+          payload: { note: 'malformed signature probe' }
         })
 
-    const quorumSigner = generateKeyPairSync('ed25519')
-    const breakGlassSigner = generateKeyPairSync('ed25519')
-    const quorumDid = 'did:example:redteam-quorum'
-    const breakGlassDid = 'did:example:redteam-breakglass'
-
-    const registerQuorumDid = await request
-      .post('/api/v1/sphere/dids')
-      .set('authorization', `Bearer ${serviceToken}`)
-      .send({
-        did: quorumDid,
-        publicKey: quorumSigner.publicKey.export({ type: 'spki', format: 'pem' }).toString()
-      })
-    expect(registerQuorumDid.status).toBe(201)
-
-    const registerBreakGlassDid = await request
-      .post('/api/v1/sphere/dids')
-      .set('authorization', `Bearer ${serviceToken}`)
-      .send({
-        did: breakGlassDid,
-        publicKey: breakGlassSigner.publicKey.export({ type: 'spki', format: 'pem' }).toString()
-      })
-    expect(registerBreakGlassDid.status).toBe(201)
-
-    const invalidSignature = await postMessage({
-      authorAgentId: didKeyActor,
-      intent: 'MISSION_REPORT',
-      attestation: ['did:example:operator'],
-      agentSignature: 'invalid.signature.payload',
-      payload: { note: 'malformed signature probe' }
-    })
-
-    const quorumMessageId = randomUUID()
-    const quorumTraceId = randomUUID()
-    const quorumPayload = { reason: 'missing counselor ACK quorum' }
-    const quorumSignature = createEdDsaCompactJws(
-      buildCanonicalDispatchPayload({
+      const missingQuorum = await postSignedMessage({
         threadId,
-        missionId,
-        authorAgentId: quorumDid,
-        messageId: quorumMessageId,
-        traceId: quorumTraceId,
+        authorAgentId: quorumSigner.did,
+        signer: quorumSigner,
         intent: 'FORCE_EVICT',
         attestation: [],
-        schemaVersion: '3.0',
-        protocolVersion: '3.0',
-        causationId: [],
-        payload: quorumPayload
-      }),
-      quorumSigner.privateKey
-    )
+        payload: { reason: 'missing counselor ACK quorum' }
+      })
 
-    const missingQuorum = await postMessage({
-      authorAgentId: quorumDid,
-      messageId: quorumMessageId,
-      traceId: quorumTraceId,
-      intent: 'FORCE_EVICT',
-      attestation: [],
-      agentSignature: quorumSignature,
-      payload: quorumPayload
-    })
+      const breakGlassProbe = await postSignedMessage({
+        threadId,
+        authorAgentId: breakGlassSigner.did,
+        signer: breakGlassSigner,
+        intent: 'EMERGENCY_SHUTDOWN',
+        attestation: [breakGlassSigner.did],
+        payload: { reason: 'unauthorized shutdown probe' }
+      })
 
-    const breakGlassMessageId = randomUUID()
-    const breakGlassTraceId = randomUUID()
-    const breakGlassPayload = { reason: 'unauthorized shutdown probe' }
-    const breakGlassSignature = createEdDsaCompactJws(
-      buildCanonicalDispatchPayload({
+      const directEventInsert = await pool
+        .query(
+          `
+            INSERT INTO sphere_events (
+              thread_id,
+              sequence,
+              message_id,
+              author_did,
+              intent,
+              timestamp,
+              client_envelope,
+              ledger_envelope,
+              payload,
+              entry_hash
+            )
+            VALUES ($1, $2, $3, $4, $5, NOW(), $6::jsonb, $7::jsonb, $8::jsonb, $9)
+          `,
+          [
+            threadId,
+            99,
+            randomUUID(),
+            'did:example:attacker',
+            'MISSION_REPORT',
+            JSON.stringify({}),
+            JSON.stringify({}),
+            JSON.stringify({}),
+            'deadbeef'
+          ]
+        )
+        .then(
+          () => ({ code: 'unexpected_success' }),
+          (error: { code?: string }) => ({ code: error.code ?? 'unknown_error' })
+        )
+
+      const directAckInsert = await pool
+        .query(
+          `
+            INSERT INTO sphere_acks (
+              thread_id,
+              target_sequence,
+              target_message_id,
+              actor_did,
+              ack_message_id,
+              trace_id,
+              intent,
+              schema_version,
+              attestation,
+              agent_signature
+            )
+            VALUES (
+              $1,
+              $2,
+              $3,
+              'did:example:ack-attacker',
+              $4,
+              $5,
+              'ACK_ENTRY',
+              '3.0',
+              '[]'::jsonb,
+              'sig:direct-insert'
+            )
+          `,
+          [
+            threadId,
+            1,
+            randomUUID(),
+            randomUUID(),
+            randomUUID()
+          ]
+        )
+        .then(
+          () => ({ code: 'unexpected_success' }),
+          (error: { code?: string }) => ({ code: error.code ?? 'unknown_error' })
+        )
+
+      const status = await request
+        .get('/api/v1/sphere/status')
+        .set('authorization', `Bearer ${serviceToken}`)
+
+      observed = {
+        invalidSignature: { status: invalidSignature.status, code: invalidSignature.body.code },
+        missingQuorum: { status: missingQuorum.status, code: missingQuorum.body.code },
+        breakGlassProbe: { status: breakGlassProbe.status, code: breakGlassProbe.body.code },
+        directEventInsert,
+        directAckInsert,
+        governanceCounters: status.body.governanceMetrics?.counters
+      }
+
+      expect(observed).toMatchObject({
+        invalidSignature: { status: 401, code: 'STM_ERR_INVALID_SIGNATURE' },
+        missingQuorum: { status: 412, code: 'STM_ERR_MISSING_ATTESTATION' },
+        breakGlassProbe: { status: 403, code: 'BREAK_GLASS_AUTH_FAILED' },
+        directEventInsert: { code: '42501' },
+        directAckInsert: { code: '42501' }
+      })
+      expect((observed.governanceCounters as Record<string, number> | undefined)?.signatureVerificationFailureTotal).toBeGreaterThanOrEqual(1)
+      expect((observed.governanceCounters as Record<string, number> | undefined)?.materialImpactQuorumFailureTotal).toBeGreaterThanOrEqual(1)
+      expect((observed.governanceCounters as Record<string, number> | undefined)?.breakGlassFailedTotal).toBeGreaterThanOrEqual(1)
+
+      recordScenario({
+        scenarioId: 'core_blocking_probes',
+        attackClass: 'db_write_bypass',
+        status: 'passed',
+        expected: {
+          invalidSignature: 'STM_ERR_INVALID_SIGNATURE',
+          missingQuorum: 'STM_ERR_MISSING_ATTESTATION',
+          breakGlassProbe: 'BREAK_GLASS_AUTH_FAILED',
+          directEventInsert: '42501',
+          directAckInsert: '42501'
+        },
+        observed,
+        capturedAt: new Date().toISOString()
+      })
+    } catch (error) {
+      recordScenario({
+        scenarioId: 'core_blocking_probes',
+        attackClass: 'db_write_bypass',
+        status: 'failed',
+        expected: {
+          invalidSignature: 'STM_ERR_INVALID_SIGNATURE',
+          missingQuorum: 'STM_ERR_MISSING_ATTESTATION',
+          breakGlassProbe: 'BREAK_GLASS_AUTH_FAILED',
+          directEventInsert: '42501',
+          directAckInsert: '42501'
+        },
+        observed,
+        capturedAt: new Date().toISOString()
+      })
+      throw error
+    }
+  })
+
+  it('rejects replay and duplicate-message idempotency abuse attempts', async () => {
+    const threadId = randomUUID()
+    const missionId = randomUUID()
+    let observed: Record<string, unknown> = {}
+
+    try {
+      await conductor.createThread({
         threadId,
         missionId,
-        authorAgentId: breakGlassDid,
-        messageId: breakGlassMessageId,
-        traceId: breakGlassTraceId,
-        intent: 'EMERGENCY_SHUTDOWN',
-        attestation: [breakGlassDid],
-        schemaVersion: '3.0',
-        protocolVersion: '3.0',
-        causationId: [],
-        payload: breakGlassPayload
-      }),
-      breakGlassSigner.privateKey
-    )
+        createdBy: didKeyActor
+      })
 
-    const breakGlassProbe = await postMessage({
-      authorAgentId: breakGlassDid,
-      messageId: breakGlassMessageId,
-      traceId: breakGlassTraceId,
-      intent: 'EMERGENCY_SHUTDOWN',
-      attestation: [breakGlassDid],
-      agentSignature: breakGlassSignature,
-      payload: breakGlassPayload
-    })
+      const replaySigner: RegisteredSigner = {
+        did: 'did:example:redteam-replay',
+        keyPair: generateKeyPairSync('ed25519')
+      }
+      await registerSigner(replaySigner)
 
-    const directEventInsert = await pool
-      .query(
-        `
-          INSERT INTO sphere_events (
-            thread_id,
-            sequence,
-            message_id,
-            author_did,
-            intent,
-            timestamp,
-            client_envelope,
-            ledger_envelope,
-            payload,
-            entry_hash
-          )
-          VALUES ($1, $2, $3, $4, $5, NOW(), $6::jsonb, $7::jsonb, $8::jsonb, $9)
-        `,
-        [
-          threadId,
-          99,
-          randomUUID(),
-          'did:example:attacker',
-          'MISSION_REPORT',
-          JSON.stringify({}),
-          JSON.stringify({}),
-          JSON.stringify({}),
-          'deadbeef'
-        ]
-      )
-      .then(
-        () => ({ code: 'unexpected_success' }),
-        (error: { code?: string }) => ({ code: error.code ?? 'unknown_error' })
-      )
+      const replayMessageId = randomUUID()
+      const firstResponse = await postSignedMessage({
+        threadId,
+        authorAgentId: replaySigner.did,
+        signer: replaySigner,
+        messageId: replayMessageId,
+        idempotencyKey: 'redteam-replay-key',
+        intent: 'MISSION_REPORT',
+        attestation: ['did:example:operator'],
+        payload: { body: 'baseline message' }
+      })
 
-    const directAckInsert = await pool
-      .query(
-        `
-          INSERT INTO sphere_acks (
-            thread_id,
-            target_sequence,
-            target_message_id,
-            actor_did,
-            ack_message_id,
-            trace_id,
-            intent,
-            schema_version,
-            attestation,
-            agent_signature
-          )
-          VALUES (
-            $1,
-            $2,
-            $3,
-            'did:example:ack-attacker',
-            $4,
-            $5,
-            'ACK_ENTRY',
-            '3.0',
-            '[]'::jsonb,
-            'sig:direct-insert'
-          )
-        `,
-        [
-          threadId,
-          1,
-          randomUUID(),
-          randomUUID(),
-          randomUUID()
-        ]
-      )
-      .then(
-        () => ({ code: 'unexpected_success' }),
-        (error: { code?: string }) => ({ code: error.code ?? 'unknown_error' })
-      )
+      const replayedResponse = await postSignedMessage({
+        threadId,
+        authorAgentId: replaySigner.did,
+        signer: replaySigner,
+        messageId: replayMessageId,
+        idempotencyKey: 'redteam-replay-key',
+        intent: 'MISSION_REPORT',
+        attestation: ['did:example:operator'],
+        payload: { body: 'tampered replay payload' }
+      })
 
-    const status = await request
-      .get('/api/v1/sphere/status')
-      .set('authorization', `Bearer ${serviceToken}`)
+      observed = {
+        firstResponse: { status: firstResponse.status, sequence: firstResponse.body.sequence },
+        replayedResponse: { status: replayedResponse.status, code: replayedResponse.body.code }
+      }
 
-    expect(status.status).toBe(200)
+      expect(observed).toMatchObject({
+        firstResponse: { status: 201, sequence: 1 },
+        replayedResponse: { status: 409, code: 'STM_ERR_DUPLICATE_IDEMPOTENCY_KEY' }
+      })
 
-    const summary = {
-      invalidSignature: { status: invalidSignature.status, code: invalidSignature.body.code },
-      missingQuorum: { status: missingQuorum.status, code: missingQuorum.body.code },
-      breakGlassProbe: { status: breakGlassProbe.status, code: breakGlassProbe.body.code },
-      directEventInsert,
-      directAckInsert,
-      governanceCounters: status.body.governanceMetrics?.counters
+      recordScenario({
+        scenarioId: 'replay_duplicate_message',
+        attackClass: 'replay_idempotency',
+        status: 'passed',
+        expected: {
+          firstResponse: 201,
+          replayedResponse: 'STM_ERR_DUPLICATE_IDEMPOTENCY_KEY'
+        },
+        observed,
+        capturedAt: new Date().toISOString()
+      })
+    } catch (error) {
+      recordScenario({
+        scenarioId: 'replay_duplicate_message',
+        attackClass: 'replay_idempotency',
+        status: 'failed',
+        expected: {
+          firstResponse: 201,
+          replayedResponse: 'STM_ERR_DUPLICATE_IDEMPOTENCY_KEY'
+        },
+        observed,
+        capturedAt: new Date().toISOString()
+      })
+      throw error
     }
+  })
 
-    expect(summary).toMatchObject({
-      invalidSignature: { status: 401, code: 'STM_ERR_INVALID_SIGNATURE' },
-      missingQuorum: { status: 412, code: 'STM_ERR_MISSING_ATTESTATION' },
-      breakGlassProbe: { status: 403, code: 'BREAK_GLASS_AUTH_FAILED' },
-      directEventInsert: { code: '42501' },
-      directAckInsert: { code: '42501' }
-    })
-    expect(summary.governanceCounters?.signatureVerificationFailureTotal).toBeGreaterThanOrEqual(1)
-    expect(summary.governanceCounters?.materialImpactQuorumFailureTotal).toBeGreaterThanOrEqual(1)
-    expect(summary.governanceCounters?.breakGlassFailedTotal).toBeGreaterThanOrEqual(1)
+  it('detects mixed-key rotation edge tampering through ledger verification', async () => {
+    const threadId = randomUUID()
+    const missionId = randomUUID()
+    let observed: Record<string, unknown> = {}
+
+    try {
+      await conductor.createThread({
+        threadId,
+        missionId,
+        createdBy: didKeyActor
+      })
+
+      const signer: RegisteredSigner = {
+        did: 'did:example:redteam-rotation',
+        keyPair: generateKeyPairSync('ed25519')
+      }
+      await registerSigner(signer)
+
+      const firstResponse = await postSignedMessage({
+        threadId,
+        authorAgentId: signer.did,
+        signer,
+        intent: 'MISSION_REPORT',
+        attestation: ['did:example:operator'],
+        payload: { body: 'pre-rotation entry' }
+      })
+      expect(firstResponse.status).toBe(201)
+
+      const rotateResponse = await request
+        .post('/api/v1/sphere/rotate-conductor-key')
+        .set('authorization', `Bearer ${serviceToken}`)
+        .send({
+          keyId: 'conductor-key-redteam-rotated',
+          verificationGraceDays: 7
+        })
+      expect(rotateResponse.status).toBe(201)
+
+      const secondResponse = await postSignedMessage({
+        threadId,
+        authorAgentId: signer.did,
+        signer,
+        intent: 'MISSION_REPORT',
+        attestation: ['did:example:operator'],
+        payload: { body: 'post-rotation entry' }
+      })
+      expect(secondResponse.status).toBe(201)
+
+      await pool.query(
+        `
+          UPDATE sphere_events
+          SET ledger_envelope = jsonb_set(
+            ledger_envelope,
+            '{conductorSignatureV2,keyId}',
+            to_jsonb($2::text),
+            false
+          )
+          WHERE thread_id = $1
+            AND sequence = 1
+        `,
+        [threadId, 'conductor-key-redteam-rotated']
+      )
+
+      const verifyResponse = await request
+        .get(`/api/v1/sphere/threads/${threadId}/verify-ledger`)
+        .set('authorization', `Bearer ${serviceToken}`)
+
+      const issueCodes = new Set(
+        (verifyResponse.body.issues ?? []).map((issue: { code: string }) => issue.code)
+      )
+      observed = {
+        rotateStatus: rotateResponse.status,
+        verifyStatus: verifyResponse.status,
+        verified: verifyResponse.body.verified,
+        issueCodes: [...issueCodes]
+      }
+
+      expect(verifyResponse.status).toBe(200)
+      expect(verifyResponse.body.verified).toBe(false)
+      expect(issueCodes.has('INVALID_CONDUCTOR_SIGNATURE_V2')).toBe(true)
+      expect(issueCodes.has('ENTRY_HASH_MISMATCH')).toBe(true)
+
+      recordScenario({
+        scenarioId: 'mixed_key_rotation_tamper',
+        attackClass: 'mixed_key_rotation',
+        status: 'passed',
+        expected: {
+          verifyStatus: 200,
+          verified: false,
+          requiredIssueCodes: ['INVALID_CONDUCTOR_SIGNATURE_V2', 'ENTRY_HASH_MISMATCH']
+        },
+        observed,
+        capturedAt: new Date().toISOString()
+      })
+    } catch (error) {
+      recordScenario({
+        scenarioId: 'mixed_key_rotation_tamper',
+        attackClass: 'mixed_key_rotation',
+        status: 'failed',
+        expected: {
+          verifyStatus: 200,
+          verified: false,
+          requiredIssueCodes: ['INVALID_CONDUCTOR_SIGNATURE_V2', 'ENTRY_HASH_MISMATCH']
+        },
+        observed,
+        capturedAt: new Date().toISOString()
+      })
+      throw error
+    }
   })
 })
