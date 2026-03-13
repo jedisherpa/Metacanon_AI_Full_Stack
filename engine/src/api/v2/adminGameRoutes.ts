@@ -1,4 +1,3 @@
-import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Router } from 'express';
@@ -28,6 +27,7 @@ import { enqueueGameCommand } from '../../queue/boss.js';
 import { generateHint } from '../../llm/service.js';
 import type { ProviderChoice } from '../../llm/providers.js';
 import type { WebSocketHub } from '../../ws/hub.js';
+import { loadRedTeamArtifacts } from '../../observability/redTeamReports.js';
 import { buildGameExport } from '../../export/jsonExport.js';
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
@@ -39,35 +39,6 @@ const defaultRedTeamReportPath = path.join(
   'governance-redteam-report.json'
 );
 
-type AdminRedTeamReport = {
-  generatedAt: string;
-  suite: string;
-  metrics: {
-    totalScenarios: number;
-    passedScenarios: number;
-    failedScenarios: number;
-    blockedProbeScenarios: number;
-    attackClassCounts: Record<string, number>;
-  };
-  scenarios: Array<{
-    scenarioId: string;
-    attackClass: string;
-    status: 'passed' | 'failed';
-    expected: Record<string, unknown>;
-    observed: Record<string, unknown>;
-    capturedAt: string;
-  }>;
-  runner?: {
-    command?: string;
-    startedAt?: string;
-    completedAt?: string;
-    durationMs?: number;
-    exitCode?: number;
-    status?: string;
-    reportPath?: string;
-  };
-};
-
 function resolveRedTeamReportPath(configuredPath?: string): string {
   if (!configuredPath?.trim()) {
     return defaultRedTeamReportPath;
@@ -76,15 +47,6 @@ function resolveRedTeamReportPath(configuredPath?: string): string {
   return path.isAbsolute(configuredPath)
     ? configuredPath
     : path.resolve(projectRoot, configuredPath);
-}
-
-function isMissingFile(errorValue: unknown): boolean {
-  return (
-    typeof errorValue === 'object' &&
-    errorValue !== null &&
-    'code' in errorValue &&
-    errorValue.code === 'ENOENT'
-  );
 }
 
 const createGameSchema = z.object({
@@ -205,28 +167,8 @@ export function createAdminGameRoutes(params: { lensPack: LensPack; wsHub?: WebS
     const reportPath = resolveRedTeamReportPath(env.SPHERE_REDTEAM_REPORT_PATH);
 
     try {
-      const [rawReport, metadata] = await Promise.all([
-        readFile(reportPath, 'utf8'),
-        stat(reportPath)
-      ]);
-      const report = JSON.parse(rawReport) as AdminRedTeamReport;
-
-      return res.json({
-        reportAvailable: true,
-        reportPath,
-        updatedAt: metadata.mtime.toISOString(),
-        report
-      });
+      return res.json(await loadRedTeamArtifacts({ reportPath }));
     } catch (cause) {
-      if (isMissingFile(cause)) {
-        return res.json({
-          reportAvailable: false,
-          reportPath,
-          updatedAt: null,
-          report: null
-        });
-      }
-
       return error(
         res,
         500,

@@ -1,3 +1,6 @@
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import express from 'express';
 import request from 'supertest';
 import { describe, expect, it, vi } from 'vitest';
@@ -192,5 +195,115 @@ describe('engineRoomRoutes skill runtime endpoints', () => {
     expect(secondRun.body.run.result.status).toBe('blocked');
     expect(secondRun.body.run.result.code).toBe('SKILL_ALREADY_RUNNING');
     expect(secondRun.body.run.result.traceId).toBe('trace-skill-2');
+  });
+
+  it('returns red-team history and trend payload for operator surfaces', async () => {
+    vi.resetModules();
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'metacanon-engine-room-redteam-'));
+    const reportPath = path.join(tempDir, 'governance-redteam-report.json');
+    const historyPath = path.join(tempDir, 'governance-redteam-history.json');
+
+    applyBaseEnv({
+      SPHERE_REDTEAM_REPORT_PATH: reportPath
+    });
+
+    await writeFile(
+      reportPath,
+      JSON.stringify(
+        {
+          generatedAt: '2026-03-12T03:05:00.000Z',
+          suite: 'governance_redteam',
+          metrics: {
+            totalScenarios: 7,
+            passedScenarios: 6,
+            failedScenarios: 1,
+            blockedProbeScenarios: 6,
+            attackClassCounts: {
+              replay_idempotency: 1,
+              degraded_mode_abuse: 1
+            }
+          },
+          scenarios: [],
+          runner: {
+            status: 'failed',
+            durationMs: 1250
+          }
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+    await writeFile(
+      historyPath,
+      JSON.stringify(
+        {
+          updatedAt: '2026-03-12T03:06:00.000Z',
+          latestReportPath: reportPath,
+          runs: [
+            {
+              runId: '2026-03-12T03-05-00-000Z',
+              generatedAt: '2026-03-12T03:05:00.000Z',
+              status: 'failed',
+              durationMs: 1250,
+              totalScenarios: 7,
+              passedScenarios: 6,
+              failedScenarios: 1,
+              blockedProbeScenarios: 6,
+              attackClassCounts: {
+                replay_idempotency: 1,
+                degraded_mode_abuse: 1
+              }
+            },
+            {
+              runId: '2026-03-11T03-05-00-000Z',
+              generatedAt: '2026-03-11T03:05:00.000Z',
+              status: 'passed',
+              durationMs: 980,
+              totalScenarios: 5,
+              passedScenarios: 5,
+              failedScenarios: 0,
+              blockedProbeScenarios: 5,
+              attackClassCounts: {
+                replay_idempotency: 1
+              }
+            }
+          ]
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+
+    const routesMod = await import('./engineRoomRoutes.js');
+    const runtimeMod = await import('../../agents/skillRuntime.js');
+
+    const app = express();
+    app.use(express.json());
+    app.use(
+      routesMod.createEngineRoomRoutes({
+        lensPack: { pack_id: 'test-pack', lenses: [], families: {} } as never,
+        skillRuntime: new runtimeMod.SkillRuntime()
+      })
+    );
+
+    const response = await request(app).get('/api/v1/engine-room/redteam-report');
+    expect(response.status).toBe(200);
+    expect(response.body.ok).toBe(true);
+    expect(response.body.reportAvailable).toBe(true);
+    expect(response.body.historyAvailable).toBe(true);
+    expect(response.body.reportPath).toBe(reportPath);
+    expect(response.body.historyPath).toBe(historyPath);
+    expect(response.body.trend).toMatchObject({
+      runCount: 2,
+      passedRuns: 1,
+      failedRuns: 1,
+      latestRunAt: '2026-03-12T03:05:00.000Z',
+      attackClassTotals: {
+        replay_idempotency: 2,
+        degraded_mode_abuse: 1
+      }
+    });
   });
 });

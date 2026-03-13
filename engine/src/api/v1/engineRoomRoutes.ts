@@ -1,3 +1,5 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Router } from 'express';
 import { db } from '../../db/client.js';
 import { games, commands, auditEvents } from '../../db/schema.js';
@@ -9,6 +11,26 @@ import type { LensPack } from '../../config/lensPack.js';
 import { z } from 'zod';
 import { sendApiError } from '../../lib/apiError.js';
 import { SkillRuntimeError, type SkillRuntime } from '../../agents/skillRuntime.js';
+import { loadRedTeamArtifacts } from '../../observability/redTeamReports.js';
+
+const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+const projectRoot = path.resolve(moduleDir, '../../../../');
+const defaultRedTeamReportPath = path.join(
+  projectRoot,
+  'artifacts',
+  'redteam',
+  'governance-redteam-report.json'
+);
+
+function resolveRedTeamReportPath(configuredPath?: string): string {
+  if (!configuredPath?.trim()) {
+    return defaultRedTeamReportPath;
+  }
+
+  return path.isAbsolute(configuredPath)
+    ? configuredPath
+    : path.resolve(projectRoot, configuredPath);
+}
 
 const skillRunSchema = z.object({
   skillId: z.string().min(1),
@@ -165,6 +187,20 @@ export function createEngineRoomRoutes(deps: { lensPack: LensPack; skillRuntime?
       res.json({ ok: true, failedCommands, count: failedCommands.length, hapticTrigger: null });
     } catch (err) {
       res.status(500).json({ error: 'Internal server error', code: 'FALLBACK_REPORT_ERROR' });
+    }
+  });
+
+  // ─── GET /api/v1/engine-room/redteam-report ────────────────────────────────
+  router.get('/api/v1/engine-room/redteam-report', async (_req, res) => {
+    try {
+      const reportPath = resolveRedTeamReportPath(env.SPHERE_REDTEAM_REPORT_PATH);
+      res.json({
+        ok: true,
+        ...(await loadRedTeamArtifacts({ reportPath })),
+        hapticTrigger: null
+      });
+    } catch (err) {
+      res.status(500).json({ error: 'Internal server error', code: 'REDTEAM_REPORT_ERROR' });
     }
   });
 

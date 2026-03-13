@@ -76,8 +76,8 @@ function main() {
   const missing = sort([...routeEndpoints].filter((endpoint) => !commandEndpoints.has(endpoint)));
   const unexpected = sort([...commandEndpoints].filter((endpoint) => !routeEndpoints.has(endpoint)));
 
-  const expectedRouteCount = 52;
-  const expectedCommandIdCount = 53;
+  const expectedRouteCount = 53;
+  const expectedCommandIdCount = 54;
 
   const routeCountOk = routeEndpoints.size === expectedRouteCount;
   const commandIdCountOk = commandIds.length === expectedCommandIdCount;

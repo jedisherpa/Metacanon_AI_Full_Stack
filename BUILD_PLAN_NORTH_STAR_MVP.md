@@ -245,3 +245,4 @@ This overlay is now a first-class track and gates release readiness. Feature wor
 
 1. DONE: Added an admin-facing `/api/v2/admin/redteam-report` endpoint plus Council Nebula dashboard panel so operators can inspect the latest machine-readable governance red-team artifact without pulling CI artifacts manually.
 2. DONE: Expanded the PG-backed red-team harness with counselor-ACK forgery and degraded-mode abuse-chain scenarios, keeping the Phase 3 report aligned with the new UI surface.
+3. DONE: Persisted red-team run history and trend summaries alongside the latest artifact, then exposed the same latest/history/trend report contract to both the admin dashboard and the Telegram Mini App Engine Room operator surface.

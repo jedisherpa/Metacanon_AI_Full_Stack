@@ -873,6 +873,7 @@ export const api = {
     executeEndpoint('GET', '/api/v1/engine-room/export', { query: { gameId } }),
   getGlossary: () => request('GET', '/api/v1/engine-room/glossary'),
   getFallbackReport: () => request('GET', '/api/v1/engine-room/fallback-report'),
+  getRedTeamReport: () => request<EngineRoomRedTeamReportResponse>('GET', '/api/v1/engine-room/redteam-report'),
   heartbeatMute: (body: { gameId?: string; durationMinutes?: number }) =>
     request('POST', '/api/v1/engine-room/heartbeat-mute', body),
   pauseDrills: () => request('POST', '/api/v1/engine-room/pause-drills'),
@@ -971,6 +972,82 @@ export type Proposal = {
   proposedBy: string;
   status: string;
   createdAt: string;
+};
+
+export type EngineRoomRedTeamScenario = {
+  scenarioId: string;
+  attackClass: string;
+  status: 'passed' | 'failed';
+  expected: Record<string, unknown>;
+  observed: Record<string, unknown>;
+  capturedAt: string;
+};
+
+export type EngineRoomRedTeamReport = {
+  generatedAt: string;
+  suite: string;
+  metrics: {
+    totalScenarios: number;
+    passedScenarios: number;
+    failedScenarios: number;
+    blockedProbeScenarios: number;
+    attackClassCounts: Record<string, number>;
+  };
+  scenarios: EngineRoomRedTeamScenario[];
+  runner?: {
+    command?: string;
+    startedAt?: string;
+    completedAt?: string;
+    durationMs?: number;
+    exitCode?: number;
+    status?: string;
+    reportPath?: string;
+  };
+};
+
+export type EngineRoomRedTeamRunSummary = {
+  runId: string;
+  generatedAt: string;
+  status: 'passed' | 'failed';
+  durationMs: number | null;
+  totalScenarios: number;
+  passedScenarios: number;
+  failedScenarios: number;
+  blockedProbeScenarios: number;
+  attackClassCounts: Record<string, number>;
+  snapshotPath?: string;
+};
+
+export type EngineRoomRedTeamHistory = {
+  updatedAt: string;
+  latestReportPath: string;
+  latestSnapshotPath?: string;
+  runs: EngineRoomRedTeamRunSummary[];
+};
+
+export type EngineRoomRedTeamTrend = {
+  windowSize: number;
+  runCount: number;
+  passedRuns: number;
+  failedRuns: number;
+  passRate: number | null;
+  averageDurationMs: number | null;
+  averageBlockedProbeScenarios: number | null;
+  latestRunAt: string | null;
+  attackClassTotals: Record<string, number>;
+};
+
+export type EngineRoomRedTeamReportResponse = {
+  ok: boolean;
+  reportAvailable: boolean;
+  reportPath: string;
+  updatedAt: string | null;
+  report: EngineRoomRedTeamReport | null;
+  historyAvailable: boolean;
+  historyPath: string;
+  history: EngineRoomRedTeamHistory | null;
+  trend: EngineRoomRedTeamTrend | null;
+  hapticTrigger?: string | null;
 };
 
 export type SphereCapabilities = {

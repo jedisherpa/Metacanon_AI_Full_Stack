@@ -44,11 +44,47 @@ export type AdminRedTeamReport = {
   };
 };
 
+export type AdminRedTeamRunSummary = {
+  runId: string;
+  generatedAt: string;
+  status: 'passed' | 'failed';
+  durationMs: number | null;
+  totalScenarios: number;
+  passedScenarios: number;
+  failedScenarios: number;
+  blockedProbeScenarios: number;
+  attackClassCounts: Record<string, number>;
+  snapshotPath?: string;
+};
+
+export type AdminRedTeamHistory = {
+  updatedAt: string;
+  latestReportPath: string;
+  latestSnapshotPath?: string;
+  runs: AdminRedTeamRunSummary[];
+};
+
+export type AdminRedTeamTrend = {
+  windowSize: number;
+  runCount: number;
+  passedRuns: number;
+  failedRuns: number;
+  passRate: number | null;
+  averageDurationMs: number | null;
+  averageBlockedProbeScenarios: number | null;
+  latestRunAt: string | null;
+  attackClassTotals: Record<string, number>;
+};
+
 export type AdminRedTeamReportResponse = {
   reportAvailable: boolean;
   reportPath: string;
   updatedAt: string | null;
   report: AdminRedTeamReport | null;
+  historyAvailable: boolean;
+  historyPath: string;
+  history: AdminRedTeamHistory | null;
+  trend: AdminRedTeamTrend | null;
 };
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {

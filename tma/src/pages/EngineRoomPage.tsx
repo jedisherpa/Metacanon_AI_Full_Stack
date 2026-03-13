@@ -15,6 +15,7 @@ import {
 import {
   api,
   ApiRequestError,
+  type EngineRoomRedTeamReportResponse,
   type RuntimeBridgeState,
   type RuntimeComputeOption,
   type RuntimeHealth,
@@ -605,6 +606,23 @@ function classifyCommandError(error: unknown): CommandErrorState {
   };
 }
 
+function formatTimestamp(value?: string | null): string {
+  if (!value) return 'Unavailable';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return parsed.toLocaleString();
+}
+
+function formatAttackClass(value: string): string {
+  return value
+    .split('_')
+    .filter(Boolean)
+    .map((segment) => segment[0].toUpperCase() + segment.slice(1))
+    .join(' ');
+}
+
 export default function EngineRoomPage({ defaultTab = 'status' }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>(defaultTab);
   const [status, setStatus] = useState<any>({});
@@ -615,6 +633,7 @@ export default function EngineRoomPage({ defaultTab = 'status' }: Props) {
   const [runtimeComputeOptions, setRuntimeComputeOptions] = useState<RuntimeComputeOption[]>([]);
   const [runtimeCommunicationStatus, setRuntimeCommunicationStatus] =
     useState<Record<string, unknown> | null>(null);
+  const [redTeamReport, setRedTeamReport] = useState<EngineRoomRedTeamReportResponse | null>(null);
   const [dbHealth, setDbHealth] = useState<any>(null);
   const [glossary, setGlossary] = useState<any[]>([]);
   const [constellations, setConstellations] = useState<any[]>([]);
@@ -744,7 +763,8 @@ export default function EngineRoomPage({ defaultTab = 'status' }: Props) {
         api.getRuntimeHealth(),
         api.getRuntimeBridgeState(),
         api.getRuntimeComputeOptions(),
-        api.getRuntimeCommunicationStatus()
+        api.getRuntimeCommunicationStatus(),
+        api.getRedTeamReport()
       ])
         .then(([
           statusResult,
@@ -754,7 +774,8 @@ export default function EngineRoomPage({ defaultTab = 'status' }: Props) {
           runtimeHealthResult,
           runtimeBridgeResult,
           runtimeComputeOptionsResult,
-          runtimeCommunicationStatusResult
+          runtimeCommunicationStatusResult,
+          redTeamReportResult
         ]) => {
           if (statusResult.status === 'fulfilled') {
             setStatus((statusResult.value as any).status);
@@ -774,6 +795,7 @@ export default function EngineRoomPage({ defaultTab = 'status' }: Props) {
               ? runtimeCommunicationStatusResult.value
               : null
           );
+          setRedTeamReport(redTeamReportResult.status === 'fulfilled' ? redTeamReportResult.value : null);
           setLoading(false);
         })
         .catch(() => setLoading(false));
@@ -941,6 +963,8 @@ export default function EngineRoomPage({ defaultTab = 'status' }: Props) {
     { id: 'constellations', icon: List, label: 'Constellations' },
     { id: 'commands', icon: Terminal, label: 'Open Claw' }
   ];
+  const recentRedTeamRuns = redTeamReport?.history?.runs.slice(0, 4) ?? [];
+  const redTeamTrend = redTeamReport?.trend ?? null;
 
   return (
     <div className="flex flex-col h-full">
@@ -1102,6 +1126,104 @@ export default function EngineRoomPage({ defaultTab = 'status' }: Props) {
                 <p className="text-white/45 text-xs">
                   Runtime control API unavailable. Set API base to metacanon-code-api and configure control key if enabled.
                 </p>
+              )}
+            </div>
+
+            <div className="territory-card lf-card border border-cyan-400/20 bg-cyan-400/[0.04] rounded-sm p-3">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-white/70 text-xs font-mono uppercase tracking-wider">Governance Red-Team</p>
+                <span
+                  className={`text-xs font-mono ${
+                    redTeamReport?.report?.runner?.status === 'passed' ? 'text-engine' : 'text-red-400'
+                  }`}
+                >
+                  {redTeamReport?.report?.runner?.status?.toUpperCase() ?? 'NO REPORT'}
+                </span>
+              </div>
+
+              {redTeamReport?.report ? (
+                <div className="space-y-3 text-xs">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <p className="text-white/40">Scenarios</p>
+                      <p className="text-white font-mono">{redTeamReport.report.metrics.totalScenarios}</p>
+                    </div>
+                    <div>
+                      <p className="text-white/40">Blocked Probes</p>
+                      <p className="text-white font-mono">{redTeamReport.report.metrics.blockedProbeScenarios}</p>
+                    </div>
+                    <div>
+                      <p className="text-white/40">Latest Run</p>
+                      <p className="text-white font-mono">{formatTimestamp(redTeamReport.updatedAt)}</p>
+                    </div>
+                    <div>
+                      <p className="text-white/40">History Window</p>
+                      <p className="text-white font-mono">{redTeamTrend?.runCount ?? 0}</p>
+                    </div>
+                  </div>
+
+                  {redTeamTrend ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <p className="text-white/40">Pass Rate</p>
+                        <p className="text-white font-mono">
+                          {redTeamTrend.passRate !== null ? `${Math.round(redTeamTrend.passRate * 100)}%` : 'n/a'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-white/40">Avg Duration</p>
+                        <p className="text-white font-mono">
+                          {redTeamTrend.averageDurationMs !== null
+                            ? `${Math.round(redTeamTrend.averageDurationMs)} ms`
+                            : 'n/a'}
+                        </p>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="flex flex-wrap gap-1">
+                    {Object.entries(redTeamReport.report.metrics.attackClassCounts)
+                      .sort(([left], [right]) => left.localeCompare(right))
+                      .map(([attackClass, count]) => (
+                        <span
+                          key={attackClass}
+                          className="px-1.5 py-0.5 rounded-sm border border-cyan-400/30 text-[10px] font-mono text-cyan-200"
+                        >
+                          {formatAttackClass(attackClass)}: {count}
+                        </span>
+                      ))}
+                  </div>
+
+                  {recentRedTeamRuns.length > 0 ? (
+                    <div className="space-y-1">
+                      {recentRedTeamRuns.map((run) => (
+                        <div
+                          key={run.runId}
+                          className="flex items-center justify-between border border-white/10 rounded-sm px-2 py-2"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-white font-mono truncate">{run.runId}</p>
+                            <p className="text-white/40 font-mono">
+                              {run.totalScenarios} scenarios · {run.durationMs !== null ? `${Math.round(run.durationMs)} ms` : 'n/a'}
+                            </p>
+                          </div>
+                          <span className={`font-mono ${run.status === 'passed' ? 'text-engine' : 'text-red-400'}`}>
+                            {run.status.toUpperCase()}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-white/45 text-xs">
+                    No red-team artifact is available yet for this operator surface.
+                  </p>
+                  <p className="text-white/35 text-[10px] font-mono break-all">
+                    {redTeamReport?.reportPath ?? 'artifacts/redteam/governance-redteam-report.json'}
+                  </p>
+                </div>
               )}
             </div>
 

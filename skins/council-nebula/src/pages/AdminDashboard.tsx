@@ -110,6 +110,8 @@ export default function AdminDashboard() {
   }
 
   const report = redTeamReport?.report;
+  const trend = redTeamReport?.trend;
+  const recentRuns = redTeamReport?.history?.runs.slice(0, 5) ?? [];
   const recentScenarios = [...(report?.scenarios ?? [])]
     .sort((left, right) => right.capturedAt.localeCompare(left.capturedAt))
     .slice(0, 6);
@@ -229,6 +231,33 @@ export default function AdminDashboard() {
               <code className="redteam-report__path">{redTeamReport?.reportPath}</code>
             </div>
 
+            {trend ? (
+              <div className="redteam-metrics">
+                <div className="redteam-metric">
+                  <span className="redteam-metric__label">History Window</span>
+                  <strong>{trend.runCount} runs</strong>
+                </div>
+                <div className="redteam-metric">
+                  <span className="redteam-metric__label">Pass Rate</span>
+                  <strong>{trend.passRate !== null ? `${Math.round(trend.passRate * 100)}%` : 'n/a'}</strong>
+                </div>
+                <div className="redteam-metric">
+                  <span className="redteam-metric__label">Avg Duration</span>
+                  <strong>
+                    {trend.averageDurationMs !== null ? `${Math.round(trend.averageDurationMs)} ms` : 'n/a'}
+                  </strong>
+                </div>
+                <div className="redteam-metric">
+                  <span className="redteam-metric__label">Avg Blocked Probes</span>
+                  <strong>
+                    {trend.averageBlockedProbeScenarios !== null
+                      ? trend.averageBlockedProbeScenarios.toFixed(1)
+                      : 'n/a'}
+                  </strong>
+                </div>
+              </div>
+            ) : null}
+
             <div className="redteam-attack-classes">
               {Object.entries(report.metrics.attackClassCounts)
                 .sort(([left], [right]) => left.localeCompare(right))
@@ -238,6 +267,27 @@ export default function AdminDashboard() {
                   </span>
                 ))}
             </div>
+
+            {recentRuns.length > 0 ? (
+              <div className="redteam-scenarios">
+                {recentRuns.map((run) => (
+                  <article key={run.runId} className="redteam-scenario">
+                    <div className="redteam-scenario__header">
+                      <div>
+                        <strong>{run.runId}</strong>
+                        <div className="muted">
+                          {formatTimestamp(run.generatedAt)} | {run.totalScenarios} scenarios |{' '}
+                          {run.durationMs !== null ? `${Math.round(run.durationMs)} ms` : 'duration n/a'}
+                        </div>
+                      </div>
+                      <span className={`pill pill--${run.status === 'passed' ? 'completed' : 'failed'}`}>
+                        {run.status}
+                      </span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : null}
 
             <div className="redteam-scenarios">
               {recentScenarios.map((scenario: AdminRedTeamScenario) => (

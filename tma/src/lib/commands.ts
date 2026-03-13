@@ -615,7 +615,7 @@ export const commandCatalog: CommandDefinition[] = [
     queryTemplate: { gameId: 'game-id' }
   },
 
-  // Engine Room (19)
+  // Engine Room (20)
   {
     id: 'engine_status_all',
     label: 'Status All',
@@ -678,6 +678,14 @@ export const commandCatalog: CommandDefinition[] = [
     method: 'GET',
     path: '/api/v1/engine-room/fallback-report',
     description: 'List failed commands for fallback analysis.'
+  },
+  {
+    id: 'engine_redteam_report',
+    label: 'Red-Team Report',
+    scope: 'engine-room',
+    method: 'GET',
+    path: '/api/v1/engine-room/redteam-report',
+    description: 'Fetch the latest governance red-team report plus persisted history and trend summary.'
   },
   {
     id: 'engine_glossary',

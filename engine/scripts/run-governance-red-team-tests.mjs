@@ -9,6 +9,8 @@ const databaseUrl = process.env.DATABASE_URL?.trim()
 const reportPath =
   process.env.METACANON_REDTEAM_REPORT_PATH?.trim() ||
   path.resolve(engineRoot, '../artifacts/redteam/governance-redteam-report.json')
+const historyPath = path.join(path.dirname(reportPath), 'governance-redteam-history.json')
+const snapshotDir = path.join(path.dirname(reportPath), 'history', 'runs')
 
 function printSetupHint() {
   console.error('')
@@ -45,6 +47,7 @@ if (result.error) {
 
 const completedAt = new Date().toISOString()
 const durationMs = Date.parse(completedAt) - Date.parse(startedAt)
+const runId = startedAt.replace(/[:.]/g, '-')
 
 let report = {
   generatedAt: completedAt,
@@ -83,7 +86,56 @@ const finalReport = {
   }
 }
 
+function buildRunSummary() {
+  return {
+    runId,
+    generatedAt: finalReport.generatedAt ?? completedAt,
+    status: finalReport.runner?.status === 'passed' ? 'passed' : 'failed',
+    durationMs: finalReport.runner?.durationMs ?? durationMs,
+    totalScenarios: finalReport.metrics?.totalScenarios ?? 0,
+    passedScenarios: finalReport.metrics?.passedScenarios ?? 0,
+    failedScenarios: finalReport.metrics?.failedScenarios ?? 0,
+    blockedProbeScenarios: finalReport.metrics?.blockedProbeScenarios ?? 0,
+    attackClassCounts: finalReport.metrics?.attackClassCounts ?? {},
+    snapshotPath: path.join(snapshotDir, `${runId}.json`)
+  }
+}
+
+let history = {
+  updatedAt: completedAt,
+  latestReportPath: reportPath,
+  latestSnapshotPath: path.join(snapshotDir, `${runId}.json`),
+  runs: []
+}
+
+if (fs.existsSync(historyPath)) {
+  try {
+    const parsedHistory = JSON.parse(fs.readFileSync(historyPath, 'utf8'))
+    if (parsedHistory && typeof parsedHistory === 'object' && Array.isArray(parsedHistory.runs)) {
+      history = parsedHistory
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`Failed to parse governance red-team history at ${historyPath}: ${message}`)
+  }
+}
+
+const nextRunSummary = buildRunSummary()
+history = {
+  ...history,
+  updatedAt: completedAt,
+  latestReportPath: reportPath,
+  latestSnapshotPath: nextRunSummary.snapshotPath,
+  runs: [
+    nextRunSummary,
+    ...history.runs.filter((entry) => entry && entry.runId !== nextRunSummary.runId)
+  ].slice(0, 100)
+}
+
 fs.writeFileSync(reportPath, JSON.stringify(finalReport, null, 2))
+fs.mkdirSync(snapshotDir, { recursive: true })
+fs.writeFileSync(path.join(snapshotDir, `${runId}.json`), JSON.stringify(finalReport, null, 2))
+fs.writeFileSync(historyPath, JSON.stringify(history, null, 2))
 console.log(`[redteam] Report written to ${reportPath}`)
 
 process.exit(result.status ?? 1)

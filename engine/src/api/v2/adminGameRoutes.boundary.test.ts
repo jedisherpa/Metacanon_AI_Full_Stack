@@ -77,13 +77,18 @@ describe('adminGameRoutes red-team report endpoint', () => {
       reportAvailable: false,
       reportPath: mockEnv.SPHERE_REDTEAM_REPORT_PATH,
       updatedAt: null,
-      report: null
+      report: null,
+      historyAvailable: false,
+      historyPath: path.join(tempDir, 'governance-redteam-history.json'),
+      history: null,
+      trend: null
     });
   });
 
   it('returns the parsed report payload and timestamp when the artifact exists', async () => {
     const tempDir = await mkdtemp(path.join(tmpdir(), 'metacanon-admin-redteam-present-'));
     const reportPath = path.join(tempDir, 'governance-redteam-report.json');
+    const historyPath = path.join(tempDir, 'governance-redteam-history.json');
     mockEnv.SPHERE_REDTEAM_REPORT_PATH = reportPath;
 
     await writeFile(
@@ -122,6 +127,35 @@ describe('adminGameRoutes red-team report endpoint', () => {
       ),
       'utf8'
     );
+    await writeFile(
+      historyPath,
+      JSON.stringify(
+        {
+          updatedAt: '2026-03-12T01:05:00.000Z',
+          latestReportPath: reportPath,
+          latestSnapshotPath: path.join(tempDir, 'history', 'runs', '2026-03-12T01-02-03-000Z.json'),
+          runs: [
+            {
+              runId: '2026-03-12T01-02-03-000Z',
+              generatedAt: '2026-03-12T01:02:03.000Z',
+              status: 'passed',
+              durationMs: 914,
+              totalScenarios: 5,
+              passedScenarios: 5,
+              failedScenarios: 0,
+              blockedProbeScenarios: 5,
+              attackClassCounts: {
+                replay_idempotency: 1,
+                mixed_key_rotation: 1
+              }
+            }
+          ]
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
 
     const app = await buildApp();
     const response = await request(app).get('/api/v2/admin/redteam-report');
@@ -146,6 +180,28 @@ describe('adminGameRoutes red-team report endpoint', () => {
       runner: {
         status: 'passed',
         reportPath
+      }
+    });
+    expect(response.body.historyAvailable).toBe(true);
+    expect(response.body.historyPath).toBe(historyPath);
+    expect(response.body.history).toMatchObject({
+      latestReportPath: reportPath,
+      runs: [
+        expect.objectContaining({
+          runId: '2026-03-12T01-02-03-000Z',
+          status: 'passed',
+          totalScenarios: 5
+        })
+      ]
+    });
+    expect(response.body.trend).toMatchObject({
+      runCount: 1,
+      passedRuns: 1,
+      failedRuns: 0,
+      latestRunAt: '2026-03-12T01:02:03.000Z',
+      attackClassTotals: {
+        replay_idempotency: 1,
+        mixed_key_rotation: 1
       }
     });
   });
