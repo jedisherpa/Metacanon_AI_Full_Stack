@@ -225,8 +225,8 @@ export const DIANA_MEMBER_CONFIG: MemberConfig = {
       id: "noir",
       label: "Noir",
       path: "/diana/Diana%203.png",
-      objectPosition: "76% 50%",
-      scale: 1.08,
+      objectPosition: "82% 13%",
+      scale: 1.8,
     },
     {
       id: "forest",
