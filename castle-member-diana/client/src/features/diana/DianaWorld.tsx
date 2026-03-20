@@ -1,20 +1,18 @@
-import { FadeIn } from "@/components/sections/FadeIn";
-import { SectionDivider } from "@/components/sections/SectionDivider";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  ArrowDown,
   ArrowUpRight,
   BookOpenText,
   Download,
-  ScrollText,
+  Menu,
+  RefreshCcw,
   Shield,
   Sparkles,
+  X,
 } from "lucide-react";
 import {
-  lazy,
-  Suspense,
+  type ReactNode,
   startTransition,
   useEffect,
   useEffectEvent,
@@ -22,12 +20,13 @@ import {
   useState,
 } from "react";
 import { ArtifactDialog } from "./components/ArtifactDialog";
-import { ForgeBackdrop } from "./components/ForgeBackdrop";
+import { DraggableCollageCanvas } from "./components/DraggableCollageCanvas";
 import { PortalGrid } from "./components/PortalGrid";
 import { SovereignWall } from "./components/SovereignWall";
 import { DIANA_MEMBER_CONFIG } from "./config/member";
 import { DIANA_PORTALS } from "./config/portals";
 import { resolveArtifactResult, resolvePrismPrompt } from "./logic";
+import { DIANA_PRE_EDITORIAL_IMAGE_SNAPSHOT } from "../../../../reference/snapshots/diana-pre-editorial-image-swap";
 import {
   buildPortalUrl,
   checkSovereignBadge,
@@ -38,23 +37,52 @@ import {
   logSovereignEvent,
   subscribeToWallEntries,
 } from "./lib/sovereign";
+import {
+  getNextCollageViewId,
+  resolveLandingWindowId,
+} from "./shell";
 import type {
   ArrivalContext,
-  HeroPortraitOption,
+  CollageCardDefinition,
+  CollageViewDefinition,
+  DesktopNavItem,
+  FooterQuickLinkDefinition,
   InfluenceDefinition,
+  LandingWindowViewId,
   SovereignBadge,
   SovereignEventPayload,
   WallEntry,
 } from "./types";
 
-const LazyForgeScene = lazy(async () => {
-  const module = await import("./components/ForgeScene");
-  return { default: module.ForgeScene };
-});
+const IMAGE_SET_STORAGE_KEY = "diana:landing:image-set";
 
-function scrollToSection(id: string) {
-  document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+function cloneCollageViews(views: readonly CollageViewDefinition[]): CollageViewDefinition[] {
+  return views.map((view) => ({
+    ...view,
+    cards: view.cards.map((card) => ({
+      ...card,
+      desktop: { ...card.desktop },
+      mobile: { ...card.mobile },
+    })) as CollageCardDefinition[],
+  }));
 }
+
+const IMAGE_SETS = {
+  original: {
+    label: "Original",
+    collageViews: cloneCollageViews(
+      DIANA_PRE_EDITORIAL_IMAGE_SNAPSHOT.collageViews as unknown as readonly CollageViewDefinition[]
+    ),
+  },
+  editorial: {
+    label: "New",
+    collageViews: cloneCollageViews(
+      DIANA_MEMBER_CONFIG.collageViews as readonly CollageViewDefinition[]
+    ),
+  },
+} as const;
+
+type ImageSetId = keyof typeof IMAGE_SETS;
 
 function prettifyToken(value: string | null) {
   if (!value) {
@@ -64,103 +92,17 @@ function prettifyToken(value: string | null) {
   return value.replace(/[-_]/g, " ");
 }
 
-function parsePositionToken(token: string | undefined, fallback: number) {
-  if (!token) {
-    return fallback;
+function resolveFooterActionUrl(action: FooterQuickLinkDefinition) {
+  switch (action.id) {
+    case "download-prism":
+      return import.meta.env.VITE_PRISM_DOWNLOAD_URL || action.url;
+    case "sign-ddos":
+      return import.meta.env.VITE_DDOS_SIGN_URL || action.url;
+    case "read-constitution":
+      return import.meta.env.VITE_CONSTITUTION_URL || action.url;
+    default:
+      return action.url;
   }
-
-  const normalized = token.trim().toLowerCase();
-
-  if (normalized === "left" || normalized === "top") {
-    return 0;
-  }
-
-  if (normalized === "center") {
-    return 50;
-  }
-
-  if (normalized === "right" || normalized === "bottom") {
-    return 100;
-  }
-
-  if (normalized.endsWith("%")) {
-    const parsed = Number.parseFloat(normalized);
-    if (!Number.isNaN(parsed)) {
-      return parsed;
-    }
-  }
-
-  return fallback;
-}
-
-function parseObjectPosition(value: string | undefined) {
-  const tokens = value?.trim().split(/\s+/) ?? [];
-
-  return {
-    x: parsePositionToken(tokens[0], 50),
-    y: parsePositionToken(tokens[1], 20),
-  };
-}
-
-function formatObjectPosition(x: number, y: number) {
-  return `${Math.round(x)}% ${Math.round(y)}%`;
-}
-
-function parseHeroCrop(option: HeroPortraitOption) {
-  const position = parseObjectPosition(option.objectPosition);
-
-  return {
-    ...position,
-    scale: option.scale ?? 1,
-  };
-}
-
-function formatHeroScale(scale: number) {
-  return Number(scale.toFixed(2));
-}
-
-function EditorialImage({
-  path,
-  alt,
-  eyebrow,
-}: {
-  path: string;
-  alt: string;
-  eyebrow: string;
-}) {
-  const [missing, setMissing] = useState(false);
-
-  if (missing) {
-    return (
-      <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(160deg,rgba(201,168,76,0.12),rgba(75,0,130,0.2),rgba(26,0,51,0.92))]">
-        <div className="p-6">
-          <p className="text-xs uppercase tracking-[0.24em] text-[rgba(255,250,205,0.62)]">
-            {eyebrow}
-          </p>
-        </div>
-        <div className="aspect-[4/5] w-full bg-[radial-gradient(circle_at_top,_rgba(201,168,76,0.25),_transparent_34%),linear-gradient(180deg,_rgba(75,0,130,0.24),_rgba(26,0,51,0.72))]" />
-      </div>
-    );
-  }
-
-  return (
-    <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-black/20">
-      <img
-        src={path}
-        alt={alt}
-        onError={() => setMissing(true)}
-        loading={eyebrow === "Hero portrait" ? "eager" : "lazy"}
-        decoding="async"
-        className="min-h-[420px] w-full object-cover"
-      />
-      <div className="absolute inset-0 bg-gradient-to-t from-background/70 via-transparent to-transparent" />
-      <div className="absolute left-6 top-6">
-        <p className="text-xs uppercase tracking-[0.24em] text-[rgba(255,250,205,0.72)]">
-          {eyebrow}
-        </p>
-      </div>
-    </div>
-  );
 }
 
 function BadgeNotification({ badge }: { badge: SovereignBadge | null }) {
@@ -168,18 +110,18 @@ function BadgeNotification({ badge }: { badge: SovereignBadge | null }) {
     <AnimatePresence>
       {badge ? (
         <motion.div
-          initial={{ opacity: 0, y: -22 }}
+          initial={{ opacity: 0, y: -18 }}
           animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -22 }}
+          exit={{ opacity: 0, y: -18 }}
+          className="editorial-badge fixed right-4 top-[4.5rem] z-50 max-w-sm rounded-[1.3rem] px-5 py-4 shadow-[0_24px_60px_rgba(17,17,17,0.12)] sm:right-6"
           role="status"
           aria-live="polite"
-          className="fixed right-6 top-6 z-50 max-w-sm rounded-[1.6rem] border border-sovereign-gold/35 bg-[rgba(26,0,51,0.94)] p-5 shadow-[0_30px_90px_rgba(0,0,0,0.35)] backdrop-blur-md"
         >
-          <p className="text-xs uppercase tracking-[0.22em] text-sovereign-gold">Badge earned</p>
-          <h3 className="mt-2 font-display text-3xl text-radiant-white">{badge.title}</h3>
-          <p className="mt-2 text-sm leading-7 text-[rgba(255,250,205,0.72)]">
-            {badge.description}
+          <p className="font-[var(--font-ui)] text-[10px] uppercase tracking-[0.28em] text-black/48">
+            Badge earned
           </p>
+          <h3 className="mt-2 font-display text-3xl leading-none text-black">{badge.title}</h3>
+          <p className="editorial-copy mt-3 text-sm leading-7">{badge.description}</p>
         </motion.div>
       ) : null}
     </AnimatePresence>
@@ -195,62 +137,56 @@ function PrismConsole({
   const [response, setResponse] = useState(resolvePrismPrompt(""));
 
   return (
-    <div className="grid gap-12 lg:grid-cols-[0.9fr_1.1fr]">
+    <div className="grid gap-8 xl:grid-cols-[0.92fr_1.08fr]">
       <div>
-        <p
-          className="text-sm uppercase tracking-[0.24em] text-sovereign-gold"
-          style={{ fontFamily: "var(--font-mono)" }}
-        >
-          Prism simulator
-        </p>
-        <h3 className="mt-5 font-display text-4xl text-radiant-white sm:text-5xl">
+        <p className="editorial-label">Prism simulator</p>
+        <h3 className="mt-4 font-display text-4xl leading-[1.02] text-black sm:text-5xl">
           A lens set for grief, ferocity, and re-selfing.
         </h3>
-        <p className="mt-5 max-w-xl text-lg leading-9 text-[rgba(255,250,205,0.74)]">
-          These prompts are authored from Diana&apos;s own source material. They
-          demonstrate how this realm names fragmentation, shadow, tenderness, and
-          return without flattening them into generic self-help.
+        <p className="editorial-copy mt-5 max-w-xl text-[1.02rem] leading-8">
+          These prompts are authored from Diana&apos;s source material. They remain
+          the same Diana lens set as before, only reframed inside this editorial
+          shell.
         </p>
 
-        <div className="mt-10 border-y border-white/10">
+        <div className="editorial-rule mt-8 border-y">
           {DIANA_MEMBER_CONFIG.prismPairs.map((pair) => (
             <button
               key={pair.prompt}
+              type="button"
               onClick={() => {
                 setPrompt(pair.prompt);
                 setResponse(pair);
               }}
-              className="w-full border-t border-white/10 py-5 text-left first:border-t-0"
+              className="editorial-rule w-full border-t px-0 py-4 text-left first:border-t-0 transition-colors hover:bg-black/[0.02]"
             >
-              <p className="text-base leading-8 text-[rgba(255,250,205,0.84)]">{pair.prompt}</p>
+              <p className="editorial-copy text-[0.98rem] leading-8">{pair.prompt}</p>
             </button>
           ))}
         </div>
       </div>
 
-      <div className="border-l border-white/10 pl-0 lg:pl-10">
-        <label className="text-xs uppercase tracking-[0.22em] text-[rgba(255,250,205,0.64)]">
-          Ask Prism
-        </label>
+      <div className="editorial-inset rounded-[1.7rem] p-5 sm:p-6">
+        <label className="editorial-label">Ask Prism</label>
         <Textarea
           value={prompt}
           onChange={(event) => setPrompt(event.target.value)}
           placeholder="What fragment wants to come back into coherence?"
-          className="mt-4 min-h-36 border-white/10 bg-transparent px-0 text-base text-radiant-white placeholder:text-[rgba(255,250,205,0.36)]"
+          className="mt-4 min-h-36 rounded-[1.4rem] border-black/10 bg-white/90 text-black placeholder:text-black/35"
         />
 
-        <div className="mt-6 flex flex-wrap gap-3">
+        <div className="mt-5 flex flex-wrap gap-3">
           <Button
             size="lg"
             onClick={() => setResponse(resolvePrismPrompt(prompt))}
-            className="rounded-full bg-sovereign-gold px-6 text-[0.82rem] font-semibold uppercase tracking-[0.2em] text-[#1a0033] hover:bg-[rgba(201,168,76,0.92)]"
+            className="rounded-full bg-black px-6 text-[0.74rem] uppercase tracking-[0.24em] text-white hover:bg-black/88"
           >
             Simulate response
           </Button>
           <Button
             size="lg"
             variant="outline"
-            className="rounded-full border-sovereign-gold/35 bg-transparent px-6 text-[0.82rem] font-semibold uppercase tracking-[0.2em] text-sovereign-gold"
+            className="rounded-full border-black/12 bg-white px-6 text-[0.74rem] uppercase tracking-[0.24em] text-black hover:bg-black/[0.03]"
             onClick={() => {
               void onEvent({
                 eventType: "prism_cta",
@@ -259,9 +195,11 @@ function PrismConsole({
                 },
               });
 
-              const url =
-                import.meta.env.VITE_PRISM_DOWNLOAD_URL || "https://metacanonai.com/prism";
-              window.open(url, "_blank", "noopener,noreferrer");
+              window.open(
+                import.meta.env.VITE_PRISM_DOWNLOAD_URL || "https://metacanonai.com/prism",
+                "_blank",
+                "noopener,noreferrer"
+              );
             }}
           >
             <Download className="size-4" />
@@ -269,19 +207,12 @@ function PrismConsole({
           </Button>
         </div>
 
-        <div className="mt-10 border-l-4 border-sovereign-gold pl-6">
-          <p
-            className="text-xs uppercase tracking-[0.22em] text-[rgba(255,250,205,0.62)]"
-            style={{ fontFamily: "var(--font-mono)" }}
-          >
-            Response
-          </p>
-          <h4 className="mt-4 text-sm font-semibold uppercase tracking-[0.16em] text-sovereign-gold">
+        <div className="editorial-rule mt-8 border-t pt-5">
+          <p className="editorial-label">Response</p>
+          <h4 className="mt-3 text-sm font-semibold uppercase tracking-[0.18em] text-black/56">
             {response.prompt}
           </h4>
-          <p className="mt-4 text-lg leading-9 text-[rgba(255,250,205,0.84)]">
-            {response.response}
-          </p>
+          <p className="editorial-copy mt-4 text-[1rem] leading-8">{response.response}</p>
         </div>
       </div>
     </div>
@@ -316,26 +247,28 @@ function AscensionBlock({
       body: "Step from the personal realm into the structural language of the wider Metacanon ecosystem.",
       icon: BookOpenText,
       eventType: "prism_cta" as const,
-      url: import.meta.env.VITE_CONSTITUTION_URL || "https://metacanonai.com/constitution",
+      url:
+        import.meta.env.VITE_CONSTITUTION_URL ||
+        "https://metacanonai.com/constitution",
     },
   ];
 
   return (
-    <div className="border-y border-white/10">
+    <div className="editorial-rule border-y">
       {actions.map((action) => {
         const Icon = action.icon;
 
         return (
           <article
             key={action.id}
-            className="grid gap-5 border-t border-white/10 py-8 first:border-t-0 lg:grid-cols-[minmax(0,1fr)_auto]"
+            className="editorial-rule grid gap-5 border-t py-7 first:border-t-0 lg:grid-cols-[minmax(0,1fr)_auto]"
           >
             <div>
               <div className="flex items-center gap-3">
-                <Icon className="size-5 text-sovereign-gold" />
-                <h4 className="font-display text-3xl text-radiant-white">{action.title}</h4>
+                <Icon className="size-5 text-black/68" />
+                <h4 className="font-display text-3xl text-black">{action.title}</h4>
               </div>
-              <p className="mt-4 max-w-2xl text-base leading-8 text-[rgba(255,250,205,0.74)]">
+              <p className="editorial-copy mt-3 max-w-2xl text-[0.98rem] leading-8">
                 {action.body}
               </p>
             </div>
@@ -343,7 +276,7 @@ function AscensionBlock({
             <Button
               size="lg"
               variant="outline"
-              className="rounded-full border-sovereign-gold/35 bg-transparent px-6 text-[0.82rem] font-semibold uppercase tracking-[0.2em] text-sovereign-gold"
+              className="rounded-full border-black/12 bg-white px-6 text-[0.74rem] uppercase tracking-[0.24em] text-black hover:bg-black/[0.03]"
               onClick={() => {
                 void onEvent({
                   eventType: action.eventType,
@@ -365,19 +298,63 @@ function AscensionBlock({
   );
 }
 
+function LandingWindow({
+  navItem,
+  uuid,
+  arrival,
+  children,
+}: {
+  navItem: DesktopNavItem;
+  uuid: string;
+  arrival: ArrivalContext;
+  children: ReactNode;
+}) {
+  return (
+    <section className="editorial-window relative flex h-full flex-col overflow-hidden rounded-[2rem]">
+      <div className="editorial-window-bar flex items-center justify-between gap-4 border-b px-4 py-3 sm:px-5">
+        <div className="flex items-center gap-2">
+          <span className="editorial-os-dot bg-[#ff5f56]" />
+          <span className="editorial-os-dot bg-[#ffbd2e]" />
+          <span className="editorial-os-dot bg-[#27c93f]" />
+        </div>
+
+        <div className="min-w-0 text-center">
+          <p className="font-[var(--font-ui)] text-[10px] uppercase tracking-[0.28em] text-black/48">
+            {DIANA_MEMBER_CONFIG.brandName}
+          </p>
+          <p className="hidden truncate font-[var(--font-ui)] text-[10px] uppercase tracking-[0.22em] text-black/38 sm:block">
+            {navItem.label}
+          </p>
+        </div>
+
+        <div className="hidden font-[var(--font-ui)] text-[10px] uppercase tracking-[0.22em] text-black/38 sm:block">
+          {arrival.fromLabel ? `via ${arrival.fromLabel}` : uuid ? `uuid ${uuid}` : "landing"}
+        </div>
+      </div>
+
+      <div className="overflow-y-auto px-5 pb-8 pt-5 sm:px-7 sm:pb-9 sm:pt-6">
+        <p className="editorial-label">{navItem.label}</p>
+        <h2 className="mt-4 max-w-3xl font-display text-4xl leading-[1.02] text-black sm:text-5xl">
+          {navItem.title}
+        </h2>
+        <p className="editorial-copy mt-4 max-w-3xl text-[1.02rem] leading-8">
+          {navItem.subtitle}
+        </p>
+        <div className="mt-8">{children}</div>
+      </div>
+    </section>
+  );
+}
+
 export function DianaWorld() {
-  const showHeroCropLab = import.meta.env.DEV;
-  const heroPortraitOptions: HeroPortraitOption[] =
-    DIANA_MEMBER_CONFIG.heroPortraitOptions.length > 0
-      ? DIANA_MEMBER_CONFIG.heroPortraitOptions
-      : [
-          {
-            id: "default",
-            label: "Primary",
-            path: DIANA_MEMBER_CONFIG.assets.heroPortrait,
-            objectPosition: "center 20%",
-          },
-        ];
+  const [activeImageSetId, setActiveImageSetId] = useState<ImageSetId>(() => {
+    if (typeof window === "undefined") {
+      return "editorial";
+    }
+
+    const stored = window.localStorage.getItem(IMAGE_SET_STORAGE_KEY);
+    return stored === "original" ? "original" : "editorial";
+  });
   const [arrival, setArrival] = useState<ArrivalContext>({
     fromRealm: null,
     fromLabel: null,
@@ -385,15 +362,12 @@ export function DianaWorld() {
     heldArtifact: null,
     quest: null,
   });
-  const [activeHeroId, setActiveHeroId] = useState(heroPortraitOptions[0].id);
-  const [isHeroCropLabCollapsed, setIsHeroCropLabCollapsed] = useState(false);
-  const [heroCropPositions, setHeroCropPositions] = useState<
-    Record<string, { x: number; y: number; scale: number }>
-  >(() =>
-    Object.fromEntries(heroPortraitOptions.map((option) => [option.id, parseHeroCrop(option)]))
-  );
   const [uuid, setUuid] = useState("");
   const [badge, setBadge] = useState<SovereignBadge | null>(null);
+  const [activeView, setActiveView] = useState<LandingWindowViewId>("origin");
+  const [activeCollageViewId, setActiveCollageViewId] = useState(
+    IMAGE_SETS.editorial.collageViews[0]?.id ?? ""
+  );
   const [wallEntries, setWallEntries] = useState<WallEntry[]>(
     DIANA_MEMBER_CONFIG.wallSeeds.map((label, index) => ({
       id: `seed-${index}`,
@@ -404,35 +378,22 @@ export function DianaWorld() {
   const [activeInfluence, setActiveInfluence] = useState<InfluenceDefinition | null>(
     DIANA_MEMBER_CONFIG.influences[0]
   );
-  const activeHero =
-    heroPortraitOptions.find((option) => option.id === activeHeroId) ?? heroPortraitOptions[0];
-  const activeHeroCrop = heroCropPositions[activeHero.id] ?? parseHeroCrop(activeHero);
-  const heroPortraitConfigSnapshot = [
-    "heroPortraitOptions: [",
-    heroPortraitOptions
-      .map((option) => {
-        const crop = heroCropPositions[option.id] ?? parseHeroCrop(option);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-        return [
-          "  {",
-          `    id: "${option.id}",`,
-          `    label: "${option.label}",`,
-          `    path: "${option.path}",`,
-          `    objectPosition: "${formatObjectPosition(crop.x, crop.y)}",`,
-          `    scale: ${formatHeroScale(crop.scale)},`,
-          "  },",
-        ].join("\n");
-      })
-      .join("\n"),
-    "],",
-  ].join("\n");
+  const navItems = DIANA_MEMBER_CONFIG.desktopNavItems;
+  const activeImageSet = IMAGE_SETS[activeImageSetId];
+  const activeNavItem =
+    navItems.find((item) => item.id === activeView) ?? navItems[0];
+  const activeCollageView =
+    activeImageSet.collageViews.find((view) => view.id === activeCollageViewId) ??
+    activeImageSet.collageViews[0];
 
   const arrivalThreads = useMemo(() => {
     const threads = [];
 
     if (arrival.fromLabel) {
       threads.push(
-        `Arriving from ${arrival.fromLabel}. Your UUID has been carried forward so this realm can recognize your passage.`
+        `Arriving from ${arrival.fromLabel}. Your UUID has been carried forward so this landing shell can recognize your passage.`
       );
     }
 
@@ -500,7 +461,7 @@ export function DianaWorld() {
       "description",
       DIANA_MEMBER_CONFIG.pageDescription
     );
-    setMeta('meta[property="og:title"]', "property", "og:title", DIANA_MEMBER_CONFIG.pageTitle);
+    setMeta("meta[property=\"og:title\"]", "property", "og:title", DIANA_MEMBER_CONFIG.pageTitle);
     setMeta(
       'meta[property="og:description"]',
       "property",
@@ -517,6 +478,20 @@ export function DianaWorld() {
     );
     setMeta('meta[name="twitter:image"]', "name", "twitter:image", "/diana/og-image.svg");
   }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(IMAGE_SET_STORAGE_KEY, activeImageSetId);
+  }, [activeImageSetId]);
+
+  useEffect(() => {
+    if (
+      activeImageSet.collageViews.some((view) => view.id === activeCollageViewId)
+    ) {
+      return;
+    }
+
+    setActiveCollageViewId(activeImageSet.collageViews[0]?.id ?? "");
+  }, [activeCollageViewId, activeImageSet]);
 
   useEffect(() => {
     const nextArrival = getArrivalContext(window.location.search);
@@ -549,705 +524,444 @@ export function DianaWorld() {
     };
   }, [handleEvent, refreshWallEntries]);
 
+  const openView = (nextId: string) => {
+    const resolvedId = resolveLandingWindowId(nextId, navItems, navItems[0].id);
+
+    setActiveView(resolvedId);
+    setIsMobileMenuOpen(false);
+    void handleEvent({
+      eventType: "story_interact",
+      metadata: {
+        section: "landing-shell",
+        interaction: "nav_select",
+        viewId: resolvedId,
+      },
+    });
+  };
+
+  const cycleCollageView = () => {
+    const nextId = getNextCollageViewId(
+      activeImageSet.collageViews,
+      activeCollageViewId
+    );
+
+    setActiveCollageViewId(nextId);
+    void handleEvent({
+      eventType: "story_interact",
+      metadata: {
+        section: "landing-shell",
+        interaction: "collage_refresh",
+        collageViewId: nextId,
+      },
+    });
+  };
+
+  const switchImageSet = (nextId: ImageSetId) => {
+    if (nextId === activeImageSetId) {
+      return;
+    }
+
+    setActiveImageSetId(nextId);
+    setIsMobileMenuOpen(false);
+    void handleEvent({
+      eventType: "story_interact",
+      metadata: {
+        section: "landing-shell",
+        interaction: "image_set_toggle",
+        imageSetId: nextId,
+      },
+    });
+  };
+
+  const handleFooterAction = (action: FooterQuickLinkDefinition) => {
+    const url = resolveFooterActionUrl(action);
+
+    void handleEvent({
+      eventType: action.eventType,
+      metadata: {
+        destination: url,
+        ...(action.metadata ?? {}),
+      },
+    });
+
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-background text-foreground">
-      <Suspense fallback={<ForgeBackdrop />}>
-        <LazyForgeScene />
-      </Suspense>
+    <div className="relative h-screen overflow-hidden bg-background text-foreground">
       <BadgeNotification badge={badge} />
 
-      <main className="relative z-10">
-        <section id="arrival" className="relative min-h-screen overflow-hidden">
-          <div className="absolute inset-0">
-            <AnimatePresence initial={false} mode="wait">
-              <motion.div
-                key={activeHero.path}
-                initial={{ opacity: 0.18 }}
-                animate={{ opacity: 0.62 }}
-                exit={{ opacity: 0.18 }}
-                transition={{ duration: 0.42, ease: "easeOut" }}
-                style={{
-                  backgroundImage: `url(${activeHero.path})`,
-                  backgroundPosition: formatObjectPosition(activeHeroCrop.x, activeHeroCrop.y),
-                  backgroundSize: `${Math.round(activeHeroCrop.scale * 100)}% auto`,
-                }}
-                className="h-full w-full bg-no-repeat saturate-[1.08] contrast-110"
-              />
-            </AnimatePresence>
-            <div className="absolute inset-0 bg-gradient-to-t from-background via-background/26 to-background/46" />
-            <div className="absolute inset-0 bg-gradient-to-r from-background/92 via-background/42 via-45% to-background/18" />
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_76%_32%,rgba(201,168,76,0.16),transparent_28%)]" />
+      <header className="editorial-menu-shell fixed inset-x-0 top-0 z-40 h-14 border-b px-4 sm:px-6">
+        <div className="mx-auto flex h-full max-w-[1280px] items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="truncate font-display text-[1.45rem] italic text-black">
+              {DIANA_MEMBER_CONFIG.brandName}
+            </p>
           </div>
 
-          {showHeroCropLab ? (
-            isHeroCropLabCollapsed ? (
-              <div className="absolute left-5 top-5 z-20 flex items-center gap-3 rounded-[1.4rem] border border-white/10 bg-[rgba(26,0,51,0.74)] px-4 py-3 shadow-[0_24px_70px_rgba(0,0,0,0.3)] backdrop-blur-md md:left-8 md:top-8">
-                <p
-                  className="text-[0.68rem] uppercase tracking-[0.24em] text-sovereign-gold"
-                  style={{ fontFamily: "var(--font-mono)" }}
-                >
-                  Hero crop lab
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setIsHeroCropLabCollapsed(false)}
-                  className="rounded-full border border-white/15 px-3 py-2 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-[rgba(255,250,205,0.78)] transition hover:border-sovereign-gold/45 hover:text-radiant-white"
-                >
-                  Open
-                </button>
-              </div>
-            ) : (
-              <div className="absolute left-5 top-5 z-20 w-[min(24rem,calc(100vw-2.5rem))] rounded-[1.4rem] border border-white/10 bg-[rgba(26,0,51,0.74)] p-4 shadow-[0_24px_70px_rgba(0,0,0,0.3)] backdrop-blur-md md:left-8 md:top-8">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p
-                      className="text-[0.68rem] uppercase tracking-[0.24em] text-sovereign-gold"
-                      style={{ fontFamily: "var(--font-mono)" }}
-                    >
-                      Hero crop lab
-                    </p>
-                    <p className="mt-2 text-xs leading-6 text-[rgba(255,250,205,0.66)]">
-                      Zoom first if the portrait is too narrow, then use X and Y to land the frame.
-                      These controls are dev-only and leave the baked config untouched until we
-                      paste it back.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setHeroCropPositions((current) => ({
-                          ...current,
-                          [activeHero.id]: parseHeroCrop(activeHero),
-                        }));
-                      }}
-                      className="rounded-full border border-white/15 px-3 py-2 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-[rgba(255,250,205,0.78)] transition hover:border-sovereign-gold/45 hover:text-radiant-white"
-                    >
-                      Reset
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setIsHeroCropLabCollapsed(true)}
-                      className="rounded-full border border-white/15 px-3 py-2 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-[rgba(255,250,205,0.78)] transition hover:border-sovereign-gold/45 hover:text-radiant-white"
-                    >
-                      Collapse
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mt-5 space-y-4">
-                  <label className="block">
-                    <div className="flex items-center justify-between gap-4 text-xs uppercase tracking-[0.2em] text-[rgba(255,250,205,0.66)]">
-                      <span>X position</span>
-                      <span className="text-sovereign-gold">{Math.round(activeHeroCrop.x)}%</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      step="1"
-                      value={activeHeroCrop.x}
-                      onChange={(event) => {
-                        const nextValue = Number(event.target.value);
-                        setHeroCropPositions((current) => ({
-                          ...current,
-                          [activeHero.id]: {
-                            ...(current[activeHero.id] ?? parseHeroCrop(activeHero)),
-                            x: nextValue,
-                          },
-                        }));
-                      }}
-                      className="mt-2 w-full accent-[#c9a84c]"
-                    />
-                  </label>
-
-                  <label className="block">
-                    <div className="flex items-center justify-between gap-4 text-xs uppercase tracking-[0.2em] text-[rgba(255,250,205,0.66)]">
-                      <span>Y position</span>
-                      <span className="text-sovereign-gold">{Math.round(activeHeroCrop.y)}%</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      step="1"
-                      value={activeHeroCrop.y}
-                      onChange={(event) => {
-                        const nextValue = Number(event.target.value);
-                        setHeroCropPositions((current) => ({
-                          ...current,
-                          [activeHero.id]: {
-                            ...(current[activeHero.id] ?? parseHeroCrop(activeHero)),
-                            y: nextValue,
-                          },
-                        }));
-                      }}
-                      className="mt-2 w-full accent-[#c9a84c]"
-                    />
-                  </label>
-
-                  <label className="block">
-                    <div className="flex items-center justify-between gap-4 text-xs uppercase tracking-[0.2em] text-[rgba(255,250,205,0.66)]">
-                      <span>Zoom</span>
-                      <span className="text-sovereign-gold">
-                        {formatHeroScale(activeHeroCrop.scale)}x
-                      </span>
-                    </div>
-                    <input
-                      type="range"
-                      min="1"
-                      max="1.8"
-                      step="0.01"
-                      value={activeHeroCrop.scale}
-                      onChange={(event) => {
-                        const nextValue = Number(event.target.value);
-                        setHeroCropPositions((current) => ({
-                          ...current,
-                          [activeHero.id]: {
-                            ...(current[activeHero.id] ?? parseHeroCrop(activeHero)),
-                            scale: nextValue,
-                          },
-                        }));
-                      }}
-                      className="mt-2 w-full accent-[#c9a84c]"
-                    />
-                  </label>
-                </div>
-
-                <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-3">
-                  <p className="text-[0.68rem] uppercase tracking-[0.22em] text-[rgba(255,250,205,0.56)]">
-                    Current crop
-                  </p>
-                  <p className="mt-2 font-mono text-sm text-sovereign-gold">
-                    {formatObjectPosition(activeHeroCrop.x, activeHeroCrop.y)}
-                  </p>
-                  <p className="mt-1 font-mono text-sm text-sovereign-gold">
-                    {formatHeroScale(activeHeroCrop.scale)}x
-                  </p>
-                </div>
-
-                <Textarea
-                  readOnly
-                  value={heroPortraitConfigSnapshot}
-                  className="mt-4 min-h-44 resize-y border-white/10 bg-[rgba(0,0,0,0.18)] font-mono text-xs leading-6 text-[rgba(255,250,205,0.78)]"
-                />
-              </div>
-            )
-          ) : null}
-
-          <div className="absolute right-5 top-5 z-20 flex flex-wrap justify-end gap-2 md:right-8 md:top-8">
-            {heroPortraitOptions.map((option, index) => {
-              const isActive = option.id === activeHero.id;
+          <nav className="hidden items-center gap-2 lg:flex">
+            {navItems.map((item) => {
+              const isActive = item.id === activeView;
 
               return (
                 <button
-                  key={option.id}
+                  key={item.id}
                   type="button"
-                  aria-pressed={isActive}
-                  onClick={() => {
-                    setActiveHeroId(option.id);
-                    void handleEvent({
-                      eventType: "story_interact",
-                      metadata: {
-                        section: "arrival",
-                        interaction: "hero_portrait_select",
-                        heroOptionId: option.id,
-                      },
-                    });
-                  }}
-                  className={`rounded-full border px-3 py-2 text-[0.68rem] font-semibold uppercase tracking-[0.22em] transition ${
+                  onClick={() => openView(item.id)}
+                  className={`rounded-full px-4 py-2 font-display text-[1.08rem] italic transition ${
                     isActive
-                      ? "border-sovereign-gold bg-sovereign-gold text-[#1a0033]"
-                      : "border-white/15 bg-[rgba(26,0,51,0.58)] text-[rgba(255,250,205,0.86)] backdrop-blur-md hover:border-sovereign-gold/45 hover:text-radiant-white"
+                      ? "bg-black text-white shadow-[0_14px_30px_rgba(15,15,15,0.12)]"
+                      : "text-black/62 hover:bg-black/[0.04] hover:text-black"
                   }`}
                 >
-                  {index + 1}. {option.label}
+                  {item.label}
                 </button>
               );
             })}
-          </div>
+          </nav>
 
-          <div className="relative z-10 flex min-h-screen items-end px-8 py-20 md:px-16 lg:px-24">
-            <div className="max-w-5xl">
-              {arrivalThreads.length > 0 ? (
-                <FadeIn>
-                  <div className="mb-10 max-w-2xl rounded-[1.4rem] border border-sovereign-gold/25 bg-[rgba(201,168,76,0.08)] px-5 py-4">
-                    <div className="space-y-2">
-                      {arrivalThreads.map((thread) => (
-                        <p
-                          key={thread}
-                          className="text-sm leading-7 text-[rgba(255,250,205,0.82)]"
-                        >
-                          {thread}
-                        </p>
-                      ))}
-                    </div>
-                  </div>
-                </FadeIn>
-              ) : null}
+          <div className="flex items-center gap-2">
+            <div className="hidden items-center gap-1 rounded-full border border-black/10 bg-white p-1 md:flex">
+              {(Object.entries(IMAGE_SETS) as Array<[ImageSetId, (typeof IMAGE_SETS)[ImageSetId]]>).map(
+                ([imageSetId, imageSet]) => {
+                  const isActive = imageSetId === activeImageSetId;
 
-              <FadeIn delay={0.08}>
-                <p
-                  className="text-sm uppercase tracking-[0.32em] text-sovereign-gold"
-                  style={{ fontFamily: "var(--font-mono)" }}
-                >
-                  Diana Fleishman • Luminous Shadowbreaker
-                </p>
-              </FadeIn>
-
-              <FadeIn delay={0.16}>
-                <h1 className="mt-6 max-w-5xl font-display text-5xl leading-[1.04] text-radiant-white sm:text-6xl md:text-7xl lg:text-8xl">
-                  {DIANA_MEMBER_CONFIG.primaryHeadline}
-                </h1>
-              </FadeIn>
-
-              <FadeIn delay={0.24}>
-                <p className="mt-8 max-w-3xl text-xl leading-9 text-[rgba(255,250,205,0.82)]">
-                  {DIANA_MEMBER_CONFIG.subheadline}
-                </p>
-              </FadeIn>
-
-              <FadeIn delay={0.32}>
-                <p className="mt-6 max-w-3xl text-lg leading-9 text-[rgba(255,250,205,0.68)]">
-                  {DIANA_MEMBER_CONFIG.arrivalBody}
-                </p>
-              </FadeIn>
-
-              <FadeIn delay={0.4}>
-                <div className="mt-10 max-w-3xl border-l-4 border-sovereign-gold pl-6">
-                  <p className="text-xl leading-9 text-[rgba(255,250,205,0.88)]">
-                    {DIANA_MEMBER_CONFIG.activationMessage}
-                  </p>
-                </div>
-              </FadeIn>
-
-              <FadeIn delay={0.48}>
-                <div className="mt-10 flex flex-wrap gap-4">
-                  <Button
-                    size="lg"
-                    onClick={() => scrollToSection("origin")}
-                    className="rounded-full bg-sovereign-gold px-7 text-[0.82rem] font-semibold uppercase tracking-[0.2em] text-[#1a0033] hover:bg-[rgba(201,168,76,0.92)]"
-                  >
-                    Begin the pilgrimage
-                    <ArrowDown className="size-4" />
-                  </Button>
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    onClick={() => scrollToSection("artifacts")}
-                    className="rounded-full border-white/15 bg-transparent px-7 text-[0.82rem] font-semibold uppercase tracking-[0.2em] text-radiant-white"
-                  >
-                    Enter the relics
-                  </Button>
-                </div>
-              </FadeIn>
-
-              <FadeIn delay={0.56}>
-                <div className="mt-10 flex flex-wrap gap-8 text-sm text-[rgba(255,250,205,0.58)]">
-                  <p>Realm: {DIANA_MEMBER_CONFIG.realmId}</p>
-                  <p>UUID: {uuid || "Resolving"}</p>
-                  <p>Mode: portal-aware, ledger-ready</p>
-                  {arrival.heldArtifact ? (
-                    <p>Artifact: {prettifyToken(arrival.heldArtifact)}</p>
-                  ) : null}
-                </div>
-              </FadeIn>
-
-              <FadeIn delay={0.64}>
-                <div className="mt-14 flex items-center gap-4">
-                  <div className="h-px w-16 bg-sovereign-gold/50" />
-                  <p
-                    className="text-sm uppercase tracking-[0.24em] text-[rgba(255,250,205,0.58)]"
-                    style={{ fontFamily: "var(--font-mono)" }}
-                  >
-                    Scroll to begin
-                  </p>
-                </div>
-              </FadeIn>
+                  return (
+                    <button
+                      key={imageSetId}
+                      type="button"
+                      aria-pressed={isActive}
+                      onClick={() => switchImageSet(imageSetId)}
+                      className={`rounded-full px-3 py-2 font-[var(--font-ui)] text-[10px] uppercase tracking-[0.24em] transition ${
+                        isActive
+                          ? "bg-black text-white"
+                          : "text-black/58 hover:bg-black/[0.04] hover:text-black"
+                      }`}
+                    >
+                      {imageSet.label}
+                    </button>
+                  );
+                }
+              )}
             </div>
+
+            <button
+              type="button"
+              onClick={cycleCollageView}
+              className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white px-4 py-2 font-[var(--font-ui)] text-[10px] uppercase tracking-[0.28em] text-black/62 transition hover:bg-black/[0.03] hover:text-black"
+            >
+              <RefreshCcw className="size-3.5" />
+              refresh.
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsMobileMenuOpen((current) => !current)}
+              className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white px-4 py-2 font-[var(--font-ui)] text-[10px] uppercase tracking-[0.28em] text-black/62 transition hover:bg-black/[0.03] hover:text-black lg:hidden"
+            >
+              {isMobileMenuOpen ? <X className="size-4" /> : <Menu className="size-4" />}
+              menu
+            </button>
           </div>
-        </section>
+        </div>
+      </header>
 
-        <SectionDivider />
+      <AnimatePresence>
+        {isMobileMenuOpen ? (
+          <motion.div
+            initial={{ opacity: 0, y: -12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            className="editorial-mobile-menu fixed inset-x-4 top-[4.5rem] z-[45] rounded-[1.8rem] p-4 shadow-[0_24px_60px_rgba(15,15,15,0.12)] lg:hidden"
+          >
+            <div className="mb-4 flex items-center gap-1 rounded-full border border-black/10 bg-white p-1">
+              {(Object.entries(IMAGE_SETS) as Array<[ImageSetId, (typeof IMAGE_SETS)[ImageSetId]]>).map(
+                ([imageSetId, imageSet]) => {
+                  const isActive = imageSetId === activeImageSetId;
 
-        <section id="origin" className="relative overflow-hidden">
-          <div className="px-8 py-24 md:px-16 md:py-32 lg:px-24">
-            <div className="grid gap-14 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
-              <FadeIn>
-                <EditorialImage
-                  path={DIANA_MEMBER_CONFIG.assets.originPortrait}
-                  alt="Diana outdoors in white"
-                  eyebrow="Origin"
-                />
-              </FadeIn>
-
-              <div>
-                <FadeIn>
-                  <p
-                    className="text-sm uppercase tracking-[0.28em] text-sovereign-gold"
-                    style={{ fontFamily: "var(--font-mono)" }}
-                  >
-                    Origin
-                  </p>
-                </FadeIn>
-
-                <FadeIn delay={0.08}>
-                  <h2 className="mt-5 font-display text-4xl leading-tight text-radiant-white sm:text-5xl md:text-6xl">
-                    {DIANA_MEMBER_CONFIG.originHeadline}
-                  </h2>
-                </FadeIn>
-
-                <FadeIn delay={0.16}>
-                  <p className="mt-8 max-w-3xl text-lg leading-9 text-[rgba(255,250,205,0.78)]">
-                    {DIANA_MEMBER_CONFIG.originBody}
-                  </p>
-                </FadeIn>
-
-                <div className="mt-12 space-y-7">
-                  {DIANA_MEMBER_CONFIG.originMoments.map((moment, index) => (
-                    <FadeIn key={moment.id} delay={0.24 + index * 0.08}>
-                      <button
-                        onClick={() => {
-                          void handleEvent({
-                            eventType: "story_interact",
-                            metadata: {
-                              storyMoment: moment.id,
-                            },
-                          });
-                        }}
-                        className="block border-l-4 border-white/10 pl-6 text-left transition-colors hover:border-sovereign-gold"
-                      >
-                        <p className="text-sm uppercase tracking-[0.2em] text-sovereign-gold">
-                          {moment.label}
-                        </p>
-                        <p className="mt-2 text-base leading-8 text-[rgba(255,250,205,0.72)]">
-                          {moment.detail}
-                        </p>
-                      </button>
-                    </FadeIn>
-                  ))}
-                </div>
-              </div>
+                  return (
+                    <button
+                      key={imageSetId}
+                      type="button"
+                      aria-pressed={isActive}
+                      onClick={() => switchImageSet(imageSetId)}
+                      className={`flex-1 rounded-full px-3 py-2 font-[var(--font-ui)] text-[10px] uppercase tracking-[0.24em] transition ${
+                        isActive
+                          ? "bg-black text-white"
+                          : "text-black/58 hover:bg-black/[0.04] hover:text-black"
+                      }`}
+                    >
+                      {imageSet.label}
+                    </button>
+                  );
+                }
+              )}
             </div>
-          </div>
-        </section>
 
-        <SectionDivider />
-
-        <section id="artifacts" className="relative overflow-hidden">
-          <div className="px-8 py-24 md:px-16 md:py-32 lg:px-24">
-            <FadeIn>
-              <p
-                className="text-sm uppercase tracking-[0.28em] text-sovereign-gold"
-                style={{ fontFamily: "var(--font-mono)" }}
-              >
-                The relics
-              </p>
-            </FadeIn>
-
-            <FadeIn delay={0.08}>
-              <h2 className="mt-5 max-w-4xl font-display text-4xl leading-tight text-radiant-white sm:text-5xl md:text-6xl">
-                Five thresholds for turning fragmentation into coherent selfhood.
-              </h2>
-            </FadeIn>
-
-            <FadeIn delay={0.16}>
-              <p className="mt-8 max-w-3xl text-lg leading-9 text-[rgba(255,250,205,0.74)]">
-                Each artifact is grounded in Diana&apos;s actual themes: performance,
-                grief, ferocity, relational initiation, and the rebuilding of
-                story. The point is not spectacle. It is return.
-              </p>
-            </FadeIn>
-
-            <div className="mt-12 border-b border-white/10">
-              {DIANA_MEMBER_CONFIG.artifacts.map((artifact, index) => (
-                <FadeIn key={artifact.id} delay={0.24 + index * 0.06}>
-                  <ArtifactDialog
-                    artifact={artifact}
-                    onEvent={handleEvent}
-                    onResolve={resolveArtifactResult}
-                  />
-                </FadeIn>
+            <div className="space-y-2">
+              {navItems.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => openView(item.id)}
+                  className={`w-full rounded-[1.2rem] px-4 py-3 text-left transition ${
+                    item.id === activeView
+                      ? "bg-black text-white"
+                      : "bg-black/[0.03] text-black hover:bg-black/[0.06]"
+                  }`}
+                  >
+                    <p className="font-display text-2xl italic">{item.label}</p>
+                    <p className="mt-1 font-[var(--font-ui)] text-[10px] uppercase tracking-[0.22em] text-black/62">
+                      {item.subtitle}
+                    </p>
+                  </button>
               ))}
             </div>
-          </div>
-        </section>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
-        <SectionDivider />
-
-        <section id="lineage" className="relative overflow-hidden">
-          <div className="px-8 py-24 md:px-16 md:py-32 lg:px-24">
-            <div className="grid gap-16 lg:grid-cols-[0.8fr_1.2fr]">
-              <div>
-                <FadeIn>
-                  <p
-                    className="text-sm uppercase tracking-[0.28em] text-sovereign-gold"
-                    style={{ fontFamily: "var(--font-mono)" }}
-                  >
-                    Intellectual lineage
-                  </p>
-                </FadeIn>
-
-                <FadeIn delay={0.08}>
-                  <h2 className="mt-5 max-w-3xl font-display text-4xl leading-tight text-radiant-white sm:text-5xl">
-                    The books and thinkers beneath the mythic frame.
-                  </h2>
-                </FadeIn>
-
-                <div className="mt-12 border-y border-white/10">
-                  {DIANA_MEMBER_CONFIG.influences.map((influence, index) => (
-                    <FadeIn key={influence.id} delay={0.16 + index * 0.05}>
-                      <button
-                        onClick={() => {
-                          setActiveInfluence(influence);
-                          void handleEvent({
-                            eventType: "influence_click",
-                            metadata: {
-                              influenceId: influence.id,
-                            },
-                          });
-                        }}
-                        className="block w-full border-t border-white/10 py-5 text-left first:border-t-0"
-                      >
-                        <p className="text-sm uppercase tracking-[0.2em] text-[rgba(255,250,205,0.56)]">
-                          {influence.author}
-                        </p>
-                        <h3 className="mt-2 font-display text-3xl text-radiant-white">
-                          {influence.title}
-                        </h3>
-                        <p className="mt-3 max-w-xl text-base leading-8 text-[rgba(255,250,205,0.7)]">
-                          {influence.body}
-                        </p>
-                      </button>
-                    </FadeIn>
-                  ))}
-                </div>
+      <main className="relative h-full px-3 pb-24 pt-18 sm:px-5 sm:pb-26">
+        <div className="mx-auto h-full max-w-[1280px]">
+          <div className="editorial-canvas-shell relative h-full overflow-hidden rounded-[2.2rem]">
+            <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.72),rgba(246,244,239,0.92)),radial-gradient(circle_at_top_right,rgba(17,17,17,0.06),transparent_34%)]" />
+            {activeCollageView ? (
+              <div className="absolute inset-0">
+                <DraggableCollageCanvas view={activeCollageView} />
               </div>
+            ) : null}
 
-              <FadeIn delay={0.18}>
-                <div className="border-l-4 border-sovereign-gold pl-8">
-                  <p
-                    className="text-sm uppercase tracking-[0.24em] text-[rgba(255,250,205,0.58)]"
-                    style={{ fontFamily: "var(--font-mono)" }}
+            <div className="absolute inset-x-3 bottom-3 top-3 sm:inset-x-auto sm:bottom-4 sm:left-4 sm:top-4 sm:w-[min(43rem,calc(100vw-10rem))]">
+              <LandingWindow navItem={activeNavItem} uuid={uuid} arrival={arrival}>
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={activeView}
+                    initial={{ opacity: 0, y: 14 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -14 }}
+                    transition={{ duration: 0.24, ease: "easeOut" }}
+                    className="space-y-8"
                   >
-                    Diana&apos;s reflection
-                  </p>
-                  <h3 className="mt-6 font-display text-4xl text-radiant-white sm:text-5xl">
-                    {activeInfluence?.title}
-                  </h3>
-                  <p className="mt-3 text-sm uppercase tracking-[0.22em] text-sovereign-gold">
-                    {activeInfluence?.author}
-                  </p>
-                  <p className="mt-8 max-w-2xl text-xl leading-10 text-[rgba(255,250,205,0.82)]">
-                    {activeInfluence?.reflection}
-                  </p>
-                </div>
-              </FadeIn>
+                    {activeView === "origin" ? (
+                      <>
+                        {arrivalThreads.length > 0 ? (
+                          <div className="editorial-inset rounded-[1.5rem] p-4 sm:p-5">
+                            {arrivalThreads.map((thread) => (
+                              <p key={thread} className="editorial-copy text-[0.98rem] leading-8">
+                                {thread}
+                              </p>
+                            ))}
+                          </div>
+                        ) : null}
+
+                        <div className="space-y-5">
+                          <h3 className="font-display text-4xl leading-[1.02] text-black sm:text-5xl">
+                            {DIANA_MEMBER_CONFIG.primaryHeadline}
+                          </h3>
+                          <p className="editorial-copy text-[1.02rem] leading-8">
+                            {DIANA_MEMBER_CONFIG.subheadline}
+                          </p>
+                          <div className="rounded-[0_1.5rem_1.5rem_0] border-l-2 border-black/12 pl-5">
+                            <p className="editorial-copy text-[1rem] leading-8">
+                              {DIANA_MEMBER_CONFIG.activationMessage}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="editorial-rule border-y py-6">
+                          <p className="editorial-copy text-[1rem] leading-8">
+                            {DIANA_MEMBER_CONFIG.originBody}
+                          </p>
+                        </div>
+
+                        <div className="space-y-4">
+                          {DIANA_MEMBER_CONFIG.originMoments.map((moment) => (
+                            <button
+                              key={moment.id}
+                              type="button"
+                              onClick={() => {
+                                void handleEvent({
+                                  eventType: "story_interact",
+                                  metadata: {
+                                    storyMoment: moment.id,
+                                  },
+                                });
+                              }}
+                              className="editorial-inset block w-full rounded-[1.35rem] px-4 py-4 text-left transition hover:-translate-y-0.5 hover:shadow-[0_18px_44px_rgba(15,15,15,0.06)] sm:px-5"
+                            >
+                              <p className="editorial-label">{moment.label}</p>
+                              <p className="editorial-copy mt-3 text-[0.98rem] leading-8">
+                                {moment.detail}
+                              </p>
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="flex flex-wrap gap-3">
+                          <Button
+                            size="lg"
+                            onClick={() => openView("relics")}
+                            className="rounded-full bg-black px-6 text-[0.74rem] uppercase tracking-[0.24em] text-white hover:bg-black/88"
+                          >
+                            Enter the relics
+                          </Button>
+                          <Button
+                            size="lg"
+                            variant="outline"
+                            onClick={() => openView("prism")}
+                            className="rounded-full border-black/12 bg-white px-6 text-[0.74rem] uppercase tracking-[0.24em] text-black hover:bg-black/[0.03]"
+                          >
+                            Open Prism
+                          </Button>
+                        </div>
+                      </>
+                    ) : null}
+
+                    {activeView === "relics" ? (
+                      <>
+                        <p className="editorial-copy max-w-3xl text-[1rem] leading-8">
+                          Each artifact is still grounded in Diana&apos;s actual themes:
+                          performance, grief, ferocity, relational initiation, and the
+                          rebuilding of story. The logic and outputs remain unchanged.
+                        </p>
+                        <div className="editorial-rule border-b">
+                          {DIANA_MEMBER_CONFIG.artifacts.map((artifact) => (
+                            <ArtifactDialog
+                              key={artifact.id}
+                              artifact={artifact}
+                              onEvent={handleEvent}
+                              onResolve={resolveArtifactResult}
+                            />
+                          ))}
+                        </div>
+                      </>
+                    ) : null}
+
+                    {activeView === "lineage" ? (
+                      <div className="grid gap-8 xl:grid-cols-[0.9fr_1.1fr]">
+                        <div className="editorial-rule border-y">
+                          {DIANA_MEMBER_CONFIG.influences.map((influence) => (
+                            <button
+                              key={influence.id}
+                              type="button"
+                              onClick={() => {
+                                setActiveInfluence(influence);
+                                void handleEvent({
+                                  eventType: "influence_click",
+                                  metadata: {
+                                    influenceId: influence.id,
+                                  },
+                                });
+                              }}
+                              className="editorial-rule block w-full border-t px-0 py-4 text-left first:border-t-0 transition-colors hover:bg-black/[0.02]"
+                            >
+                              <p className="editorial-label">{influence.author}</p>
+                              <h3 className="mt-2 font-display text-3xl text-black">
+                                {influence.title}
+                              </h3>
+                              <p className="editorial-copy mt-3 text-[0.98rem] leading-8">
+                                {influence.body}
+                              </p>
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="editorial-inset rounded-[1.7rem] p-5 sm:p-6">
+                          <p className="editorial-label">Diana&apos;s reflection</p>
+                          <h3 className="mt-4 font-display text-4xl leading-none text-black">
+                            {activeInfluence?.title}
+                          </h3>
+                          <p className="mt-2 text-sm uppercase tracking-[0.22em] text-black/48">
+                            {activeInfluence?.author}
+                          </p>
+                          <p className="editorial-copy mt-6 text-[1.04rem] leading-9">
+                            {activeInfluence?.reflection}
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {activeView === "prism" ? <PrismConsole onEvent={handleEvent} /> : null}
+
+                    {activeView === "wall" ? (
+                      <>
+                        <p className="editorial-copy max-w-3xl text-[1rem] leading-8">
+                          When the shared ledger is connected, this window updates from real
+                          declaration activity rather than remaining only symbolic.
+                        </p>
+                        <SovereignWall
+                          entries={wallEntries}
+                          onViewed={() =>
+                            handleEvent({
+                              eventType: "wall_view",
+                              metadata: {
+                                count: wallEntries.length,
+                              },
+                            })
+                          }
+                        />
+                      </>
+                    ) : null}
+
+                    {activeView === "ascend" ? (
+                      <>
+                        <div className="rounded-[0_1.5rem_1.5rem_0] border-l-2 border-black/12 pl-5">
+                          <p className="font-display text-[2rem] leading-[1.12] text-black sm:text-[2.35rem]">
+                            {DIANA_MEMBER_CONFIG.ascensionQuote}
+                          </p>
+                        </div>
+                        <AscensionBlock onEvent={handleEvent} />
+                      </>
+                    ) : null}
+
+                    {activeView === "portals" ? (
+                      <>
+                        <p className="editorial-copy max-w-3xl text-[1rem] leading-8">
+                          These crossings still preserve Diana&apos;s realm ID and the
+                          current UUID so passage through the wider ecosystem can remain one
+                          continuous story instead of a disconnected set of visits.
+                        </p>
+                        <PortalGrid
+                          portals={DIANA_PORTALS}
+                          onPortalClick={async (portal, payload) => {
+                            await handleEvent(payload);
+                            const destination = buildPortalUrl(
+                              portal.destinationUrl,
+                              uuid,
+                              portal.destinationRealm
+                            );
+                            window.location.assign(destination);
+                          }}
+                        />
+                      </>
+                    ) : null}
+                  </motion.div>
+                </AnimatePresence>
+              </LandingWindow>
             </div>
           </div>
-        </section>
-
-        <SectionDivider />
-
-        <section id="prism" className="relative overflow-hidden">
-          <div className="px-8 py-24 md:px-16 md:py-32 lg:px-24">
-            <FadeIn>
-              <p
-                className="text-sm uppercase tracking-[0.28em] text-sovereign-gold"
-                style={{ fontFamily: "var(--font-mono)" }}
-              >
-                Prism
-              </p>
-            </FadeIn>
-
-            <FadeIn delay={0.08}>
-              <h2 className="mt-5 max-w-4xl font-display text-4xl leading-tight text-radiant-white sm:text-5xl md:text-6xl">
-                A refracting lens for shadow, grief, and return.
-              </h2>
-            </FadeIn>
-
-            <FadeIn delay={0.16}>
-              <p className="mt-8 max-w-3xl text-lg leading-9 text-[rgba(255,250,205,0.74)]">
-                Diana&apos;s lens is not about abstract signal. It is about what the
-                body, story, and relational field are actually asking to be
-                witnessed and integrated.
-              </p>
-            </FadeIn>
-
-            <div className="mt-12">
-              <FadeIn delay={0.24}>
-                <PrismConsole onEvent={handleEvent} />
-              </FadeIn>
-            </div>
-          </div>
-        </section>
-
-        <SectionDivider />
-
-        <section id="wall" className="relative overflow-hidden">
-          <div className="px-8 py-24 md:px-16 md:py-32 lg:px-24">
-            <FadeIn>
-              <SovereignWall
-                entries={wallEntries}
-                onViewed={() =>
-                  handleEvent({
-                    eventType: "wall_view",
-                    metadata: {
-                      count: wallEntries.length,
-                    },
-                  })
-                }
-              />
-            </FadeIn>
-          </div>
-        </section>
-
-        <SectionDivider />
-
-        <section id="ascension" className="relative overflow-hidden">
-          <div className="px-8 py-24 md:px-16 md:py-32 lg:px-24">
-            <div className="grid gap-14 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
-              <FadeIn>
-                <EditorialImage
-                  path={DIANA_MEMBER_CONFIG.assets.ascensionPortrait}
-                  alt="Diana at dusk on the shoreline"
-                  eyebrow="Ascension"
-                />
-              </FadeIn>
-
-              <div>
-                <FadeIn>
-                  <p
-                    className="text-sm uppercase tracking-[0.28em] text-sovereign-gold"
-                    style={{ fontFamily: "var(--font-mono)" }}
-                  >
-                    Ascension
-                  </p>
-                </FadeIn>
-
-                <FadeIn delay={0.08}>
-                  <h2 className="mt-5 max-w-4xl font-display text-4xl leading-tight text-radiant-white sm:text-5xl md:text-6xl">
-                    Claim the throne beneath the crumbling palace.
-                  </h2>
-                </FadeIn>
-
-                <FadeIn delay={0.16}>
-                  <div className="mt-8 border-l-4 border-sovereign-gold pl-6">
-                    <p className="text-xl leading-10 text-[rgba(255,250,205,0.84)]">
-                      {DIANA_MEMBER_CONFIG.ascensionQuote}
-                    </p>
-                  </div>
-                </FadeIn>
-
-                <div className="mt-12">
-                  <FadeIn delay={0.24}>
-                    <AscensionBlock onEvent={handleEvent} />
-                  </FadeIn>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <SectionDivider />
-
-        <section id="portals" className="relative overflow-hidden">
-          <div className="px-8 py-24 md:px-16 md:py-32 lg:px-24">
-            <FadeIn>
-              <p
-                className="text-sm uppercase tracking-[0.28em] text-sovereign-gold"
-                style={{ fontFamily: "var(--font-mono)" }}
-              >
-                Outgoing portals
-              </p>
-            </FadeIn>
-
-            <FadeIn delay={0.08}>
-              <h2 className="mt-5 max-w-4xl font-display text-4xl leading-tight text-radiant-white sm:text-5xl md:text-6xl">
-                Carry your reclaimed fragment into allied realms.
-              </h2>
-            </FadeIn>
-
-            <FadeIn delay={0.16}>
-              <p className="mt-8 max-w-3xl text-lg leading-9 text-[rgba(255,250,205,0.74)]">
-                These crossings preserve Diana&apos;s realm ID and the current UUID so
-                passage through the wider ecosystem can remain one continuous story
-                instead of a disconnected set of visits.
-              </p>
-            </FadeIn>
-
-            <div className="mt-12">
-              <FadeIn delay={0.24}>
-                <PortalGrid
-                  portals={DIANA_PORTALS}
-                  onPortalClick={async (portal, payload) => {
-                    await handleEvent(payload);
-                    const destination = buildPortalUrl(
-                      portal.destinationUrl,
-                      uuid,
-                      portal.destinationRealm
-                    );
-                    window.location.assign(destination);
-                  }}
-                />
-              </FadeIn>
-            </div>
-          </div>
-        </section>
+        </div>
       </main>
 
-      <footer className="relative z-10 px-8 pb-20 pt-10 md:px-16 lg:px-24">
-        <div className="max-w-4xl border-t border-white/10 pt-12">
-          <FadeIn>
-            <p
-              className="text-sm uppercase tracking-[0.28em] text-sovereign-gold"
-              style={{ fontFamily: "var(--font-mono)" }}
-            >
-              Closing note
-            </p>
-          </FadeIn>
+      <footer className="editorial-footer-shell fixed inset-x-0 bottom-0 z-40 border-t px-4 py-3 sm:px-6">
+        <div className="mx-auto flex max-w-[1280px] flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <p className="editorial-copy max-w-3xl text-sm leading-7">
+            {DIANA_MEMBER_CONFIG.footerLine}
+          </p>
 
-          <FadeIn delay={0.08}>
-            <h2 className="mt-5 font-display text-4xl leading-tight text-radiant-white sm:text-5xl">
-              The myth is not decoration. It is a way back to coherence.
-            </h2>
-          </FadeIn>
-
-          <FadeIn delay={0.16}>
-            <p className="mt-6 max-w-3xl text-lg leading-9 text-[rgba(255,250,205,0.72)]">
-              This world is built from Diana&apos;s myth, transcript, origin story,
-              and throughlines. Its job is not to flatten the journey but to hold
-              it long enough for truth, tenderness, and sovereignty to meet.
-            </p>
-          </FadeIn>
-
-          <FadeIn delay={0.24}>
-            <div className="mt-10 flex flex-wrap gap-4">
-              <Button
-                size="lg"
-                variant="outline"
-                className="rounded-full border-sovereign-gold/35 bg-transparent px-6 text-[0.82rem] font-semibold uppercase tracking-[0.2em] text-sovereign-gold"
-                onClick={() =>
-                  window.open(
-                    import.meta.env.VITE_CONSTITUTION_URL || "https://metacanonai.com/constitution",
-                    "_blank",
-                    "noopener,noreferrer"
-                  )
-                }
+          <div className="flex flex-wrap gap-2">
+            {DIANA_MEMBER_CONFIG.footerQuickLinks.map((action) => (
+              <button
+                key={action.id}
+                type="button"
+                onClick={() => handleFooterAction(action)}
+                className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white px-4 py-2 font-[var(--font-ui)] text-[10px] uppercase tracking-[0.28em] text-black/62 transition hover:bg-black/[0.03] hover:text-black"
               >
-                <ScrollText className="size-4" />
-                Constitution
-              </Button>
-              <Button
-                size="lg"
-                onClick={() => scrollToSection("arrival")}
-                className="rounded-full bg-sovereign-gold px-6 text-[0.82rem] font-semibold uppercase tracking-[0.2em] text-[#1a0033] hover:bg-[rgba(201,168,76,0.92)]"
-              >
-                Return to top
-                <ArrowUpRight className="size-4" />
-              </Button>
-            </div>
-          </FadeIn>
+                {action.label}
+                <ArrowUpRight className="size-3.5" />
+              </button>
+            ))}
+          </div>
         </div>
       </footer>
     </div>

@@ -35,18 +35,18 @@ export function SovereignWall({ entries, onViewed }: SovereignWallProps) {
   return (
     <div
       ref={ref}
-      className="border-y border-white/10 py-8"
+      className="editorial-rule border-y py-6"
     >
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-[rgba(255,250,205,0.64)]">
+          <p className="editorial-label">
             Wall of Sovereigns
           </p>
-          <h3 className="font-display text-4xl text-radiant-white sm:text-5xl">
-            The wall of luminous breakers is already in motion.
+          <h3 className="font-display text-4xl text-black sm:text-5xl">
+            The wall of luminous breakers is already moving.
           </h3>
         </div>
-        <p className="max-w-md text-base leading-8 text-[rgba(255,250,205,0.68)]">
+        <p className="editorial-copy max-w-md text-base leading-8">
           These names are rendered as a living threshold. When the shared ledger
           is connected, this wall updates from real declaration activity rather
           than remaining a symbolic chorus.
@@ -61,13 +61,13 @@ export function SovereignWall({ entries, onViewed }: SovereignWallProps) {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: index * 0.04, duration: 0.35 }}
-            className="border-t border-white/10 pt-4"
+            className="editorial-rule border-t pt-4"
           >
-            <p className="font-mono text-[0.7rem] uppercase tracking-[0.22em] text-sovereign-gold">
+            <p className="font-[var(--font-ui)] text-[10px] uppercase tracking-[0.28em] text-black/44">
               Signatory
             </p>
-            <h4 className="mt-2 text-lg font-semibold text-radiant-white">{entry.label}</h4>
-            <p className="mt-1 text-sm leading-6 text-[rgba(255,250,205,0.66)]">{entry.subtitle}</p>
+            <h4 className="mt-2 text-lg font-semibold text-black">{entry.label}</h4>
+            <p className="editorial-copy-soft mt-1 text-sm leading-6">{entry.subtitle}</p>
           </motion.div>
         ))}
       </div>

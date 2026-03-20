@@ -1,5 +1,5 @@
-import { DianaWorld } from "@/features/diana/DianaWorld";
+import { DianaSplash } from "@/features/diana/components/DianaSplash";
 
 export default function Home() {
-  return <DianaWorld />;
+  return <DianaSplash />;
 }

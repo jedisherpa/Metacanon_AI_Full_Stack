@@ -127,33 +127,33 @@ export function ForgeScene() {
   return (
     <div className="pointer-events-none fixed inset-0 -z-20 overflow-hidden">
       <Canvas camera={{ position: [0, 1.2, 8], fov: 48 }} dpr={[1, 1.6]}>
-        <color attach="background" args={["#1a0033"]} />
-        <fog attach="fog" args={["#1a0033", 8, 22]} />
-        <ambientLight intensity={0.45} color="#fffacd" />
-        <pointLight position={[0, 1.5, 2.5]} intensity={18} color="#c9a84c" />
-        <pointLight position={[0, -1.5, -3.5]} intensity={9} color="#8b0000" />
+        <color attach="background" args={["#08080e"]} />
+        <fog attach="fog" args={["#08080e", 8, 22]} />
+        <ambientLight intensity={0.42} color="#d4cfc4" />
+        <pointLight position={[0, 1.5, 2.5]} intensity={15} color="#daa520" />
+        <pointLight position={[0, -1.5, -3.5]} intensity={7} color="#40e0d0" />
         <spotLight
           position={[0, 8, 6]}
           angle={0.42}
           penumbra={0.8}
-          intensity={45}
-          color="#fffacd"
+          intensity={38}
+          color="#d4cfc4"
         />
         <ForgeCameraRig />
 
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2.3, 0]}>
           <circleGeometry args={[8, 96]} />
-          <meshStandardMaterial color="#2c003e" roughness={0.95} metalness={0.1} />
+          <meshStandardMaterial color="#0c0c14" roughness={0.95} metalness={0.08} />
         </mesh>
 
         <mesh position={[0, -1.15, 0]}>
           <cylinderGeometry args={[1.3, 1.8, 0.55, 9]} />
-          <meshStandardMaterial color="#4b0082" roughness={0.7} metalness={0.32} />
+          <meshStandardMaterial color="#151620" roughness={0.78} metalness={0.24} />
         </mesh>
 
-        <SacredMesh position={[-3.2, 1.6, -4]} scale={0.9} color="#c9a84c" rotationSpeed={0.18} />
-        <SacredMesh position={[3.4, -0.3, -5.2]} scale={1.1} color="#8b0000" rotationSpeed={0.14} />
-        <SacredMesh position={[0.3, 2.8, -6.6]} scale={0.7} color="#d7bf73" rotationSpeed={0.2} />
+        <SacredMesh position={[-3.2, 1.6, -4]} scale={0.9} color="#daa520" rotationSpeed={0.18} />
+        <SacredMesh position={[3.4, -0.3, -5.2]} scale={1.1} color="#40e0d0" rotationSpeed={0.14} />
+        <SacredMesh position={[0.3, 2.8, -6.6]} scale={0.7} color="#c6c0b4" rotationSpeed={0.2} />
 
         <Sparkles
           count={180}
@@ -167,7 +167,7 @@ export function ForgeScene() {
         <EmberField />
       </Canvas>
 
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,_rgba(201,168,76,0.12),_transparent_28%),linear-gradient(180deg,_rgba(26,0,51,0.08),_rgba(26,0,51,0.64)_68%,_rgba(19,0,33,0.94))]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,_rgba(218,165,32,0.1),_transparent_24%),linear-gradient(180deg,_rgba(8,8,14,0.08),_rgba(8,8,14,0.62)_68%,_rgba(8,8,14,0.94))]" />
     </div>
   );
 }

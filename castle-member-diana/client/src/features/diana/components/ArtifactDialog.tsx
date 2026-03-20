@@ -10,6 +10,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { motion } from "framer-motion";
 import { Download, Hand, Sparkles } from "lucide-react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   ArtifactDefinition,
@@ -34,9 +35,9 @@ async function downloadPdf(title: string, result: ArtifactResult) {
     format: "letter",
   });
 
-  doc.setFillColor("#1a0033");
+  doc.setFillColor("#08080e");
   doc.rect(0, 0, 612, 792, "F");
-  doc.setTextColor("#fffacd");
+  doc.setTextColor("#d4cfc4");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(22);
   doc.text(title, 52, 72);
@@ -104,7 +105,7 @@ export function ArtifactDialog({
     setResult(nextResult);
   };
 
-  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+  const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (startXRef.current === null) {
       return;
     }
@@ -119,21 +120,21 @@ export function ArtifactDialog({
         <motion.button
           whileHover={{ x: 8 }}
           whileTap={{ scale: 0.995 }}
-          className="group w-full border-t border-white/10 py-8 text-left transition-colors hover:border-sovereign-gold/40"
+          className="group editorial-rule w-full border-t py-7 text-left transition-colors hover:bg-black/[0.02]"
         >
           <div className="grid gap-5 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-start">
-            <div className="text-xs uppercase tracking-[0.28em] text-sovereign-gold">
+            <div className="editorial-label">
               {artifact.realmToken}
             </div>
             <div className="space-y-3">
-              <h3 className="font-display text-3xl text-radiant-white sm:text-4xl">
+              <h3 className="font-display text-3xl text-black sm:text-4xl">
                 {artifact.title}
               </h3>
-              <p className="max-w-2xl text-base leading-8 text-[rgba(255,250,205,0.72)]">
+              <p className="editorial-copy max-w-2xl text-base leading-8">
                 {artifact.body}
               </p>
             </div>
-            <div className="inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.24em] text-sovereign-gold">
+            <div className="inline-flex items-center gap-2 font-[var(--font-ui)] text-[10px] uppercase tracking-[0.26em] text-black/54">
               Enter
               <Sparkles className="size-4 transition-transform group-hover:translate-x-1" />
             </div>
@@ -141,33 +142,33 @@ export function ArtifactDialog({
         </motion.button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-3xl border-white/10 bg-[rgba(26,0,51,0.96)] p-0 text-radiant-white shadow-[0_30px_120px_rgba(0,0,0,0.4)] sm:max-w-3xl">
+      <DialogContent className="editorial-window max-w-3xl border border-black/10 bg-white p-0 text-black shadow-[0_30px_90px_rgba(15,15,15,0.14)] sm:max-w-3xl">
         <div className="space-y-8 p-8">
           <DialogHeader className="space-y-4 text-left">
-            <div className="inline-flex w-fit rounded-full border border-[rgba(201,168,76,0.3)] bg-[rgba(201,168,76,0.08)] px-3 py-1 text-xs uppercase tracking-[0.22em] text-[rgba(255,250,205,0.82)]">
+            <div className="editorial-pill inline-flex w-fit rounded-full px-3 py-1 text-xs uppercase tracking-[0.22em]">
               {artifact.realmToken}
             </div>
             <DialogTitle className="font-display text-4xl">{artifact.headline}</DialogTitle>
-            <DialogDescription className="max-w-2xl text-base leading-7 text-[rgba(255,250,205,0.72)]">
+            <DialogDescription className="editorial-copy max-w-2xl text-base leading-7">
               {artifact.body}
             </DialogDescription>
           </DialogHeader>
 
           {artifact.interactionType === "input" ? (
             <div className="space-y-4">
-              <label className="text-sm uppercase tracking-[0.2em] text-[rgba(255,250,205,0.72)]">
+              <label className="editorial-label">
                 {artifact.promptLabel}
               </label>
               <Textarea
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
                 placeholder={artifact.promptPlaceholder}
-                className="min-h-36 border-white/10 bg-white/5 text-base text-radiant-white placeholder:text-[rgba(255,250,205,0.4)]"
+                className="editorial-inset min-h-36 rounded-[1.4rem] border-black/10 bg-white text-base text-black placeholder:text-black/35"
               />
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="flex items-center justify-between text-sm uppercase tracking-[0.2em] text-[rgba(255,250,205,0.72)]">
+              <div className="editorial-label flex items-center justify-between">
                 <span>{artifact.promptLabel}</span>
                 <span>{Math.round(gestureProgress * 100)}%</span>
               </div>
@@ -190,15 +191,15 @@ export function ArtifactDialog({
                     setGestureProgress(1);
                   }
                 }}
-                className="relative overflow-hidden rounded-[1.5rem] border border-white/10 bg-[linear-gradient(135deg,rgba(75,0,130,0.34),rgba(139,0,0,0.16),rgba(201,168,76,0.08))] p-6"
+                className="editorial-inset relative overflow-hidden rounded-[1.5rem] p-6"
               >
                 <div
-                  className="absolute inset-y-0 left-0 bg-[linear-gradient(90deg,rgba(201,168,76,0.32),rgba(255,250,205,0.08))] transition-all"
+                  className="absolute inset-y-0 left-0 bg-[linear-gradient(90deg,rgba(17,17,17,0.12),rgba(17,17,17,0.02))] transition-all"
                   style={{ width: `${gestureProgress * 100}%` }}
                 />
                 <div className="relative flex min-h-36 flex-col justify-between gap-4">
-                  <Hand className="size-8 text-sovereign-gold" />
-                  <p className="max-w-xl text-lg leading-8 text-radiant-white">
+                  <Hand className="size-8 text-black/62" />
+                  <p className="editorial-copy max-w-xl text-lg leading-8">
                     Drag through the storm to move the fragment back into your hands. If you prefer, press Enter or Space to reveal it in one step.
                   </p>
                 </div>
@@ -211,7 +212,7 @@ export function ArtifactDialog({
               size="lg"
               onClick={resolveArtifact}
               disabled={!readiness}
-              className="rounded-full bg-sovereign-gold px-6 text-[0.82rem] font-semibold uppercase tracking-[0.2em] text-[#1a0033] hover:bg-[rgba(201,168,76,0.92)]"
+              className="rounded-full bg-black px-6 text-[0.74rem] uppercase tracking-[0.24em] text-white hover:bg-black/88"
             >
               {artifact.ctaLabel}
             </Button>
@@ -223,7 +224,7 @@ export function ArtifactDialog({
                   setGestureProgress(1);
                   setResult(onResolve(artifact, input, 1));
                 }}
-                className="rounded-full border-white/15 bg-transparent px-6 text-[0.82rem] font-semibold uppercase tracking-[0.2em] text-radiant-white"
+                className="rounded-full border-black/12 bg-white px-6 text-[0.74rem] uppercase tracking-[0.24em] text-black hover:bg-black/[0.03]"
               >
                 Reveal without dragging
               </Button>
@@ -234,18 +235,18 @@ export function ArtifactDialog({
             <motion.div
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              className="rounded-[1.75rem] border border-white/10 bg-white/6 p-6"
+              className="editorial-inset rounded-[1.75rem] p-6"
             >
               <div className="space-y-3">
-                <p className="text-xs uppercase tracking-[0.22em] text-[rgba(255,250,205,0.66)]">
+                <p className="editorial-label">
                   Sovereignty Output
                 </p>
-                <h4 className="font-display text-3xl text-radiant-white">{result.heading}</h4>
-                <p className="text-base leading-8 text-[rgba(255,250,205,0.76)]">{result.body}</p>
-                <ul className="space-y-3 pt-2 text-sm leading-7 text-[rgba(255,250,205,0.74)]">
+                <h4 className="font-display text-3xl text-black">{result.heading}</h4>
+                <p className="editorial-copy text-base leading-8">{result.body}</p>
+                <ul className="editorial-copy space-y-3 pt-2 text-sm leading-7">
                   {result.bullets.map((bullet) => (
                     <li key={bullet} className="flex gap-3">
-                      <span className="mt-2 size-2 rounded-full bg-sovereign-gold" />
+                      <span className="mt-2 size-2 rounded-full bg-black" />
                       <span>{bullet}</span>
                     </li>
                   ))}
@@ -260,7 +261,7 @@ export function ArtifactDialog({
                     onClick={() => {
                       void downloadPdf(artifact.title, result);
                     }}
-                    className="rounded-full border-sovereign-gold/35 bg-transparent px-6 text-[0.82rem] font-semibold uppercase tracking-[0.2em] text-sovereign-gold"
+                    className="rounded-full border-black/12 bg-white px-6 text-[0.74rem] uppercase tracking-[0.24em] text-black hover:bg-black/[0.03]"
                   >
                     <Download className="size-4" />
                     Download Blueprint PDF

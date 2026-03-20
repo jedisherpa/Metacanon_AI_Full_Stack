@@ -12,25 +12,25 @@ type PortalGridProps = {
 
 export function PortalGrid({ portals, onPortalClick }: PortalGridProps) {
   return (
-    <div className="border-y border-white/10">
+    <div className="editorial-rule border-y">
       {portals.map((portal) => (
         <article
           key={portal.id}
-          className="grid gap-5 border-t border-white/10 py-8 first:border-t-0 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-start"
+          className="editorial-rule grid gap-5 border-t py-7 first:border-t-0 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-start"
         >
-          <p className="text-xs uppercase tracking-[0.24em] text-[rgba(255,250,205,0.58)]">
+          <p className="editorial-label">
             {portal.destinationRealm}
           </p>
           <div>
-            <h3 className="font-display text-3xl text-radiant-white">{portal.label}</h3>
-            <p className="mt-3 max-w-2xl text-base leading-8 text-[rgba(255,250,205,0.7)]">
+            <h3 className="font-display text-3xl text-black">{portal.label}</h3>
+            <p className="editorial-copy mt-3 max-w-2xl text-base leading-8">
               {portal.description}
             </p>
           </div>
           <Button
             size="lg"
             variant="outline"
-            className="rounded-full border-sovereign-gold/35 bg-transparent px-6 text-[0.8rem] font-semibold uppercase tracking-[0.2em] text-sovereign-gold"
+            className="rounded-full border-black/12 bg-white px-6 text-[0.74rem] uppercase tracking-[0.24em] text-black hover:bg-black/[0.03]"
             onClick={() =>
               onPortalClick(portal, {
                 eventType: "portal_exit",
