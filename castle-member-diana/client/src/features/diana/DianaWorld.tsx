@@ -386,6 +386,7 @@ export function DianaWorld() {
     quest: null,
   });
   const [activeHeroId, setActiveHeroId] = useState(heroPortraitOptions[0].id);
+  const [isHeroCropLabCollapsed, setIsHeroCropLabCollapsed] = useState(false);
   const [heroCropPositions, setHeroCropPositions] = useState<
     Record<string, { x: number; y: number; scale: number }>
   >(() =>
@@ -579,132 +580,159 @@ export function DianaWorld() {
           </div>
 
           {showHeroCropLab ? (
-            <div className="absolute left-5 top-5 z-20 w-[min(24rem,calc(100vw-2.5rem))] rounded-[1.4rem] border border-white/10 bg-[rgba(26,0,51,0.74)] p-4 shadow-[0_24px_70px_rgba(0,0,0,0.3)] backdrop-blur-md md:left-8 md:top-8">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p
-                    className="text-[0.68rem] uppercase tracking-[0.24em] text-sovereign-gold"
-                    style={{ fontFamily: "var(--font-mono)" }}
-                  >
-                    Hero crop lab
-                  </p>
-                  <p className="mt-2 text-xs leading-6 text-[rgba(255,250,205,0.66)]">
-                    Zoom first if the portrait is too narrow, then use X and Y to land the frame.
-                    These controls are dev-only and leave the baked config untouched until we paste it
-                    back.
-                  </p>
-                </div>
+            isHeroCropLabCollapsed ? (
+              <div className="absolute left-5 top-5 z-20 flex items-center gap-3 rounded-[1.4rem] border border-white/10 bg-[rgba(26,0,51,0.74)] px-4 py-3 shadow-[0_24px_70px_rgba(0,0,0,0.3)] backdrop-blur-md md:left-8 md:top-8">
+                <p
+                  className="text-[0.68rem] uppercase tracking-[0.24em] text-sovereign-gold"
+                  style={{ fontFamily: "var(--font-mono)" }}
+                >
+                  Hero crop lab
+                </p>
                 <button
                   type="button"
-                  onClick={() => {
-                    setHeroCropPositions((current) => ({
-                      ...current,
-                      [activeHero.id]: parseHeroCrop(activeHero),
-                    }));
-                  }}
+                  onClick={() => setIsHeroCropLabCollapsed(false)}
                   className="rounded-full border border-white/15 px-3 py-2 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-[rgba(255,250,205,0.78)] transition hover:border-sovereign-gold/45 hover:text-radiant-white"
                 >
-                  Reset
+                  Open
                 </button>
               </div>
-
-              <div className="mt-5 space-y-4">
-                <label className="block">
-                  <div className="flex items-center justify-between gap-4 text-xs uppercase tracking-[0.2em] text-[rgba(255,250,205,0.66)]">
-                    <span>X position</span>
-                    <span className="text-sovereign-gold">{Math.round(activeHeroCrop.x)}%</span>
+            ) : (
+              <div className="absolute left-5 top-5 z-20 w-[min(24rem,calc(100vw-2.5rem))] rounded-[1.4rem] border border-white/10 bg-[rgba(26,0,51,0.74)] p-4 shadow-[0_24px_70px_rgba(0,0,0,0.3)] backdrop-blur-md md:left-8 md:top-8">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p
+                      className="text-[0.68rem] uppercase tracking-[0.24em] text-sovereign-gold"
+                      style={{ fontFamily: "var(--font-mono)" }}
+                    >
+                      Hero crop lab
+                    </p>
+                    <p className="mt-2 text-xs leading-6 text-[rgba(255,250,205,0.66)]">
+                      Zoom first if the portrait is too narrow, then use X and Y to land the frame.
+                      These controls are dev-only and leave the baked config untouched until we
+                      paste it back.
+                    </p>
                   </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    step="1"
-                    value={activeHeroCrop.x}
-                    onChange={(event) => {
-                      const nextValue = Number(event.target.value);
-                      setHeroCropPositions((current) => ({
-                        ...current,
-                        [activeHero.id]: {
-                          ...(current[activeHero.id] ?? parseHeroCrop(activeHero)),
-                          x: nextValue,
-                        },
-                      }));
-                    }}
-                    className="mt-2 w-full accent-[#c9a84c]"
-                  />
-                </label>
-
-                <label className="block">
-                  <div className="flex items-center justify-between gap-4 text-xs uppercase tracking-[0.2em] text-[rgba(255,250,205,0.66)]">
-                    <span>Y position</span>
-                    <span className="text-sovereign-gold">{Math.round(activeHeroCrop.y)}%</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHeroCropPositions((current) => ({
+                          ...current,
+                          [activeHero.id]: parseHeroCrop(activeHero),
+                        }));
+                      }}
+                      className="rounded-full border border-white/15 px-3 py-2 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-[rgba(255,250,205,0.78)] transition hover:border-sovereign-gold/45 hover:text-radiant-white"
+                    >
+                      Reset
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsHeroCropLabCollapsed(true)}
+                      className="rounded-full border border-white/15 px-3 py-2 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-[rgba(255,250,205,0.78)] transition hover:border-sovereign-gold/45 hover:text-radiant-white"
+                    >
+                      Collapse
+                    </button>
                   </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    step="1"
-                    value={activeHeroCrop.y}
-                    onChange={(event) => {
-                      const nextValue = Number(event.target.value);
-                      setHeroCropPositions((current) => ({
-                        ...current,
-                        [activeHero.id]: {
-                          ...(current[activeHero.id] ?? parseHeroCrop(activeHero)),
-                          y: nextValue,
-                        },
-                      }));
-                    }}
-                    className="mt-2 w-full accent-[#c9a84c]"
-                  />
-                </label>
+                </div>
 
-                <label className="block">
-                  <div className="flex items-center justify-between gap-4 text-xs uppercase tracking-[0.2em] text-[rgba(255,250,205,0.66)]">
-                    <span>Zoom</span>
-                    <span className="text-sovereign-gold">
-                      {formatHeroScale(activeHeroCrop.scale)}x
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min="1"
-                    max="1.8"
-                    step="0.01"
-                    value={activeHeroCrop.scale}
-                    onChange={(event) => {
-                      const nextValue = Number(event.target.value);
-                      setHeroCropPositions((current) => ({
-                        ...current,
-                        [activeHero.id]: {
-                          ...(current[activeHero.id] ?? parseHeroCrop(activeHero)),
-                          scale: nextValue,
-                        },
-                      }));
-                    }}
-                    className="mt-2 w-full accent-[#c9a84c]"
-                  />
-                </label>
+                <div className="mt-5 space-y-4">
+                  <label className="block">
+                    <div className="flex items-center justify-between gap-4 text-xs uppercase tracking-[0.2em] text-[rgba(255,250,205,0.66)]">
+                      <span>X position</span>
+                      <span className="text-sovereign-gold">{Math.round(activeHeroCrop.x)}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value={activeHeroCrop.x}
+                      onChange={(event) => {
+                        const nextValue = Number(event.target.value);
+                        setHeroCropPositions((current) => ({
+                          ...current,
+                          [activeHero.id]: {
+                            ...(current[activeHero.id] ?? parseHeroCrop(activeHero)),
+                            x: nextValue,
+                          },
+                        }));
+                      }}
+                      className="mt-2 w-full accent-[#c9a84c]"
+                    />
+                  </label>
+
+                  <label className="block">
+                    <div className="flex items-center justify-between gap-4 text-xs uppercase tracking-[0.2em] text-[rgba(255,250,205,0.66)]">
+                      <span>Y position</span>
+                      <span className="text-sovereign-gold">{Math.round(activeHeroCrop.y)}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value={activeHeroCrop.y}
+                      onChange={(event) => {
+                        const nextValue = Number(event.target.value);
+                        setHeroCropPositions((current) => ({
+                          ...current,
+                          [activeHero.id]: {
+                            ...(current[activeHero.id] ?? parseHeroCrop(activeHero)),
+                            y: nextValue,
+                          },
+                        }));
+                      }}
+                      className="mt-2 w-full accent-[#c9a84c]"
+                    />
+                  </label>
+
+                  <label className="block">
+                    <div className="flex items-center justify-between gap-4 text-xs uppercase tracking-[0.2em] text-[rgba(255,250,205,0.66)]">
+                      <span>Zoom</span>
+                      <span className="text-sovereign-gold">
+                        {formatHeroScale(activeHeroCrop.scale)}x
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="1"
+                      max="1.8"
+                      step="0.01"
+                      value={activeHeroCrop.scale}
+                      onChange={(event) => {
+                        const nextValue = Number(event.target.value);
+                        setHeroCropPositions((current) => ({
+                          ...current,
+                          [activeHero.id]: {
+                            ...(current[activeHero.id] ?? parseHeroCrop(activeHero)),
+                            scale: nextValue,
+                          },
+                        }));
+                      }}
+                      className="mt-2 w-full accent-[#c9a84c]"
+                    />
+                  </label>
+                </div>
+
+                <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-3">
+                  <p className="text-[0.68rem] uppercase tracking-[0.22em] text-[rgba(255,250,205,0.56)]">
+                    Current crop
+                  </p>
+                  <p className="mt-2 font-mono text-sm text-sovereign-gold">
+                    {formatObjectPosition(activeHeroCrop.x, activeHeroCrop.y)}
+                  </p>
+                  <p className="mt-1 font-mono text-sm text-sovereign-gold">
+                    {formatHeroScale(activeHeroCrop.scale)}x
+                  </p>
+                </div>
+
+                <Textarea
+                  readOnly
+                  value={heroPortraitConfigSnapshot}
+                  className="mt-4 min-h-44 resize-y border-white/10 bg-[rgba(0,0,0,0.18)] font-mono text-xs leading-6 text-[rgba(255,250,205,0.78)]"
+                />
               </div>
-
-              <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-3">
-                <p className="text-[0.68rem] uppercase tracking-[0.22em] text-[rgba(255,250,205,0.56)]">
-                  Current crop
-                </p>
-                <p className="mt-2 font-mono text-sm text-sovereign-gold">
-                  {formatObjectPosition(activeHeroCrop.x, activeHeroCrop.y)}
-                </p>
-                <p className="mt-1 font-mono text-sm text-sovereign-gold">
-                  {formatHeroScale(activeHeroCrop.scale)}x
-                </p>
-              </div>
-
-              <Textarea
-                readOnly
-                value={heroPortraitConfigSnapshot}
-                className="mt-4 min-h-44 resize-y border-white/10 bg-[rgba(0,0,0,0.18)] font-mono text-xs leading-6 text-[rgba(255,250,205,0.78)]"
-              />
-            </div>
+            )
           ) : null}
 
           <div className="absolute right-5 top-5 z-20 flex flex-wrap justify-end gap-2 md:right-8 md:top-8">
