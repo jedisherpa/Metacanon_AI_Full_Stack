@@ -1,0 +1,27 @@
+<svg width="1200" height="1500" viewBox="0 0 1200 1500" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="600" y1="0" x2="600" y2="1500" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#102D36"/>
+      <stop offset="0.56" stop-color="#0A1E25"/>
+      <stop offset="1" stop-color="#061217"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(668 316) rotate(90) scale(244 288)">
+      <stop stop-color="#E6C873" stop-opacity="0.78"/>
+      <stop offset="1" stop-color="#E6C873" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="rose" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(412 986) rotate(90) scale(318 360)">
+      <stop stop-color="#9B2848" stop-opacity="0.44"/>
+      <stop offset="1" stop-color="#9B2848" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="1500" fill="url(#bg)"/>
+  <rect x="46" y="46" width="1108" height="1408" rx="50" stroke="#F3D487" stroke-opacity="0.12" stroke-width="2"/>
+  <ellipse cx="668" cy="316" rx="284" ry="244" fill="url(#halo)"/>
+  <ellipse cx="412" cy="986" rx="340" ry="318" fill="url(#rose)"/>
+  <path d="M622 289C484 352 390 487 390 656C390 878 543 1102 762 1213C711 1120 694 1034 708 946C724 842 780 730 876 594L622 289Z" fill="#D7B561" fill-opacity="0.24"/>
+  <path d="M622 289C742 373 844 473 895 611C945 747 934 905 836 1117C925 1017 989 913 1013 786C1039 651 1012 522 925 419C853 334 754 290 622 289Z" fill="#8E2141" fill-opacity="0.28"/>
+  <path d="M316 1207C443 1095 563 1031 676 1017C782 1003 882 1043 972 1138" stroke="#F7E4AE" stroke-opacity="0.22" stroke-width="3"/>
+  <path d="M250 1295C434 1141 603 1064 758 1063C872 1063 978 1105 1077 1190" stroke="#D7B561" stroke-opacity="0.16" stroke-width="2"/>
+  <circle cx="704" cy="315" r="139" stroke="#FFF7E6" stroke-opacity="0.24" stroke-width="1.5" stroke-dasharray="4 10"/>
+  <circle cx="704" cy="315" r="201" stroke="#D7B561" stroke-opacity="0.16" stroke-width="1.5" stroke-dasharray="6 14"/>
+</svg>

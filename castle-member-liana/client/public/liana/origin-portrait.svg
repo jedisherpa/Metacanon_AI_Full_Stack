@@ -1,0 +1,28 @@
+<svg width="1200" height="1500" viewBox="0 0 1200 1500" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="600" y1="0" x2="600" y2="1500" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0F2B33"/>
+      <stop offset="0.52" stop-color="#071920"/>
+      <stop offset="1" stop-color="#040F13"/>
+    </linearGradient>
+    <radialGradient id="fractureGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(606 674) rotate(90) scale(350 270)">
+      <stop stop-color="#E7C66A" stop-opacity="0.56"/>
+      <stop offset="1" stop-color="#E7C66A" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="ember" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(346 372) rotate(90) scale(220 240)">
+      <stop stop-color="#912341" stop-opacity="0.48"/>
+      <stop offset="1" stop-color="#912341" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="1500" fill="url(#bg)"/>
+  <rect x="46" y="46" width="1108" height="1408" rx="50" stroke="#F3D487" stroke-opacity="0.12" stroke-width="2"/>
+  <ellipse cx="606" cy="674" rx="312" ry="276" fill="url(#fractureGlow)"/>
+  <ellipse cx="346" cy="372" rx="270" ry="244" fill="url(#ember)"/>
+  <path d="M418 262L548 462L466 706L618 892L544 1182" stroke="#F4E2A8" stroke-opacity="0.28" stroke-width="5" stroke-linecap="round"/>
+  <path d="M737 208L676 402L778 625L688 834L775 1155" stroke="#D5AF58" stroke-opacity="0.22" stroke-width="4" stroke-linecap="round"/>
+  <path d="M588 224L612 506L558 718L641 945L606 1248" stroke="#9A2949" stroke-opacity="0.24" stroke-width="3" stroke-linecap="round"/>
+  <path d="M254 1010C377 920 497 878 612 884C737 890 850 947 950 1056" stroke="#F6E6B3" stroke-opacity="0.22" stroke-width="3"/>
+  <path d="M210 1118C362 1007 499 952 621 953C761 953 896 1017 1024 1143" stroke="#D5AF58" stroke-opacity="0.16" stroke-width="2"/>
+  <circle cx="604" cy="704" r="156" stroke="#FFF6DF" stroke-opacity="0.16" stroke-width="1.5" stroke-dasharray="4 12"/>
+  <circle cx="604" cy="704" r="234" stroke="#D5AF58" stroke-opacity="0.16" stroke-width="1.5" stroke-dasharray="8 16"/>
+</svg>

@@ -1,0 +1,60 @@
+{
+  "createdAt": "2026-03-20T04:07:45.228Z",
+  "modelQuery": "GPT Image 1.5 I2I",
+  "model": {
+    "id": "c56d2d96-ea2b-4bcb-8c1a-fe1f4fd5104d",
+    "name": "GPT Image 1.5 I2I",
+    "label": null,
+    "slug": null,
+    "type": "image",
+    "provider": null,
+    "metadata": null
+  },
+  "images": [
+    {
+      "id": "hedra-lunar-terrace",
+      "label": "Hedra Lunar Terrace",
+      "prompt": "Using the reference image for likeness and styling, create a photoreal cinematic landscape hero image of Liana Camaras on a mountain-view terrace at blue hour. Preserve her identity, joyful mystic presence, and editorial realism while widening the composition into a premium website hero with lunar teal and burnished gold atmosphere, subtle eclipse light in the clouds, no text, no watermark.",
+      "path": "/liana/generated/hedra-lunar-terrace.png",
+      "generationId": "f2920ee9-45fa-4dfd-9353-3d78a8ffdad5",
+      "referenceSourcePath": "/Users/paulcooper/Documents/Codex Master Folder/castle-member-liana/client/public/liana/converted/IMG_1105.jpg",
+      "referenceAssetId": "43fdf59c-ecee-46be-bb86-fc411c6cd7e1",
+      "assetId": "d3593b9d-a406-4845-a5a5-649c33edaaa7",
+      "resolution": "1536x1024",
+      "requestShape": "top-level-image-dimension-as-aspect-start-keyframe",
+      "contentType": "image/png",
+      "size": 2397251,
+      "createdAt": "2026-03-20T04:09:52.614Z"
+    },
+    {
+      "id": "hedra-eclipse-forge",
+      "label": "Hedra Eclipse Forge",
+      "prompt": "Using the reference image for likeness and pose energy, create a photoreal wide landscape hero image of Liana Camaras in a mythic lunar forge courtyard. Preserve her identity and upscale the scene into a cinematic homepage hero with warm gold firelight meeting cool teal moonlight, mountains in the distance, mystical but grounded atmosphere, no text, no watermark.",
+      "path": "/liana/generated/hedra-eclipse-forge.png",
+      "generationId": "5ab3e914-9d6a-4df2-9b47-875401cced36",
+      "referenceSourcePath": "/Users/paulcooper/Documents/Codex Master Folder/castle-member-liana/client/public/liana/summit-sky-hero-flat-v3.png",
+      "referenceAssetId": "41db78dd-f0ed-4a48-aae4-cee02df27ba6",
+      "assetId": "decfb6a7-aa06-4f74-8018-3bd713ea6230",
+      "resolution": "1536x1024",
+      "requestShape": "top-level-image-dimension-as-aspect-start-keyframe",
+      "contentType": "image/png",
+      "size": 2535388,
+      "createdAt": "2026-03-20T04:12:07.600Z"
+    },
+    {
+      "id": "hedra-sun-covenant",
+      "label": "Hedra Sun Covenant",
+      "prompt": "Using the reference image for likeness, create a photoreal wide landscape hero image of Liana Camaras in sunlit mountain stillness. Preserve her identity, mood, and wardrobe palette while expanding the scene into sophisticated editorial photography with expansive sky, radiant calm, immersive luxury-web energy, no text, no watermark.",
+      "path": "/liana/generated/hedra-sun-covenant.png",
+      "generationId": "f92cbbfb-d4df-4740-a6bd-1fd58138b6de",
+      "referenceSourcePath": "/Users/paulcooper/Documents/Codex Master Folder/castle-member-liana/client/public/liana/converted/IMG_5706.jpg",
+      "referenceAssetId": "b475b754-22bb-40cb-a0b3-c6de502cb2b5",
+      "assetId": "cc5d6635-e91e-4731-90af-682c598ce94f",
+      "resolution": "1536x1024",
+      "requestShape": "top-level-image-dimension-as-aspect-start-keyframe",
+      "contentType": "image/png",
+      "size": 2551708,
+      "createdAt": "2026-03-20T04:13:53.351Z"
+    }
+  ]
+}
