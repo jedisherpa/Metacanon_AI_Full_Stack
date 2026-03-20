@@ -1,0 +1,32 @@
+<svg width="1200" height="1500" viewBox="0 0 1200 1500" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="600" y1="0" x2="600" y2="1500" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0E3038"/>
+      <stop offset="0.5" stop-color="#081C22"/>
+      <stop offset="1" stop-color="#040F13"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(602 374) rotate(90) scale(278 252)">
+      <stop stop-color="#F0D58B" stop-opacity="0.78"/>
+      <stop offset="1" stop-color="#F0D58B" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="wingLeft" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(338 834) rotate(90) scale(286 242)">
+      <stop stop-color="#9E2948" stop-opacity="0.44"/>
+      <stop offset="1" stop-color="#9E2948" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="wingRight" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(868 834) rotate(90) scale(286 242)">
+      <stop stop-color="#D3AF5D" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#D3AF5D" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="1500" fill="url(#bg)"/>
+  <rect x="46" y="46" width="1108" height="1408" rx="50" stroke="#F3D487" stroke-opacity="0.12" stroke-width="2"/>
+  <ellipse cx="602" cy="374" rx="286" ry="252" fill="url(#halo)"/>
+  <ellipse cx="338" cy="834" rx="296" ry="270" fill="url(#wingLeft)"/>
+  <ellipse cx="868" cy="834" rx="296" ry="270" fill="url(#wingRight)"/>
+  <path d="M603 308C494 410 435 542 435 704C435 887 505 1044 649 1176C619 1071 621 964 657 855C692 746 765 636 874 527L603 308Z" fill="#DAB968" fill-opacity="0.24"/>
+  <path d="M603 308C718 392 804 493 851 613C900 737 904 883 856 1054C923 950 962 841 972 728C982 612 952 509 882 420C814 334 721 296 603 308Z" fill="#8D2342" fill-opacity="0.28"/>
+  <path d="M278 1048C422 959 552 919 670 929C787 938 895 991 995 1088" stroke="#F6E7B9" stroke-opacity="0.22" stroke-width="3"/>
+  <path d="M222 1158C392 1047 541 995 669 1001C820 1008 955 1070 1079 1184" stroke="#DAB968" stroke-opacity="0.16" stroke-width="2"/>
+  <circle cx="603" cy="375" r="148" stroke="#FFF7E6" stroke-opacity="0.24" stroke-width="1.5" stroke-dasharray="4 10"/>
+  <circle cx="603" cy="375" r="216" stroke="#DAB968" stroke-opacity="0.16" stroke-width="1.5" stroke-dasharray="8 14"/>
+</svg>

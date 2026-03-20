@@ -1,0 +1,22 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="600" y1="0" x2="600" y2="630" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2C003E"/>
+      <stop offset="0.54" stop-color="#1A0033"/>
+      <stop offset="1" stop-color="#130021"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(820 160) rotate(90) scale(220 320)">
+      <stop stop-color="#C9A84C" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#C9A84C" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+  <path d="M760 458L818 250L880 340L934 214L986 340L1046 250L1102 458H760Z" fill="#2C003E" stroke="#6A287E" stroke-width="2.5"/>
+  <path d="M872 410C872 373.549 901.549 344 938 344H940C976.451 344 1006 373.549 1006 410V458H872V410Z" fill="#4B0082" fill-opacity="0.82" stroke="#C9A84C" stroke-width="2.5"/>
+  <text x="76" y="128" fill="#C9A84C" font-family="Inter, sans-serif" font-size="20" letter-spacing="7">DIANA FLEISHMAN</text>
+  <text x="76" y="272" fill="#FFFACD" font-family="Playfair Display, serif" font-size="68">The Luminous</text>
+  <text x="76" y="350" fill="#FFFACD" font-family="Playfair Display, serif" font-size="68">Shadowbreaker's</text>
+  <text x="76" y="428" fill="#FFFACD" font-family="Playfair Display, serif" font-size="68">Realm</text>
+  <text x="76" y="500" fill="#FFFACD" fill-opacity="0.76" font-family="Inter, sans-serif" font-size="26">A twilight forge of reclamation for grief, ferocity, and re-selfing.</text>
+</svg>
