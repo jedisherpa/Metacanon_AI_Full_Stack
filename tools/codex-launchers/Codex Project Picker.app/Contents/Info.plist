@@ -5,21 +5,25 @@
   <key>CFBundleDevelopmentRegion</key>
   <string>en</string>
   <key>CFBundleDisplayName</key>
-  <string>Open Codex Project</string>
+  <string>Codex Project Picker</string>
   <key>CFBundleExecutable</key>
-  <string>open-codex-project-gui</string>
+  <string>CodexProjectPicker</string>
   <key>CFBundleIdentifier</key>
-  <string>com.jedisherpa.opencodexproject</string>
+  <string>com.jedisherpa.codexprojectpicker</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
-  <string>Open Codex Project</string>
+  <string>Codex Project Picker</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
   <string>1.0</string>
+  <key>CFBundleSignature</key>
+  <string>cdxp</string>
   <key>CFBundleVersion</key>
   <string>1</string>
+  <key>LSApplicationCategoryType</key>
+  <string>public.app-category.developer-tools</string>
   <key>LSMinimumSystemVersion</key>
   <string>12.0</string>
   <key>NSHighResolutionCapable</key>

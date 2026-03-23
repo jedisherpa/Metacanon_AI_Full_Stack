@@ -8,10 +8,11 @@ Launcher folder:
 
 Applications install:
 
-- `/Users/paulcooper/Applications/Open Codex Project.app`
+- `/Applications/Codex Project Picker.app`
 
 Fastest entrypoints:
 
+- `/Applications/Codex Project Picker.app`
 - `/Users/paulcooper/Documents/Codex Master Folder/tools/codex-launchers/Open Codex Project.app`
 - `/Users/paulcooper/Documents/Codex Master Folder/tools/codex-launchers/open-codex-project.command`
 - `/Users/paulcooper/Documents/Codex Master Folder/tools/codex-launchers/open-umbrella-orchestrator.command`
@@ -64,6 +65,7 @@ If the task is unclear, check:
 
 Double-click:
 
+- `/Applications/Codex Project Picker.app`
 - `/Users/paulcooper/Documents/Codex Master Folder/tools/codex-launchers/Open Codex Project.app`
 - `/Users/paulcooper/Documents/Codex Master Folder/tools/codex-launchers/open-codex-project.command`
 
@@ -96,7 +98,9 @@ Domain routing reference:
 
 - `.sh` launchers are for Terminal use
 - `.command` launchers are for Finder double-click use
-- both launch the same target directory with `codex -C "<path>" app`
+- `Codex Project Picker.app` is the preferred GUI picker and should not open Terminal
+- `Open Codex Project.app` is the older picker bundle and should be treated as legacy
+- the `.command` launchers are still available when you explicitly want the Terminal-driven route
 
 ## Global Skills vs Local Workflow Rules
 
