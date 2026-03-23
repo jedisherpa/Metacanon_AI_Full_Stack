@@ -1,0 +1,34 @@
+# key	label	path	purpose
+umbrella	Umbrella Orchestrator	/Users/paulcooper/Documents/Codex Master Folder	Workspace routing, launchers, provenance, and cleanup docs
+metacanonai-main	MetacanonAI Main	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main	Broad metacanonai integration work
+metacanonai-public	MetacanonAI Public	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-public	3002 public site work
+metacanonai-cockpit	MetacanonAI Cockpit	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-cockpit	3011 / 3013 / 3014 cockpit and audio runtime work
+metacanonai-subworlds	MetacanonAI Subworlds	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-subworlds	Subworld runtime and scene experiments
+prismai-core	PrismAI Core	/Users/paulcooper/Documents/Codex Master Folder/worktrees/anything-llm/prismai-core	Repo-wide PrismAI changes
+prismai-frontend	PrismAI Frontend	/Users/paulcooper/Documents/Codex Master Folder/worktrees/anything-llm/prismai-frontend	Frontend and embed UI work
+prismai-server	PrismAI Server	/Users/paulcooper/Documents/Codex Master Folder/worktrees/anything-llm/prismai-server	Server and collector work
+prismai-desktop	PrismAI Desktop	/Users/paulcooper/Documents/Codex Master Folder/worktrees/anything-llm/prismai-desktop	Desktop-tauri work
+prismai-mobile	PrismAI Mobile	/Users/paulcooper/Documents/Codex Master Folder/worktrees/anything-llm/prismai-mobile	Mobile app work
+prismai-overlay	PrismAI Overlay	/Users/paulcooper/Documents/Codex Master Folder/worktrees/anything-llm/prismai-overlay	Overlay cluster work
+installer-ui	Installer UI	/Users/paulcooper/Documents/Codex Master Folder/worktrees/installer-ui/mainline	PrismAI installer shell
+prism-mainline	Prism Feral Pharaoh Mainline	/Users/paulcooper/Documents/Codex Master Folder/worktrees/prism-feralpharaoh/mainline	Repo-wide Prism product work
+prism-product	Prism Product	/Users/paulcooper/Documents/Codex Master Folder/worktrees/prism-feralpharaoh/product	Product shell and routes
+prism-hero	Prism Hero	/Users/paulcooper/Documents/Codex Master Folder/worktrees/prism-feralpharaoh/prism-hero	PrismHero lab
+prism-dodeca	Prism Dodeca	/Users/paulcooper/Documents/Codex Master Folder/worktrees/prism-feralpharaoh/prism-dodeca	Prism Dodecahedron music lab
+prism-overlay	Prism Overlay	/Users/paulcooper/Documents/Codex Master Folder/worktrees/prism-feralpharaoh/overlay	Overlay component work
+anna	Castle Member Anna	/Users/paulcooper/Documents/Codex Master Folder/worktrees/castle-member-anna/mainline	Anna Phoenix V1 shared implementation root
+diana	Castle Member Diana	/Users/paulcooper/Documents/Codex Master Folder/worktrees/castle-member-diana/mainline	Diana peer realm
+liana	Castle Member Liana	/Users/paulcooper/Documents/Codex Master Folder/worktrees/castle-member-liana/mainline	Liana peer realm
+sphere-mainline	Sphere Thread Engine Mainline	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sphere-thread-engine/mainline	Repo-wide engine family work
+sphere-engine	Sphere Thread Engine Engine	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sphere-thread-engine/engine	Engine-only work
+sphere-tma	Sphere Thread Engine TMA	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sphere-thread-engine/tma	TMA surfaces
+sovereign-jewel-next	Sovereign Jewel Next	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-jewel-next/mainline	Jewel shell and viewer work
+metacanon-ddos	Metacanon DDOS Auxiliary	/Users/paulcooper/Documents/Codex Master Folder/worktrees/metacanon-ddos/auxiliary	Auxiliary declaration and verification work
+sovereign-jewel-web	Sovereign Jewel Web	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-jewel-web/mainline	Static microsite work
+council-engine	Council Engine	/Users/paulcooper/Documents/Codex Master Folder/worktrees/council-engine/mainline	Council comparison root
+lensforge	LensForge App	/Users/paulcooper/Documents/Codex Master Folder/worktrees/lensforge-app/mainline	LensForge active root
+metacanon-code-api	Metacanon Code API	/Users/paulcooper/Documents/Codex Master Folder/worktrees/metacanon-code-api/mainline	Code API service
+planes-viewer	Planes Of Existence Viewer	/Users/paulcooper/Documents/Codex Master Folder/worktrees/planes-of-existence-viewer/mainline	Planes viewer
+ffi-node	FFI Node	/Users/paulcooper/Documents/Codex Master Folder/worktrees/ffi-node/mainline	Native bridge
+image-catalog	Image Catalog Viewer	/Users/paulcooper/Documents/Codex Master Folder/worktrees/image-catalog-viewer/mainline	Image catalog viewer
+houdini-mcp	Houdini Codex MCP	/Users/paulcooper/Documents/Codex Master Folder/worktrees/houdini-codex-mcp/mainline	Houdini MCP bridge
