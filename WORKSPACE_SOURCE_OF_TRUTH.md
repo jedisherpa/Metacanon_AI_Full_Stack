@@ -474,7 +474,13 @@ Current intended destination:
 
 Canonical root:
 
-- none locked yet
+- no single family root is locked
+
+Canonical active seats:
+
+- active engine seat: `/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine`
+- active Council Nebula skin seat: `/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/skins/council-nebula`
+- active LensForge seat: `/Users/paulcooper/Documents/Codex Master Folder/lensforge-app/tma`
 
 Member roots:
 
@@ -493,46 +499,59 @@ Contamination or duplication notes:
 
 - shared package identity still says `council-engine`
 - only `sphere-thread-engine` is currently a real repo root
+- `sphere-thread-engine/tma` is inherited overlap, not the canonical LensForge seat
+- `council-engine` remains a live unmanaged comparison root, not an archive
+- detailed evidence is recorded in `COUNCIL_LENSFORGE_SPHERE_DECOMPOSITION_2026-03-22.md`
 
 Current intended destination:
 
-- no repo movement until decomposition is approved
+- keep roots separate
+- use the canonical active seats above for planning
+- no repo movement until the remaining remote/worktree hygiene is approved
 
 ### Standalone tools / services
+
+Detailed evidence is recorded in `SMALL_PROGRAM_CANONICAL_SEATS_2026-03-22.md`.
 
 #### image-catalog-viewer
 
 - root: `/Users/paulcooper/Documents/Codex Master Folder/image-catalog-viewer`
+- canonical seat: `/Users/paulcooper/Documents/Codex Master Folder/image-catalog-viewer/server.mjs`
 - server: `/Users/paulcooper/Documents/Codex Master Folder/image-catalog-viewer/server.mjs`
 - client: `/Users/paulcooper/Documents/Codex Master Folder/image-catalog-viewer/public`
 
 #### planes-of-existence-viewer
 
 - root: `/Users/paulcooper/Documents/Codex Master Folder/planes-of-existence-viewer`
+- canonical seat: `/Users/paulcooper/Documents/Codex Master Folder/planes-of-existence-viewer/components/planes-of-existence-viewer.tsx`
 - viewer lab: `/Users/paulcooper/Documents/Codex Master Folder/planes-of-existence-viewer/components/planes-of-existence-viewer.tsx`
 - asset pipeline: `/Users/paulcooper/Documents/Codex Master Folder/planes-of-existence-viewer/scripts`
 
 #### metacanon-code-api
 
 - root: `/Users/paulcooper/Documents/Codex Master Folder/metacanon-code-api`
+- canonical seat: `/Users/paulcooper/Documents/Codex Master Folder/metacanon-code-api/src/server.ts`
 - server: `/Users/paulcooper/Documents/Codex Master Folder/metacanon-code-api/src/server.ts`
 - runtime bridge layer: `/Users/paulcooper/Documents/Codex Master Folder/metacanon-code-api/src/runtimeControl.ts`
 
 #### ffi-node
 
 - root: `/Users/paulcooper/Documents/Codex Master Folder/ffi-node`
+- canonical seat: `/Users/paulcooper/Documents/Codex Master Folder/ffi-node/index.js`
 - native bridge: `/Users/paulcooper/Documents/Codex Master Folder/ffi-node/index.js`
 - build script: `/Users/paulcooper/Documents/Codex Master Folder/ffi-node/scripts/build-native.sh`
 
 #### houdini-codex-mcp
 
 - root: `/Users/paulcooper/Documents/Codex Master Folder/houdini-codex-mcp`
+- canonical seat: `/Users/paulcooper/Documents/Codex Master Folder/houdini-codex-mcp/server.cjs`
 - server: `/Users/paulcooper/Documents/Codex Master Folder/houdini-codex-mcp/server.cjs`
 - plugin bootstrap: `/Users/paulcooper/Documents/Codex Master Folder/houdini-codex-mcp/plugin/pythonrc.py`
 
 Current intended destination:
 
 - retain as separate small program or bridge roots
+- treat `installer-ui` as umbrella-linked rather than a standalone product family
 
 ### Archives and legacy copies
 
@@ -648,8 +667,12 @@ Documentation and planning only:
 - metacanonai WebGL basis map
   - keep the Prism relationship narrowed to basic WebGL basis only
   - treat current `metacanonai` runtime and workbench as sovereign-metaverse-native implementation
-- Council / LensForge / Sphere decomposition
-  - determine canonical ownership within the overlapping family
+- Council / LensForge / Sphere follow-through
+  - canonical active seats are now documented
+  - remaining work is remote/worktree hygiene and any future root promotion
+- small-program canonical seats follow-through
+  - canonical seats are now documented
+  - remaining work is repo promotion only where approved
 - worktree rollout
   - repo-backed lane scaffold has started
   - blocked future roots remain blocked until repo promotion is approved
@@ -665,6 +688,8 @@ Documentation and planning only:
 - [WORKSPACE_FAMILY_ASSIGNMENT_V2_2026-03-22.md](/Users/paulcooper/Documents/Codex%20Master%20Folder/WORKSPACE_FAMILY_ASSIGNMENT_V2_2026-03-22.md)
 - [WORKTREE_OWNERSHIP_MATRIX_2026-03-22.csv](/Users/paulcooper/Documents/Codex%20Master%20Folder/WORKTREE_OWNERSHIP_MATRIX_2026-03-22.csv)
 - [WEBGL_BASIS_MAP_METACANONAI_2026-03-22.md](/Users/paulcooper/Documents/Codex%20Master%20Folder/WEBGL_BASIS_MAP_METACANONAI_2026-03-22.md)
+- [COUNCIL_LENSFORGE_SPHERE_DECOMPOSITION_2026-03-22.md](/Users/paulcooper/Documents/Codex%20Master%20Folder/COUNCIL_LENSFORGE_SPHERE_DECOMPOSITION_2026-03-22.md)
+- [SMALL_PROGRAM_CANONICAL_SEATS_2026-03-22.md](/Users/paulcooper/Documents/Codex%20Master%20Folder/SMALL_PROGRAM_CANONICAL_SEATS_2026-03-22.md)
 
 ### Historical first-pass artifacts
 

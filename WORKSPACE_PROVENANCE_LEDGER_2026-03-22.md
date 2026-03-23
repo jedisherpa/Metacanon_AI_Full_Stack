@@ -516,6 +516,12 @@ Root: `/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine`
 - Conclusion:
   - active repo anchor for the overlapping family, but not cleanly isolated in lineage terms
 
+Current active-seat decision:
+
+- active engine canonical seat: `/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine`
+- active Council Nebula skin canonical seat: `/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/skins/council-nebula`
+- inherited `tma/` surface exists here, but it is not the canonical LensForge seat
+
 #### Archive copies
 
 Roots:
@@ -534,6 +540,10 @@ What they are not:
 Important distinction:
 
 - `council-engine-master-v2` contains a more evolved conductor / queue layer than the simpler `council-engine-code-copy`
+
+Decomposition appendix:
+
+- `/Users/paulcooper/Documents/Codex Master Folder/COUNCIL_LENSFORGE_SPHERE_DECOMPOSITION_2026-03-22.md`
 
 ## Provenance Conclusions
 
@@ -570,6 +580,10 @@ Interpretation note:
 - `/Users/paulcooper/Documents/Codex Master Folder/metacanon-code-api`
 - `/Users/paulcooper/Documents/Codex Master Folder/ffi-node`
 - `/Users/paulcooper/Documents/Codex Master Folder/houdini-codex-mcp`
+
+Canonical-seat appendix:
+
+- `/Users/paulcooper/Documents/Codex Master Folder/SMALL_PROGRAM_CANONICAL_SEATS_2026-03-22.md`
 
 ### Freeze condition
 
