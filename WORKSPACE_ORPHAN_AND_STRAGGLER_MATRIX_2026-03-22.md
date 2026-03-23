@@ -25,7 +25,7 @@ These are real code roots in the workspace but do not currently have their own g
 | `/Users/paulcooper/Documents/Codex Master Folder/planes-of-existence-viewer` | Next app root | 3D cosmology viewer | unmanaged small program | promote if retained |
 | `/Users/paulcooper/Documents/Codex Master Folder/ffi-node` | bridge root | native addon Node bridge | unmanaged service root | promote if retained |
 | `/Users/paulcooper/Documents/Codex Master Folder/houdini-codex-mcp` | bridge root | Houdini MCP bridge | unmanaged service root | promote if retained |
-| `/Users/paulcooper/Documents/Codex Master Folder/installer-ui` | handover workspace | PrismAI installer design and desktop shell | unmanaged PrismAI root with umbrella runtime dependency | promote as separate PrismAI repo when approved |
+| `/Users/paulcooper/Documents/Codex Master Folder/installer-ui` | git repo root | PrismAI installer design and desktop shell | standalone PrismAI root with umbrella runtime dependency | keep as separate repo; remote promotion remains optional |
 | `/Users/paulcooper/Documents/Codex Master Folder/council-engine` | monorepo root | council engine active root | unmanaged active root | decide canonical seat before promotion |
 | `/Users/paulcooper/Documents/Codex Master Folder/lensforge-app` | monorepo root | LensForge active root | unmanaged active root | decide canonical seat before promotion |
 

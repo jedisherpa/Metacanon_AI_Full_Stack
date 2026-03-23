@@ -488,6 +488,8 @@ Root: `/Users/paulcooper/Documents/Codex Master Folder/installer-ui`
   - the README maps UI screens to `/Users/paulcooper/Documents/Codex Master Folder/src/ui.rs`
 - Conclusion:
   - separate PrismAI implementation and handover workspace with an explicit dependency on the umbrella runtime command surface
+- Current promotion status:
+  - standalone local repo initialized; `mainline` worktree planned as the active lane
 
 ### 8. Council, LensForge, Sphere, and archive copies
 

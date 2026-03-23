@@ -96,6 +96,10 @@ Current state:
 - `ffi-node/mainline`
 - `houdini-codex-mcp/mainline`
 
+### PrismAI installer repo
+
+- `installer-ui/mainline`
+
 Current state:
 
 - `mainline` is now a real materialized worktree at `/Users/paulcooper/Documents/Codex Master Folder/worktrees/sphere-thread-engine/mainline`
@@ -104,18 +108,16 @@ Current state:
 - `council-engine/mainline` is now a real materialized worktree at `/Users/paulcooper/Documents/Codex Master Folder/worktrees/council-engine/mainline`
 - `lensforge-app/mainline` is now a real materialized worktree at `/Users/paulcooper/Documents/Codex Master Folder/worktrees/lensforge-app/mainline`
 - the small-program repos above now have real `mainline` worktrees and should be treated as standalone worktree lanes
+- `installer-ui/mainline` is now the real materialized PrismAI installer lane at `/Users/paulcooper/Documents/Codex Master Folder/worktrees/installer-ui/mainline`
+- every previously scaffolded lane in `sovereign-metaverse`, `anything-llm`, `prism-feralpharaoh`, `castle-member-*`, `sphere-thread-engine`, `sovereign-jewel-next`, and `metacanon-ddos` is now a real git worktree on its own `codex/` branch
 
 ## Blocked Future Roots
 
-These remain outside the materialized scaffold until they are real repos:
-
-- `installer-ui` PrismAI installer surface with umbrella runtime dependency
+There are currently no blocked future roots in the documented set.
 
 ## Important Constraint
 
-The following local roots are not yet repos and must remain unmanaged until repo promotion is approved:
-
-- `installer-ui` PrismAI installer surface with umbrella runtime dependency
+The umbrella root remains frozen for runtime and installer command-surface work only. Product work should happen in standalone repos or their materialized worktrees.
 
 See:
 

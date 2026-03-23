@@ -180,7 +180,7 @@ These belong to the umbrella runtime line and are not workspace residue.
 | planes-of-existence-viewer | `/Users/paulcooper/Documents/Codex Master Folder/planes-of-existence-viewer` | git repo | 3D planes viewer | standalone repo pushed to standalone remote; `mainline` worktree materialized | standalone tools / services | `planes-of-existence-viewer` / `mainline` | 0.95 |
 | ffi-node | `/Users/paulcooper/Documents/Codex Master Folder/ffi-node` | git repo | Node bridge for native runtime | standalone repo pushed to standalone remote; `mainline` worktree materialized | standalone tools / services | `ffi-node` / `mainline` | 0.96 |
 | houdini-codex-mcp | `/Users/paulcooper/Documents/Codex Master Folder/houdini-codex-mcp` | git repo | Houdini MCP bridge | standalone repo pushed to standalone remote; `mainline` worktree materialized | standalone tools / services | `houdini-codex-mcp` / `mainline` | 0.95 |
-| installer-ui | `/Users/paulcooper/Documents/Codex Master Folder/installer-ui` | handover workspace | PrismAI installer desktop shell and handover packs | active PrismAI installer root with umbrella runtime dependency | PrismAI / AnythingLLM | future `installer-ui` / `mainline` | 0.95 |
+| installer-ui | `/Users/paulcooper/Documents/Codex Master Folder/installer-ui` | git repo | PrismAI installer desktop shell and handover packs | standalone local PrismAI repo; `mainline` worktree materialized; umbrella runtime dependency remains explicit | PrismAI / AnythingLLM | `installer-ui` / `mainline` | 0.97 |
 | council-engine | `/Users/paulcooper/Documents/Codex Master Folder/council-engine` | git repo | council engine active root | standalone repo pushed to standalone remote; `mainline` worktree materialized | Council / LensForge / Sphere | `council-engine` / `mainline` | 0.90 |
 | lensforge-app | `/Users/paulcooper/Documents/Codex Master Folder/lensforge-app` | git repo | LensForge active root | standalone repo pushed to standalone remote; `mainline` worktree materialized | Council / LensForge / Sphere | `lensforge-app` / `mainline` | 0.92 |
 | council-engine-code-copy | `/Users/paulcooper/Documents/Codex Master Folder/council-engine-code-copy` | archive copy root | archived council-engine copy | archive only | archives and legacy copies | archive only | 0.90 |
@@ -475,7 +475,7 @@ Contamination or duplication notes:
 Current intended destination:
 
 - keep as separate product family and canonical PrismAI fork
-- keep `installer-ui` classified as a PrismAI product surface with an explicit dependency on the umbrella runtime command surface
+- keep `installer-ui` classified as a separate PrismAI repo with an explicit dependency on the umbrella runtime command surface
 
 ### Council / LensForge / Sphere
 
@@ -565,7 +565,7 @@ Detailed evidence is recorded in `SMALL_PROGRAM_CANONICAL_SEATS_2026-03-22.md`.
 Current intended destination:
 
 - retain as separate small program or bridge roots, with standalone remotes and materialized `mainline` worktrees now in place
-- treat `installer-ui` as a PrismAI installer surface with an explicit umbrella runtime dependency
+- treat `installer-ui` as a standalone PrismAI repo with a materialized `mainline` worktree and explicit umbrella runtime dependency
 
 ### Archives and legacy copies
 
