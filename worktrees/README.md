@@ -5,7 +5,7 @@ This directory is reserved for clean per-repo worktrees.
 Current state:
 
 - repo-backed lane scaffold has been materialized for active repo roots
-- non-repo roots remain blocked until repo promotion is explicitly approved
+- some formerly non-repo roots have now been promoted to standalone local repos
 - reserved family homes may exist before a root becomes a repo, but they are not active worktrees
 
 ## Global Rules
@@ -21,6 +21,8 @@ Current state:
 - `worktrees/sovereign-metaverse/`
 - `worktrees/anything-llm/`
 - `worktrees/prism-feralpharaoh/`
+- `worktrees/sovereign-jewel-next/`
+- `worktrees/metacanon-ddos/`
 - `worktrees/castle-member-anna/`
 - `worktrees/castle-member-diana/`
 - `worktrees/castle-member-liana/`
@@ -52,6 +54,14 @@ Current state:
 - `prism-dodeca`
 - `overlay`
 
+### sovereign-jewel-next
+
+- `mainline`
+
+### metacanon-ddos
+
+- `mainline`
+
 ### castle-member family
 
 - `castle-member-anna/mainline`
@@ -68,8 +78,6 @@ Current state:
 
 These remain outside the materialized scaffold until they are real repos:
 
-- `sovereign-jewel-next`
-- `metacanon-ddos`
 - `council-engine`
 - `lensforge-app`
 - `metacanon-code-api`
@@ -83,8 +91,6 @@ These remain outside the materialized scaffold until they are real repos:
 
 The following local roots are not yet repos and must remain unmanaged until repo promotion is approved:
 
-- `sovereign-jewel-next`
-- `metacanon-ddos`
 - `council-engine`
 - `lensforge-app`
 - `metacanon-code-api`

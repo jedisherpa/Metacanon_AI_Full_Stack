@@ -172,8 +172,8 @@ These belong to the umbrella runtime line and are not workspace residue.
 | prism-feralpharaoh | `/Users/paulcooper/Documents/Codex Master Folder/prism-feralpharaoh` | git repo | independent Prism product | active separate product root | WebGL family | `prism-feralpharaoh` / `mainline` | 0.91 |
 | sovereign-metaverse | `/Users/paulcooper/Documents/Codex Master Folder/sovereign-metaverse` | git monorepo | canonical metaverse monorepo | active canonical product root | WebGL family | `sovereign-metaverse` / `metaverse-anchor` | 0.98 |
 | sphere-thread-engine | `/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine` | git repo | sphere-thread or council-engine family repo | active but overlapping family member | Council / LensForge / Sphere | `sphere-thread-engine` / `mainline` | 0.79 |
-| sovereign-jewel-next | `/Users/paulcooper/Documents/Codex Master Folder/sovereign-jewel-next` | Next app root | Sovereign Jewel shell and viewer labs | active unmanaged root | WebGL family | future `sovereign-jewel-next` / `sovereign-jewel-next` | 0.89 |
-| metacanon-ddos | `/Users/paulcooper/Documents/Codex Master Folder/metacanon-ddos` | Next app root | DDOS declaration and verification site | active unmanaged forked root | WebGL family | future `metacanon-ddos` / `metacanon-ddos` | 0.97 |
+| sovereign-jewel-next | `/Users/paulcooper/Documents/Codex Master Folder/sovereign-jewel-next` | git repo | Sovereign Jewel shell and viewer labs | active standalone local repo; umbrella detach pending | WebGL family | `sovereign-jewel-next` / `mainline` | 0.96 |
+| metacanon-ddos | `/Users/paulcooper/Documents/Codex Master Folder/metacanon-ddos` | git repo | DDOS declaration and verification site | active standalone local repo; umbrella detach pending | WebGL family | `metacanon-ddos` / `mainline` | 0.98 |
 | sovereign-jewel-web | `/Users/paulcooper/Documents/Codex Master Folder/sovereign-jewel-web` | static microsite root | Sovereign Jewel cinematic microsite | active small program | WebGL family | future `sovereign-jewel-web` / `sovereign-jewel-web` | 0.90 |
 | image-catalog-viewer | `/Users/paulcooper/Documents/Codex Master Folder/image-catalog-viewer` | tool root | image catalog viewer | active small program | standalone tools / services | future `image-catalog-viewer` / `image-catalog-viewer` | 0.95 |
 | metacanon-code-api | `/Users/paulcooper/Documents/Codex Master Folder/metacanon-code-api` | service root | code snippet and runtime API | active small service root | standalone tools / services | future `metacanon-code-api` / `metacanon-code-api` | 0.95 |
@@ -355,6 +355,7 @@ Major stable units:
 Notes:
 
 - this is the clearest local seat for the platonic solid viewer line
+- standalone local repo initialized on 2026-03-22
 
 #### metacanon-ddos
 
@@ -374,8 +375,9 @@ Major stable units:
 
 Notes:
 
-- package identity still points at `sovereign-jewel-next`
+- package identity has been corrected to `metacanon-ddos`
 - docs still copy the jewel plan line
+- standalone local repo initialized on 2026-03-22
 
 #### prism-feralpharaoh
 

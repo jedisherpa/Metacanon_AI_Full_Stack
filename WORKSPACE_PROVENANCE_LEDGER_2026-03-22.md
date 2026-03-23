@@ -217,13 +217,14 @@ Root: `/Users/paulcooper/Documents/Codex Master Folder/sovereign-jewel-next`
   - `docs/sovereign-journey-master-plan.md`
   - `app/`, `components/`, `lib/`, `scripts/`, `blender/`
 - First local evidence:
-  - no local git history; provenance is inferred from docs and structure
+  - `2026-03-22 | 359ea3a | Initialize Sovereign Jewel standalone repo`
+  - `2026-03-22 | a37731e | Clean standalone repo artifacts`
 - What it started as:
   - a Next app prototype for the Sovereign Jewel public shell and viewer work
 - What it became:
   - a mixed public shell + platonic geometry viewer + breakup engine + asset pipeline root
 - What it should be now:
-  - its own repo or managed app root
+  - its own standalone local repo with a clean worktree lane
 
 Most important unit:
 
@@ -248,17 +249,18 @@ Other important units:
 Root: `/Users/paulcooper/Documents/Codex Master Folder/metacanon-ddos`
 
 - Strongest evidence:
-  - package name still equals `sovereign-jewel-next`
   - docs still describe the `sovereign-jewel-next` hero pipeline
   - file and folder structure mirrors the jewel root
+  - package identity is now explicitly `metacanon-ddos`
 - First local evidence:
-  - no local git history; provenance is inferred from package and duplicate-lineage evidence
+  - `2026-03-22 | 7a1b86c | Initialize Metacanon DDOS standalone repo`
+  - `2026-03-22 | 8eb255b | Clean standalone repo artifacts`
 - What it started as:
-  - a local fork or copy of the jewel root
+  - a separate local product root built from copied jewel engine and asset lineage
 - What it became:
   - a DDOS declaration experience with constitution, verification, API, and Prisma additions
 - What it should be now:
-  - a standalone root that explicitly records the fork point instead of hiding it
+  - a standalone local repo that explicitly records duplicate lineage without collapsing into the jewel product
 
 High-confidence duplicate lineage:
 
@@ -291,7 +293,7 @@ Root: `/Users/paulcooper/Documents/Codex Master Folder/prism-feralpharaoh`
 - Strongest evidence:
   - local git repo
   - dedicated remote `https://github.com/jedisherpa/prism-feralpharaoh.git`
-  - package name still equals `anything-llm-frontend`
+  - package manifest still says `anything-llm-frontend`, but that is stale residue rather than current product identity
   - duplicate-file lineage back to AnythingLLM overlay files
 - First local evidence:
   - `2026-03-15 | c5ce4ef | Make Prism body read larger in the frame`
