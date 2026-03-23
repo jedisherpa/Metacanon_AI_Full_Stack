@@ -433,6 +433,7 @@ Important note:
 - current repo state is dirty, so no source extraction or movement should be attempted from this root in the current lane
 - any relationship to `prism-feralpharaoh` should be treated as limited to basic WebGL code used as a basis for `metacanonai.com`
 - no broader relationship should be inferred between `prism-feralpharaoh` and the rest of the `sovereign-metaverse` monorepo or the rest of the `metacanonai` implementation beyond that basis
+- detailed evidence is recorded in `WEBGL_BASIS_MAP_METACANONAI_2026-03-22.md`
 
 #### Additional small WebGL roots
 
@@ -634,12 +635,19 @@ Current intended destination:
 
 Documentation and planning only:
 
-- castle-member extraction plan
-  - define clean extraction spec for Diana and Liana from the shared implementation root
-- jewel / DDOS normalization plan
-  - define canonical ownership for duplicated engine and asset pipeline lines
+- castle-member extraction follow-through
+  - Anna remains the shared implementation root
+  - Diana and Liana are now standalone peer-realm repos
+  - remaining work is remote/worktree hygiene and any future product-specific divergence
+- jewel / DDOS normalization follow-through
+  - sovereign-jewel-next is now a standalone repo
+  - remote DDOS `main` remains the live canonical site
+  - the extracted local DDOS line remains auxiliary only
 - PrismAI / prism separation confirmation
   - keep separate products and keep the overlap documented only as provenance
+- metacanonai WebGL basis map
+  - keep the Prism relationship narrowed to basic WebGL basis only
+  - treat current `metacanonai` runtime and workbench as sovereign-metaverse-native implementation
 - Council / LensForge / Sphere decomposition
   - determine canonical ownership within the overlapping family
 - worktree rollout
@@ -656,6 +664,7 @@ Documentation and planning only:
 - [WORKSPACE_ORPHAN_AND_STRAGGLER_MATRIX_2026-03-22.md](/Users/paulcooper/Documents/Codex%20Master%20Folder/WORKSPACE_ORPHAN_AND_STRAGGLER_MATRIX_2026-03-22.md)
 - [WORKSPACE_FAMILY_ASSIGNMENT_V2_2026-03-22.md](/Users/paulcooper/Documents/Codex%20Master%20Folder/WORKSPACE_FAMILY_ASSIGNMENT_V2_2026-03-22.md)
 - [WORKTREE_OWNERSHIP_MATRIX_2026-03-22.csv](/Users/paulcooper/Documents/Codex%20Master%20Folder/WORKTREE_OWNERSHIP_MATRIX_2026-03-22.csv)
+- [WEBGL_BASIS_MAP_METACANONAI_2026-03-22.md](/Users/paulcooper/Documents/Codex%20Master%20Folder/WEBGL_BASIS_MAP_METACANONAI_2026-03-22.md)
 
 ### Historical first-pass artifacts
 
