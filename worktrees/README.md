@@ -27,6 +27,12 @@ Current state:
 - `worktrees/castle-member-diana/`
 - `worktrees/castle-member-liana/`
 - `worktrees/sphere-thread-engine/`
+- `worktrees/sovereign-jewel-web/`
+- `worktrees/image-catalog-viewer/`
+- `worktrees/metacanon-code-api/`
+- `worktrees/planes-of-existence-viewer/`
+- `worktrees/ffi-node/`
+- `worktrees/houdini-codex-mcp/`
 
 ## Materialized Lane Scaffold
 
@@ -74,11 +80,21 @@ Current state:
 - `engine`
 - `tma`
 
+### small-program repos
+
+- `sovereign-jewel-web/mainline`
+- `image-catalog-viewer/mainline`
+- `metacanon-code-api/mainline`
+- `planes-of-existence-viewer/mainline`
+- `ffi-node/mainline`
+- `houdini-codex-mcp/mainline`
+
 Current state:
 
 - `mainline` is now a real materialized worktree at `/Users/paulcooper/Documents/Codex Master Folder/worktrees/sphere-thread-engine/mainline`
 - the repo remote has been corrected to `git@github.com:jedisherpa/sphere-thread-engine.git`
 - the former umbrella remote is retained as `umbrella-origin`
+- the small-program repos above now have real `mainline` worktrees and should be treated as standalone worktree lanes
 
 ## Blocked Future Roots
 
@@ -86,12 +102,7 @@ These remain outside the materialized scaffold until they are real repos:
 
 - `council-engine`
 - `lensforge-app`
-- `metacanon-code-api`
-- `planes-of-existence-viewer`
-- `ffi-node`
-- `image-catalog-viewer`
-- `houdini-codex-mcp`
-- `sovereign-jewel-web`
+- `installer-ui`
 
 ## Important Constraint
 
@@ -99,11 +110,7 @@ The following local roots are not yet repos and must remain unmanaged until repo
 
 - `council-engine`
 - `lensforge-app`
-- `metacanon-code-api`
-- `planes-of-existence-viewer`
-- `ffi-node`
-- `image-catalog-viewer`
-- `houdini-codex-mcp`
+- `installer-ui`
 
 See:
 

@@ -36,7 +36,7 @@ Supporting units:
 
 Status:
 
-- independent static microsite root
+- standalone repo pushed to standalone remote; `mainline` worktree materialized
 
 ### image-catalog-viewer
 
@@ -58,7 +58,7 @@ Dependency note:
 
 Status:
 
-- independent small tool root with a cross-root dependency
+- standalone repo pushed to standalone remote; `mainline` worktree materialized
 
 ### metacanon-code-api
 
@@ -82,7 +82,7 @@ Dependency note:
 
 Status:
 
-- independent service root
+- standalone repo pushed to standalone remote; `mainline` worktree materialized
 
 ### planes-of-existence-viewer
 
@@ -107,7 +107,7 @@ Dependency hygiene note:
 
 Status:
 
-- independent viewer root
+- standalone repo pushed to standalone remote; `mainline` worktree materialized
 
 ### ffi-node
 
@@ -131,7 +131,7 @@ Dependency note:
 
 Status:
 
-- independent bridge root
+- standalone repo pushed to standalone remote; `mainline` worktree materialized
 
 ### houdini-codex-mcp
 
@@ -153,7 +153,7 @@ Dependency note:
 
 Status:
 
-- independent bridge/tool root with explicit cross-root dependency
+- standalone repo pushed to standalone remote; `mainline` worktree materialized
 
 ### installer-ui
 

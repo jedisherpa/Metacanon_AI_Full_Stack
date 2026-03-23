@@ -174,12 +174,12 @@ These belong to the umbrella runtime line and are not workspace residue.
 | sphere-thread-engine | `/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine` | git repo | sphere-thread or council-engine family repo | active overlapping family member with corrected standalone remote | Council / LensForge / Sphere | `sphere-thread-engine` / `mainline` | 0.84 |
 | sovereign-jewel-next | `/Users/paulcooper/Documents/Codex Master Folder/sovereign-jewel-next` | git repo | Sovereign Jewel shell and viewer labs | active standalone local repo; umbrella detach pending | WebGL family | `sovereign-jewel-next` / `mainline` | 0.96 |
 | metacanon-ddos | `/Users/paulcooper/Documents/Codex Master Folder/metacanon-ddos` | git repo | DDOS-related auxiliary declaration and verification line | active standalone local auxiliary repo; canonical live site remains remote `main` | WebGL family | `metacanon-ddos` / `auxiliary` | 0.98 |
-| sovereign-jewel-web | `/Users/paulcooper/Documents/Codex Master Folder/sovereign-jewel-web` | static microsite root | Sovereign Jewel cinematic microsite | active small program | WebGL family | future `sovereign-jewel-web` / `sovereign-jewel-web` | 0.90 |
-| image-catalog-viewer | `/Users/paulcooper/Documents/Codex Master Folder/image-catalog-viewer` | tool root | image catalog viewer | active small program | standalone tools / services | future `image-catalog-viewer` / `image-catalog-viewer` | 0.95 |
-| metacanon-code-api | `/Users/paulcooper/Documents/Codex Master Folder/metacanon-code-api` | service root | code snippet and runtime API | active small service root | standalone tools / services | future `metacanon-code-api` / `metacanon-code-api` | 0.95 |
-| planes-of-existence-viewer | `/Users/paulcooper/Documents/Codex Master Folder/planes-of-existence-viewer` | Next app root | 3D planes viewer | active small program | standalone tools / services | future `planes-of-existence-viewer` / `planes-of-existence-viewer` | 0.92 |
-| ffi-node | `/Users/paulcooper/Documents/Codex Master Folder/ffi-node` | bridge root | Node bridge for native runtime | active small bridge root | standalone tools / services | future `ffi-node` / `ffi-node` | 0.96 |
-| houdini-codex-mcp | `/Users/paulcooper/Documents/Codex Master Folder/houdini-codex-mcp` | service root | Houdini MCP bridge | active small bridge root | standalone tools / services | future `houdini-codex-mcp` / `houdini-codex-mcp` | 0.94 |
+| sovereign-jewel-web | `/Users/paulcooper/Documents/Codex Master Folder/sovereign-jewel-web` | git repo | Sovereign Jewel cinematic microsite | standalone repo pushed to standalone remote; `mainline` worktree materialized | WebGL family | `sovereign-jewel-web` / `mainline` | 0.96 |
+| image-catalog-viewer | `/Users/paulcooper/Documents/Codex Master Folder/image-catalog-viewer` | git repo | image catalog viewer | standalone repo pushed to standalone remote; `mainline` worktree materialized | standalone tools / services | `image-catalog-viewer` / `mainline` | 0.97 |
+| metacanon-code-api | `/Users/paulcooper/Documents/Codex Master Folder/metacanon-code-api` | git repo | code snippet and runtime API | standalone repo pushed to standalone remote; `mainline` worktree materialized | standalone tools / services | `metacanon-code-api` / `mainline` | 0.97 |
+| planes-of-existence-viewer | `/Users/paulcooper/Documents/Codex Master Folder/planes-of-existence-viewer` | git repo | 3D planes viewer | standalone repo pushed to standalone remote; `mainline` worktree materialized | standalone tools / services | `planes-of-existence-viewer` / `mainline` | 0.95 |
+| ffi-node | `/Users/paulcooper/Documents/Codex Master Folder/ffi-node` | git repo | Node bridge for native runtime | standalone repo pushed to standalone remote; `mainline` worktree materialized | standalone tools / services | `ffi-node` / `mainline` | 0.96 |
+| houdini-codex-mcp | `/Users/paulcooper/Documents/Codex Master Folder/houdini-codex-mcp` | git repo | Houdini MCP bridge | standalone repo pushed to standalone remote; `mainline` worktree materialized | standalone tools / services | `houdini-codex-mcp` / `mainline` | 0.95 |
 | installer-ui | `/Users/paulcooper/Documents/Codex Master Folder/installer-ui` | handover workspace | installer desktop shell and handover packs | active umbrella-linked root | umbrella runtime / installer | `Codex Master Folder` / `umbrella-installer-ui` | 0.95 |
 | council-engine | `/Users/paulcooper/Documents/Codex Master Folder/council-engine` | monorepo root | council engine active root | active unmanaged root | Council / LensForge / Sphere | future `council-engine` / `council-engine` | 0.84 |
 | lensforge-app | `/Users/paulcooper/Documents/Codex Master Folder/lensforge-app` | monorepo root | LensForge active root | active unmanaged root | Council / LensForge / Sphere | future `lensforge-app` / `lensforge-app` | 0.87 |
@@ -520,6 +520,7 @@ Detailed evidence is recorded in `SMALL_PROGRAM_CANONICAL_SEATS_2026-03-22.md`.
 - canonical seat: `/Users/paulcooper/Documents/Codex Master Folder/image-catalog-viewer/server.mjs`
 - server: `/Users/paulcooper/Documents/Codex Master Folder/image-catalog-viewer/server.mjs`
 - client: `/Users/paulcooper/Documents/Codex Master Folder/image-catalog-viewer/public`
+- status: standalone repo pushed to standalone remote; `mainline` worktree materialized
 
 #### planes-of-existence-viewer
 
@@ -527,6 +528,7 @@ Detailed evidence is recorded in `SMALL_PROGRAM_CANONICAL_SEATS_2026-03-22.md`.
 - canonical seat: `/Users/paulcooper/Documents/Codex Master Folder/planes-of-existence-viewer/components/planes-of-existence-viewer.tsx`
 - viewer lab: `/Users/paulcooper/Documents/Codex Master Folder/planes-of-existence-viewer/components/planes-of-existence-viewer.tsx`
 - asset pipeline: `/Users/paulcooper/Documents/Codex Master Folder/planes-of-existence-viewer/scripts`
+- status: standalone repo pushed to standalone remote; `mainline` worktree materialized
 
 #### metacanon-code-api
 
@@ -534,6 +536,7 @@ Detailed evidence is recorded in `SMALL_PROGRAM_CANONICAL_SEATS_2026-03-22.md`.
 - canonical seat: `/Users/paulcooper/Documents/Codex Master Folder/metacanon-code-api/src/server.ts`
 - server: `/Users/paulcooper/Documents/Codex Master Folder/metacanon-code-api/src/server.ts`
 - runtime bridge layer: `/Users/paulcooper/Documents/Codex Master Folder/metacanon-code-api/src/runtimeControl.ts`
+- status: standalone repo pushed to standalone remote; `mainline` worktree materialized
 
 #### ffi-node
 
@@ -541,6 +544,7 @@ Detailed evidence is recorded in `SMALL_PROGRAM_CANONICAL_SEATS_2026-03-22.md`.
 - canonical seat: `/Users/paulcooper/Documents/Codex Master Folder/ffi-node/index.js`
 - native bridge: `/Users/paulcooper/Documents/Codex Master Folder/ffi-node/index.js`
 - build script: `/Users/paulcooper/Documents/Codex Master Folder/ffi-node/scripts/build-native.sh`
+- status: standalone repo pushed to standalone remote; `mainline` worktree materialized
 
 #### houdini-codex-mcp
 
@@ -548,10 +552,11 @@ Detailed evidence is recorded in `SMALL_PROGRAM_CANONICAL_SEATS_2026-03-22.md`.
 - canonical seat: `/Users/paulcooper/Documents/Codex Master Folder/houdini-codex-mcp/server.cjs`
 - server: `/Users/paulcooper/Documents/Codex Master Folder/houdini-codex-mcp/server.cjs`
 - plugin bootstrap: `/Users/paulcooper/Documents/Codex Master Folder/houdini-codex-mcp/plugin/pythonrc.py`
+- status: standalone repo pushed to standalone remote; `mainline` worktree materialized
 
 Current intended destination:
 
-- retain as separate small program or bridge roots
+- retain as separate small program or bridge roots, with standalone remotes and materialized `mainline` worktrees now in place
 - treat `installer-ui` as umbrella-linked rather than a standalone product family
 
 ### Archives and legacy copies

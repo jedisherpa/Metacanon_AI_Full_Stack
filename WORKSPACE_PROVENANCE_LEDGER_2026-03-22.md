@@ -33,6 +33,7 @@ Every provenance claim below is ranked from strongest to weakest evidence:
 - `/Users/paulcooper/Documents/Codex Master Folder/prism-feralpharaoh` remains an independent product even though it carries duplicated Prism and Metacanon frontend lineage from `/Users/paulcooper/Documents/Codex Master Folder/anything-llm/frontend/src`.
 - `/Users/paulcooper/Documents/Codex Master Folder/anything-llm` and `/Users/paulcooper/Documents/Codex Master Folder/prism-feralpharaoh` are separate products for ownership, worktree, and cleanup purposes.
 - `/Users/paulcooper/Documents/Codex Master Folder/sovereign-jewel-web` is a separate static microsite root and not just a forgotten branch of the larger jewel projects.
+- `/Users/paulcooper/Documents/Codex Master Folder/sovereign-jewel-web`, `/Users/paulcooper/Documents/Codex Master Folder/image-catalog-viewer`, `/Users/paulcooper/Documents/Codex Master Folder/metacanon-code-api`, `/Users/paulcooper/Documents/Codex Master Folder/planes-of-existence-viewer`, `/Users/paulcooper/Documents/Codex Master Folder/ffi-node`, and `/Users/paulcooper/Documents/Codex Master Folder/houdini-codex-mcp` have been promoted to standalone repos, pushed to standalone remotes, and given materialized `mainline` worktrees.
 - The umbrella Rust torus and sub-sphere runtime is its own real code line and must remain visible.
 
 ## Root-by-Root Provenance
@@ -412,6 +413,8 @@ Root: `/Users/paulcooper/Documents/Codex Master Folder/image-catalog-viewer`
   - `server.mjs` calls `/Users/paulcooper/Documents/Codex Master Folder/scripts/build_image_catalog.py`
 - Conclusion:
   - separate small tool root with an explicit dependency back to the umbrella runtime workspace
+- Current promotion status:
+- promoted to standalone repo, pushed to standalone remote, and given a materialized `mainline` worktree
 
 #### planes-of-existence-viewer
 
@@ -425,6 +428,8 @@ Root: `/Users/paulcooper/Documents/Codex Master Folder/planes-of-existence-viewe
   - this is a separate cosmology viewer with its own GLB runtime and asset pipeline
 - Conclusion:
   - first-class small product root, not a hidden sub-feature of the jewel or metacanon apps
+- Current promotion status:
+- promoted to standalone repo, pushed to standalone remote, and given a materialized `mainline` worktree
 
 #### metacanon-code-api
 
@@ -438,6 +443,8 @@ Root: `/Users/paulcooper/Documents/Codex Master Folder/metacanon-code-api`
   - the README explicitly says it serves live snippets and runtime control endpoints backed by `ffi-node`
 - Conclusion:
   - separate service root with a direct bridge dependency
+- Current promotion status:
+- promoted to standalone repo, pushed to standalone remote, and given a materialized `mainline` worktree
 
 #### ffi-node
 
@@ -451,6 +458,8 @@ Root: `/Users/paulcooper/Documents/Codex Master Folder/ffi-node`
   - `index.js` expects `metacanon_ai.node` and exports Rust-style compatibility aliases
 - Conclusion:
   - separate Node bridge root with direct lineage back to the umbrella Rust runtime
+- Current promotion status:
+- promoted to standalone repo, pushed to standalone remote, and given a materialized `mainline` worktree
 
 #### houdini-codex-mcp
 
@@ -464,6 +473,8 @@ Root: `/Users/paulcooper/Documents/Codex Master Folder/houdini-codex-mcp`
   - the README says the MCP SDK is resolved from `/Users/paulcooper/Documents/Codex Master Folder/anything-llm/server`
 - Conclusion:
   - separate bridge root with an explicit dependency on the AnythingLLM server tree
+- Current promotion status:
+- promoted to standalone repo, pushed to standalone remote, and given a materialized `mainline` worktree
 
 #### installer-ui
 
