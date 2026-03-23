@@ -511,16 +511,17 @@ Root: `/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine`
   - README
   - root package name `council-engine`
   - `tma/package.json` names `lensforge-tma`
-- Key ambiguity:
-  - the repo remote points back to `git@github.com:jedisherpa/Metacanon_AI_Full_Stack.git`
 - Conclusion:
-  - active repo anchor for the overlapping family, but not cleanly isolated in lineage terms
+  - active repo anchor for the overlapping family, now isolated onto its own remote
 
 Current active-seat decision:
 
 - active engine canonical seat: `/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/engine`
 - active Council Nebula skin canonical seat: `/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine/skins/council-nebula`
 - inherited `tma/` surface exists here, but it is not the canonical LensForge seat
+- standalone remote: `git@github.com:jedisherpa/sphere-thread-engine.git`
+- preserved legacy reference remote: `umbrella-origin -> git@github.com:jedisherpa/Metacanon_AI_Full_Stack.git`
+- materialized worktree: `/Users/paulcooper/Documents/Codex Master Folder/worktrees/sphere-thread-engine/mainline`
 
 #### Archive copies
 

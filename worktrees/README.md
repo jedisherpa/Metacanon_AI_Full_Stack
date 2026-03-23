@@ -74,6 +74,12 @@ Current state:
 - `engine`
 - `tma`
 
+Current state:
+
+- `mainline` is now a real materialized worktree at `/Users/paulcooper/Documents/Codex Master Folder/worktrees/sphere-thread-engine/mainline`
+- the repo remote has been corrected to `git@github.com:jedisherpa/sphere-thread-engine.git`
+- the former umbrella remote is retained as `umbrella-origin`
+
 ## Blocked Future Roots
 
 These remain outside the materialized scaffold until they are real repos:
