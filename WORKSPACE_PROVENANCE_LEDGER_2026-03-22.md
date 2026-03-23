@@ -500,7 +500,7 @@ Root: `/Users/paulcooper/Documents/Codex Master Folder/council-engine`
   - README
   - workspaces `engine` and `skins/council-nebula`
 - Conclusion:
-  - unmanaged active root in the council-engine lineage
+  - standalone active root in the council-engine lineage, now isolated onto its own repo and remote
 
 #### lensforge-app
 
@@ -508,10 +508,11 @@ Root: `/Users/paulcooper/Documents/Codex Master Folder/lensforge-app`
 
 - Strongest evidence:
   - README
-  - root package name still `council-engine`
+  - root package name `lensforge-app`
+  - root workspaces now include `tma`
   - `tma/package.json` names `lensforge-tma`
 - Conclusion:
-  - hybrid overlapping root: shared council engine lineage plus a distinct LensForge TMA surface
+  - hybrid overlapping root: shared council engine lineage plus a distinct LensForge TMA surface, now isolated onto its own repo and remote
 
 #### sphere-thread-engine
 

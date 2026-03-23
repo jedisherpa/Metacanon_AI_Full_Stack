@@ -27,6 +27,8 @@ Current state:
 - `worktrees/castle-member-diana/`
 - `worktrees/castle-member-liana/`
 - `worktrees/sphere-thread-engine/`
+- `worktrees/council-engine/`
+- `worktrees/lensforge-app/`
 - `worktrees/sovereign-jewel-web/`
 - `worktrees/image-catalog-viewer/`
 - `worktrees/metacanon-code-api/`
@@ -80,6 +82,11 @@ Current state:
 - `engine`
 - `tma`
 
+### council and lensforge repos
+
+- `council-engine/mainline`
+- `lensforge-app/mainline`
+
 ### small-program repos
 
 - `sovereign-jewel-web/mainline`
@@ -94,22 +101,20 @@ Current state:
 - `mainline` is now a real materialized worktree at `/Users/paulcooper/Documents/Codex Master Folder/worktrees/sphere-thread-engine/mainline`
 - the repo remote has been corrected to `git@github.com:jedisherpa/sphere-thread-engine.git`
 - the former umbrella remote is retained as `umbrella-origin`
+- `council-engine/mainline` is now a real materialized worktree at `/Users/paulcooper/Documents/Codex Master Folder/worktrees/council-engine/mainline`
+- `lensforge-app/mainline` is now a real materialized worktree at `/Users/paulcooper/Documents/Codex Master Folder/worktrees/lensforge-app/mainline`
 - the small-program repos above now have real `mainline` worktrees and should be treated as standalone worktree lanes
 
 ## Blocked Future Roots
 
 These remain outside the materialized scaffold until they are real repos:
 
-- `council-engine`
-- `lensforge-app`
 - `installer-ui`
 
 ## Important Constraint
 
 The following local roots are not yet repos and must remain unmanaged until repo promotion is approved:
 
-- `council-engine`
-- `lensforge-app`
 - `installer-ui`
 
 See:

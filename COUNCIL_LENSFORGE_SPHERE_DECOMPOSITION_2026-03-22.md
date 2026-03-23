@@ -20,7 +20,7 @@ This is a cleanup map, not a merge plan.
 
 - `sphere-thread-engine` is the only active member with its own git history, so it is the current git-backed anchor for the shared engine line.
 - `lensforge-app/tma` is the clearest canonical active LensForge seat because its package identity is explicitly `lensforge-tma`.
-- `council-engine` remains an unmanaged active root that preserves the Council Engine core, skin, config, and governance line, but it is not the current git-backed anchor.
+- `council-engine` remains a standalone active root that preserves the Council Engine core, skin, config, and governance line, but it is not the current git-backed anchor.
 - `sphere-thread-engine/tma` is real, but it is inherited overlap, not the canonical LensForge TMA seat.
 - `council-engine-code-copy` and `council-engine-master-v2` are archive copies, not active product roots.
 
@@ -110,7 +110,7 @@ Important delta:
 
 Current intended role:
 
-- unmanaged active Council Engine root
+- standalone Council Engine repo preserving the original core/skin/config/governance line
 
 Keep visible for:
 
@@ -174,7 +174,7 @@ Use this boundary going forward:
 - active Council Engine canonical seat: `sphere-thread-engine/engine`
 - active Council Nebula skin canonical seat: `sphere-thread-engine/skins/council-nebula`
 - active LensForge canonical seat: `lensforge-app/tma`
-- `council-engine` remains a live unmanaged comparison root
+- `council-engine` remains a live comparison root
 - archive copies stay archive-only
 
 ## Operational consequence
@@ -182,4 +182,4 @@ Use this boundary going forward:
 - do not collapse these roots into one family root
 - do not delete `council-engine`
 - do not treat `sphere-thread-engine/tma` as the canonical LensForge product seat
-- fix remote/worktree hygiene later, after provenance review is accepted
+- keep the standalone remotes and `mainline` worktrees aligned with the canonical-seat model

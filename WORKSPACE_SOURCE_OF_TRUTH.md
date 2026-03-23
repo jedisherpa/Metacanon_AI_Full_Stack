@@ -181,8 +181,8 @@ These belong to the umbrella runtime line and are not workspace residue.
 | ffi-node | `/Users/paulcooper/Documents/Codex Master Folder/ffi-node` | git repo | Node bridge for native runtime | standalone repo pushed to standalone remote; `mainline` worktree materialized | standalone tools / services | `ffi-node` / `mainline` | 0.96 |
 | houdini-codex-mcp | `/Users/paulcooper/Documents/Codex Master Folder/houdini-codex-mcp` | git repo | Houdini MCP bridge | standalone repo pushed to standalone remote; `mainline` worktree materialized | standalone tools / services | `houdini-codex-mcp` / `mainline` | 0.95 |
 | installer-ui | `/Users/paulcooper/Documents/Codex Master Folder/installer-ui` | handover workspace | installer desktop shell and handover packs | active umbrella-linked root | umbrella runtime / installer | `Codex Master Folder` / `umbrella-installer-ui` | 0.95 |
-| council-engine | `/Users/paulcooper/Documents/Codex Master Folder/council-engine` | monorepo root | council engine active root | active unmanaged root | Council / LensForge / Sphere | future `council-engine` / `council-engine` | 0.84 |
-| lensforge-app | `/Users/paulcooper/Documents/Codex Master Folder/lensforge-app` | monorepo root | LensForge active root | active unmanaged root | Council / LensForge / Sphere | future `lensforge-app` / `lensforge-app` | 0.87 |
+| council-engine | `/Users/paulcooper/Documents/Codex Master Folder/council-engine` | git repo | council engine active root | standalone repo pushed to standalone remote; `mainline` worktree materialized | Council / LensForge / Sphere | `council-engine` / `mainline` | 0.90 |
+| lensforge-app | `/Users/paulcooper/Documents/Codex Master Folder/lensforge-app` | git repo | LensForge active root | standalone repo pushed to standalone remote; `mainline` worktree materialized | Council / LensForge / Sphere | `lensforge-app` / `mainline` | 0.92 |
 | council-engine-code-copy | `/Users/paulcooper/Documents/Codex Master Folder/council-engine-code-copy` | archive copy root | archived council-engine copy | archive only | archives and legacy copies | archive only | 0.90 |
 | council-engine-master-v2 | `/Users/paulcooper/Documents/Codex Master Folder/council-engine-master-v2` | archive copy root | archived council-engine master v2 copy | archive only | archives and legacy copies | archive only | 0.91 |
 
@@ -497,11 +497,12 @@ Major stable units:
 
 Contamination or duplication notes:
 
-- shared package identity still says `council-engine`
-- only `sphere-thread-engine` is currently a real repo root
+- shared engine and skin package identities still carry Council lineage
+- all three active roots are now real repos with standalone remotes
 - `sphere-thread-engine/tma` is inherited overlap, not the canonical LensForge seat
-- `council-engine` remains a live unmanaged comparison root, not an archive
+- `council-engine` remains a live comparison root, not an archive
 - `sphere-thread-engine` now has a standalone remote and a materialized `mainline` worktree
+- `council-engine` and `lensforge-app` now also have standalone remotes and materialized `mainline` worktrees
 - detailed evidence is recorded in `COUNCIL_LENSFORGE_SPHERE_DECOMPOSITION_2026-03-22.md`
 
 Current intended destination:
