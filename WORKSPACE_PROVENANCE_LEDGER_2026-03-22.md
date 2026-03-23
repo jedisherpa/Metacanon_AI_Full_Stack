@@ -294,7 +294,7 @@ Root: `/Users/paulcooper/Documents/Codex Master Folder/prism-feralpharaoh`
 - Strongest evidence:
   - local git repo
   - dedicated remote `https://github.com/jedisherpa/prism-feralpharaoh.git`
-  - package manifest still says `anything-llm-frontend`, but that is stale residue rather than current product identity
+  - package manifest normalized to `prism-feralpharaoh` on 2026-03-22
   - duplicate-file lineage back to AnythingLLM overlay files
 - First local evidence:
   - `2026-03-15 | c5ce4ef | Make Prism body read larger in the frame`
