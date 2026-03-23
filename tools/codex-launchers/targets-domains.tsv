@@ -1,0 +1,40 @@
+# key	label	path	purpose
+godsminddreaming	godsminddreaming.com	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/apps/godsminddreaming	Main Godsmind entry app
+cordera	cordera.godsminddreaming.com	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/apps/godsminddreaming/app/cordera	Direct Cordera subworld seat
+ascendia	ascendia.godsminddreaming.com	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/apps/godsminddreaming/app/ascendia	Direct Ascendia subworld seat
+ecclesia	ecclesia.godsminddreaming.com	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/apps/godsminddreaming/app/ecclesia	Direct Ecclesia subworld seat
+kenosis	kenosis.godsminddreaming.com	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/apps/godsminddreaming/app/kenosis	Direct Kenosis subworld seat
+dynamis	dynamis.godsminddreaming.com	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/apps/godsminddreaming/app/dynamis	Direct Dynamis subworld seat
+godchild	godchild.godsminddreaming.com	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/apps/godsminddreaming/app/godchild	Direct Godchild subworld seat
+pmpe	pmpe.godsminddreaming.com	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/apps/godsminddreaming/app/pmpe	Direct PMPE subworld seat
+paul-godsmind	paul.godsminddreaming.com	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/apps/godsminddreaming/app/paul	Direct Paul subworld seat
+metacanonai	metacanonai.com	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/apps/metacanonai	Main MetacanonAI entry app
+sphere-metacanonai	sphere.metacanonai.com	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/apps/metacanonai/app/[slug]	Dynamic slug seat for the Sphere domain line
+prism-metacanonai	prism.metacanonai.com	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/apps/metacanonai/app/[slug]	Monorepo Prism slug seat; exact live repo seat is external/private
+metacanon-net	metacanon.net	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/apps/metacanonai/app/[slug]	Dynamic slug seat for the metacanon.net domain line
+metacanon-website	metacanon.website	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/apps/metacanonai/app/[slug]	Dynamic slug seat for the metacanon.website domain line
+sovereignai-design	sovereignai.design	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/apps/metacanonai/app/[slug]	Dynamic slug seat for the sovereignai.design domain line
+sphereai-dev	sphereai.dev	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/apps/metacanonai/app/[slug]	Dynamic slug seat for the sphereai.dev domain line
+iampaulcooper	iampaulcooper.com	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/apps/iampaulcooper	Main I Am Paul Cooper entry app
+paulcooper-ai	paulcooper.ai	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/apps/iampaulcooper/app/[slug]	Dynamic slug seat for the paulcooper.ai domain line
+paulcooper-agency	paulcooper.agency	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/apps/iampaulcooper/app/[slug]	Dynamic slug seat for the paulcooper.agency domain line
+consciousnessarchitect	consciousnessarchitect.com	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/apps/iampaulcooper/app/[slug]	Dynamic slug seat for the consciousnessarchitect.com domain line
+feralpharaoh	feralpharaoh.com	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/apps/feralpharaoh	Main Feral Pharaoh entry app
+protocolferal	protocolferal.com	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/apps/feralpharaoh/app/[slug]	Dynamic slug seat for the protocolferal.com domain line
+wizardjoe	wizardjoe.com	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/apps/feralpharaoh/app/[slug]	Dynamic slug seat for the wizardjoe.com domain line
+handsofthevoid	handsofthevoid.com	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/apps/feralpharaoh/app/[slug]	Dynamic slug seat for the hands of the void domain line
+suckmymarketing	suckmymarketing.com	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/apps/feralpharaoh/app/[slug]	Dynamic slug seat for the suckmymarketing.com domain line
+alchemistassembly	alchemistassembly.com	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/apps/feralpharaoh/app/[slug]	Dynamic slug seat for the alchemistassembly.com domain line
+obsidianmind	obsidianmind.live	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/apps/feralpharaoh/app/[slug]	Dynamic slug seat for the obsidianmind.live domain line
+the12thwitness	the12thwitness.com	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/apps/feralpharaoh/app/[slug]	Dynamic slug seat for the12thwitness.com domain line
+antechamber	antechamber.art	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/apps/feralpharaoh/app/[slug]	Dynamic slug seat for the antechamber.art domain line
+jedisherpa	jedisherpa.com	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/apps/jedisherpa	Main JediSherpa entry app
+harmonizingman	harmonizingman.com	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/apps/jedisherpa/app/[slug]	Dynamic slug seat for the harmonizingman.com domain line
+fisheye-news	fisheye.news	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/apps/jedisherpa/app/[slug]	Dynamic slug seat for the fisheye.news domain line
+govclaw	govclaw.com	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/apps/jedisherpa/app/[slug]	Dynamic slug seat for the govclaw.com domain line
+worldtransformationfoundation	worldtransformationfoundation.com	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/apps/jedisherpa/app/[slug]	Monorepo implementation seat for the worldtransformationfoundation.com domain line
+re-self	re-self.com	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/apps/jedisherpa/app/[slug]	Dynamic slug seat for the re-self.com domain line
+shamanyourself	shamanyourself.com	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/docs/reference/42-domains	Reference-only local seat; exact live repo is external and not cloned here
+paulcooperai-com	paulcooperai.com	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/docs/reference/42-domains	Reference-only local seat; exact live repo is external and not cloned here
+sign-wtf	sign.worldtransformationfoundation.com	/Users/paulcooper/Documents/Codex Master Folder/worktrees/metacanon-ddos/auxiliary	Local DDOS auxiliary seat for the sign.worldtransformationfoundation.com line
+archangels	archangels.art	/Users/paulcooper/Documents/Codex Master Folder/worktrees/sovereign-metaverse/metacanonai-main/docs/reference/42-domains	Reference-only local seat; exact live repo is external and not cloned here

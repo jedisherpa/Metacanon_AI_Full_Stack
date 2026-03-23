@@ -69,6 +69,23 @@ Or run in Terminal:
 
 The picker shows numbered active lanes. Select a number and it launches the Codex app scoped to that directory.
 
+The picker now has three menus:
+
+- `Active Worktrees`
+- `Linked Domains`
+- `Local-Only / Non-Vercel Projects`
+
+Use `Linked Domains` when you are thinking in terms of a live domain rather than a repo name.
+
+Important behavior:
+
+- if the exact domain code seat exists locally, the launcher lands on that code path
+- if the exact live repo is external/private and not cloned here, the launcher lands on the nearest local implementation or reference seat instead
+
+Domain routing reference:
+
+- `/Users/paulcooper/Documents/Codex Master Folder/DOMAIN_THREAD_MAP.md`
+
 ## Terminal Launchers vs .command Launchers
 
 - `.sh` launchers are for Terminal use
@@ -100,3 +117,4 @@ They are mandatory only in those coding roots and define:
 
 - umbrella root = orchestrate
 - worktree root = code
+- linked domain menu = route a live domain to its best local seat

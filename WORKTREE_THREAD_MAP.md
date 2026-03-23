@@ -2,6 +2,10 @@
 
 Use this file to decide which Codex thread should own a given task.
 
+If the task starts from a live domain name instead of a repo or app name, check:
+
+- `/Users/paulcooper/Documents/Codex Master Folder/DOMAIN_THREAD_MAP.md`
+
 Rules:
 
 - open the umbrella root only for orchestration, inventory, launchers, and workspace policy
