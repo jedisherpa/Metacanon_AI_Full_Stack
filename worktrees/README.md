@@ -60,7 +60,7 @@ Current state:
 
 ### metacanon-ddos
 
-- `mainline`
+- `auxiliary`
 
 ### castle-member family
 

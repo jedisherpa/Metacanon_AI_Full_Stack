@@ -249,6 +249,7 @@ Other important units:
 Root: `/Users/paulcooper/Documents/Codex Master Folder/metacanon-ddos`
 
 - Strongest evidence:
+  - existing remote `main` already contains the live DDOS site history
   - docs still describe the `sovereign-jewel-next` hero pipeline
   - file and folder structure mirrors the jewel root
   - package identity is now explicitly `metacanon-ddos`
@@ -258,9 +259,9 @@ Root: `/Users/paulcooper/Documents/Codex Master Folder/metacanon-ddos`
 - What it started as:
   - a separate local product root built from copied jewel engine and asset lineage
 - What it became:
-  - a DDOS declaration experience with constitution, verification, API, and Prisma additions
+  - an auxiliary local DDOS-related line with constitution, verification, API, and Prisma additions
 - What it should be now:
-  - a standalone local repo that explicitly records duplicate lineage without collapsing into the jewel product
+  - a standalone local auxiliary repo that stays separate from the canonical live DDOS `main` branch unless intentionally reconciled
 
 High-confidence duplicate lineage:
 

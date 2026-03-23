@@ -173,7 +173,7 @@ These belong to the umbrella runtime line and are not workspace residue.
 | sovereign-metaverse | `/Users/paulcooper/Documents/Codex Master Folder/sovereign-metaverse` | git monorepo | canonical metaverse monorepo | active canonical product root | WebGL family | `sovereign-metaverse` / `metaverse-anchor` | 0.98 |
 | sphere-thread-engine | `/Users/paulcooper/Documents/Codex Master Folder/sphere-thread-engine` | git repo | sphere-thread or council-engine family repo | active but overlapping family member | Council / LensForge / Sphere | `sphere-thread-engine` / `mainline` | 0.79 |
 | sovereign-jewel-next | `/Users/paulcooper/Documents/Codex Master Folder/sovereign-jewel-next` | git repo | Sovereign Jewel shell and viewer labs | active standalone local repo; umbrella detach pending | WebGL family | `sovereign-jewel-next` / `mainline` | 0.96 |
-| metacanon-ddos | `/Users/paulcooper/Documents/Codex Master Folder/metacanon-ddos` | git repo | DDOS declaration and verification site | active standalone local repo; umbrella detach pending | WebGL family | `metacanon-ddos` / `mainline` | 0.98 |
+| metacanon-ddos | `/Users/paulcooper/Documents/Codex Master Folder/metacanon-ddos` | git repo | DDOS-related auxiliary declaration and verification line | active standalone local auxiliary repo; canonical live site remains remote `main` | WebGL family | `metacanon-ddos` / `auxiliary` | 0.98 |
 | sovereign-jewel-web | `/Users/paulcooper/Documents/Codex Master Folder/sovereign-jewel-web` | static microsite root | Sovereign Jewel cinematic microsite | active small program | WebGL family | future `sovereign-jewel-web` / `sovereign-jewel-web` | 0.90 |
 | image-catalog-viewer | `/Users/paulcooper/Documents/Codex Master Folder/image-catalog-viewer` | tool root | image catalog viewer | active small program | standalone tools / services | future `image-catalog-viewer` / `image-catalog-viewer` | 0.95 |
 | metacanon-code-api | `/Users/paulcooper/Documents/Codex Master Folder/metacanon-code-api` | service root | code snippet and runtime API | active small service root | standalone tools / services | future `metacanon-code-api` / `metacanon-code-api` | 0.95 |
@@ -378,6 +378,8 @@ Notes:
 - package identity has been corrected to `metacanon-ddos`
 - docs still copy the jewel plan line
 - standalone local repo initialized on 2026-03-22
+- remote `origin/main` remains the canonical live DDOS site
+- local extraction is auxiliary only and is currently pushed to `origin/codex/standalone-repo-extraction`
 
 #### prism-feralpharaoh
 
@@ -555,10 +557,10 @@ Current intended destination:
   - `/Users/paulcooper/Documents/Codex Master Folder/castle-member-diana`
   - `/Users/paulcooper/Documents/Codex Master Folder/castle-member-liana`
 
-### Jewel to DDOS fork lineage
+### Jewel to DDOS auxiliary lineage
 
 - local parent line: `/Users/paulcooper/Documents/Codex Master Folder/sovereign-jewel-next`
-- local forked root: `/Users/paulcooper/Documents/Codex Master Folder/metacanon-ddos`
+- local auxiliary related root: `/Users/paulcooper/Documents/Codex Master Folder/metacanon-ddos`
 - duplicated units:
   - breakup engine
   - geometry viewer
