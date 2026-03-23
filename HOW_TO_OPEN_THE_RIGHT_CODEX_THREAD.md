@@ -6,8 +6,13 @@ Launcher folder:
 
 - `/Users/paulcooper/Documents/Codex Master Folder/tools/codex-launchers/`
 
+Applications install:
+
+- `/Users/paulcooper/Applications/Open Codex Project.app`
+
 Fastest entrypoints:
 
+- `/Users/paulcooper/Documents/Codex Master Folder/tools/codex-launchers/Open Codex Project.app`
 - `/Users/paulcooper/Documents/Codex Master Folder/tools/codex-launchers/open-codex-project.command`
 - `/Users/paulcooper/Documents/Codex Master Folder/tools/codex-launchers/open-umbrella-orchestrator.command`
 - `/Users/paulcooper/Documents/Codex Master Folder/tools/codex-launchers/open-sovereign-metaverse.command`
@@ -59,6 +64,7 @@ If the task is unclear, check:
 
 Double-click:
 
+- `/Users/paulcooper/Documents/Codex Master Folder/tools/codex-launchers/Open Codex Project.app`
 - `/Users/paulcooper/Documents/Codex Master Folder/tools/codex-launchers/open-codex-project.command`
 
 Or run in Terminal:

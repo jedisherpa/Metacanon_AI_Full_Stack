@@ -1,0 +1,158 @@
+#!/bin/zsh
+set -euo pipefail
+
+LAUNCHER_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
+ACTIVE_FILE="$LAUNCHER_DIR/targets.tsv"
+DOMAIN_FILE="$LAUNCHER_DIR/targets-domains.tsv"
+LOCAL_ONLY_FILE="$LAUNCHER_DIR/targets-local-only.tsv"
+
+PATH="/Users/paulcooper/.nvm/versions/node/v20.20.0/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+
+CODEX_BIN="${CODEX_BIN:-}"
+if [[ -z "$CODEX_BIN" ]]; then
+  for candidate in \
+    "/Users/paulcooper/.nvm/versions/node/v20.20.0/bin/codex" \
+    "/opt/homebrew/bin/codex" \
+    "/usr/local/bin/codex"
+  do
+    if [[ -x "$candidate" ]]; then
+      CODEX_BIN="$candidate"
+      break
+    fi
+  done
+fi
+
+if [[ -z "$CODEX_BIN" ]]; then
+  CODEX_BIN="$(command -v codex || true)"
+fi
+
+show_dialog() {
+  local title="$1"
+  local message="$2"
+  /usr/bin/osascript - "$title" "$message" <<'APPLESCRIPT'
+on run argv
+	set theTitle to item 1 of argv
+	set theMessage to item 2 of argv
+	display dialog theMessage with title theTitle buttons {"OK"} default button "OK"
+end run
+APPLESCRIPT
+}
+
+choose_option() {
+  local title="$1"
+  local prompt="$2"
+  shift 2
+
+  if (( $# == 0 )); then
+    print "__CANCEL__"
+    return 0
+  fi
+
+  /usr/bin/osascript - "$title" "$prompt" "$@" <<'APPLESCRIPT'
+on run argv
+	set theTitle to item 1 of argv
+	set thePrompt to item 2 of argv
+	if (count of argv) < 3 then return "__CANCEL__"
+	set optionItems to items 3 thru -1 of argv
+	set chosen to choose from list optionItems with title theTitle with prompt thePrompt OK button name "Open" cancel button name "Cancel" without multiple selections allowed and empty selection allowed false
+	if chosen is false then return "__CANCEL__"
+	return item 1 of chosen
+end run
+APPLESCRIPT
+}
+
+launch_codex() {
+  local target_dir="$1"
+  local label="$2"
+
+  if [[ -z "$CODEX_BIN" || ! -x "$CODEX_BIN" ]]; then
+    show_dialog "Codex Not Found" "The codex binary was not found. Expected it in your NVM or Homebrew paths."
+    exit 1
+  fi
+
+  if [[ ! -d "$target_dir" ]]; then
+    show_dialog "Missing Target" "The target directory does not exist:\n\n$target_dir"
+    exit 1
+  fi
+
+  cd "$target_dir"
+  nohup "$CODEX_BIN" -C "$target_dir" app >/tmp/open-codex-project.log 2>&1 &
+  disown
+}
+
+choose_target_from_file() {
+  local targets_file="$1"
+  local title="$2"
+  local prompt="$3"
+
+  if [[ ! -f "$targets_file" ]]; then
+    show_dialog "Targets Missing" "Target file not found:\n\n$targets_file"
+    exit 1
+  fi
+
+  local -a displays
+  local -a labels
+  local -a paths
+  local key label path purpose choice
+  local index=1
+
+  while IFS=$'\t' read -r key label path purpose; do
+    [[ -z "${key}" ]] && continue
+    [[ "${key}" == \#* ]] && continue
+    [[ ! -d "${path}" ]] && continue
+    labels[$index]="${label}"
+    paths[$index]="${path}"
+    displays[$index]="${label} — ${purpose}"
+    ((index++))
+  done < "$targets_file"
+
+  if (( index == 1 )); then
+    show_dialog "No Targets" "No launchable targets were found for:\n\n$title"
+    exit 1
+  fi
+
+  choice="$(choose_option "$title" "$prompt" "${displays[@]}")"
+  if [[ "$choice" == "__CANCEL__" ]]; then
+    return 1
+  fi
+
+  local i=1
+  while (( i < index )); do
+    if [[ "${displays[$i]}" == "$choice" ]]; then
+      launch_codex "${paths[$i]}" "${labels[$i]}"
+      return 0
+    fi
+    ((i++))
+  done
+
+  show_dialog "Selection Error" "The chosen target could not be resolved."
+  exit 1
+}
+
+while true; do
+  category="$(choose_option \
+    "Open Codex Project" \
+    "Choose a project category." \
+    "Active Worktrees" \
+    "Linked Domains" \
+    "Local-Only / Non-Vercel Projects")"
+
+  case "$category" in
+    "__CANCEL__")
+      exit 0
+      ;;
+    "Active Worktrees")
+      choose_target_from_file "$ACTIVE_FILE" "Active Worktrees" "Choose the worktree you want to open in Codex." || continue
+      ;;
+    "Linked Domains")
+      choose_target_from_file "$DOMAIN_FILE" "Linked Domains" "Choose the live domain line you want to route to a local Codex seat." || continue
+      ;;
+    "Local-Only / Non-Vercel Projects")
+      choose_target_from_file "$LOCAL_ONLY_FILE" "Local-Only / Non-Vercel Projects" "Choose a local-only or non-Vercel project lane." || continue
+      ;;
+    *)
+      show_dialog "Selection Error" "Unknown category selected."
+      exit 1
+      ;;
+  esac
+done
