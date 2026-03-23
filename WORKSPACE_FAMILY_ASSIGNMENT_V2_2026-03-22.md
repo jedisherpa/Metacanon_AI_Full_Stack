@@ -29,7 +29,6 @@ Canonical root:
 Included roots:
 
 - `/Users/paulcooper/Documents/Codex Master Folder`
-- `/Users/paulcooper/Documents/Codex Master Folder/installer-ui`
 
 Core units:
 
@@ -39,13 +38,10 @@ Core units:
 - umbrella provider adapters
 - umbrella torus and sub-sphere runtime
 - umbrella FFI bridge
-- installer-ui desktop app
-- installer-ui prototype
-- installer-ui handover packs
 
 Boundary note:
 
-- This family owns the runtime and installer line only. It does not own the other product roots just because they live in the same parent folder.
+- This family owns the runtime and installer command line only. It does not own the other product roots just because they live in the same parent folder.
 
 ### 2. Castle members
 
@@ -121,6 +117,7 @@ Canonical root:
 Included roots:
 
 - `/Users/paulcooper/Documents/Codex Master Folder/anything-llm`
+- `/Users/paulcooper/Documents/Codex Master Folder/installer-ui`
 
 Core units:
 
@@ -131,6 +128,9 @@ Core units:
 - browser-extension
 - embed
 - mobile PrismAI app
+- installer-ui desktop app
+- installer-ui prototype
+- installer-ui handover packs
 - Metacanon data pack
 - cloud deployments
 
@@ -138,6 +138,7 @@ Critical lineage note:
 
 - Historical file overlap with `prism-feralpharaoh` remains recorded in the provenance ledger.
 - That overlap does not change current product ownership, worktrees, or cleanup lanes.
+- `installer-ui` remains a separate PrismAI surface with an explicit dependency on the umbrella runtime command surface.
 
 ### 5. Council / LensForge / Sphere
 

@@ -67,7 +67,7 @@ Important owned units:
 
 Important boundary:
 
-- `installer-ui/` is provenance-linked to this root, but is treated as a separate top-level root in the new census because it has its own implementation surface and handover packs.
+- `installer-ui/` is provenance-linked to this root for runtime command integration, but is treated as a separate top-level PrismAI root in the new census because it has its own implementation surface and handover packs.
 
 ### 2. AnythingLLM / PrismAI core
 
@@ -487,7 +487,7 @@ Root: `/Users/paulcooper/Documents/Codex Master Folder/installer-ui`
 - Key provenance fact:
   - the README maps UI screens to `/Users/paulcooper/Documents/Codex Master Folder/src/ui.rs`
 - Conclusion:
-  - separate implementation and handover workspace inside the umbrella product family
+  - separate PrismAI implementation and handover workspace with an explicit dependency on the umbrella runtime command surface
 
 ### 8. Council, LensForge, Sphere, and archive copies
 

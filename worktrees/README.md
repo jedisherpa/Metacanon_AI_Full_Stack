@@ -109,13 +109,13 @@ Current state:
 
 These remain outside the materialized scaffold until they are real repos:
 
-- `installer-ui`
+- `installer-ui` PrismAI installer surface with umbrella runtime dependency
 
 ## Important Constraint
 
 The following local roots are not yet repos and must remain unmanaged until repo promotion is approved:
 
-- `installer-ui`
+- `installer-ui` PrismAI installer surface with umbrella runtime dependency
 
 See:
 

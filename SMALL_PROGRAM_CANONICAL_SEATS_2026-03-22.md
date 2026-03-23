@@ -177,4 +177,6 @@ Dependency note:
 
 Status:
 
+- PrismAI installer surface with an explicit umbrella runtime dependency
+
 - umbrella-linked implementation workspace, not an independent product family root
