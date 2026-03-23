@@ -305,6 +305,16 @@ Root: `/Users/paulcooper/Documents/Codex Master Folder/prism-feralpharaoh`
 - What it should be now:
   - independent product root with explicit lineage documentation
 
+Current boundary result:
+
+- `prism-feralpharaoh` is a separate repo and separate runtime from `/Users/paulcooper/Documents/Codex Master Folder/sovereign-metaverse/apps/metacanonai`
+- this pass found no direct duplicate-file overlap between:
+  - `src/pages/MetacanonAI` and `apps/metacanonai/components`
+  - `src/pages/PrismHero` and `apps/metacanonai/components`
+  - `src/pages/PrismDodecahedron` and `apps/metacanonai/components`
+- the relationship between these roots is limited to basic WebGL code used as a basis for `metacanonai.com`, not direct duplicate-source ownership or shared product ownership
+- the repo currently has local modifications, so source moves are not safe in the current lane
+
 Management rule:
 
 - `prism-feralpharaoh` is completely separate from `anything-llm` for current ownership, worktree planning, and cleanup sequencing.
@@ -370,6 +380,17 @@ Important Metacanon sub-units:
 - workbench routes
 - citadel runtime and tuning layer
 - API layer
+
+Current boundary result:
+
+- `apps/metacanonai` is a separate repo seat and separate runtime from `/Users/paulcooper/Documents/Codex Master Folder/prism-feralpharaoh`
+- this pass found no direct duplicate-file overlap between the current Metacanon app/component trees and:
+  - `prism-feralpharaoh/src/pages/MetacanonAI`
+  - `prism-feralpharaoh/src/pages/PrismHero`
+  - `prism-feralpharaoh/src/pages/PrismDodecahedron`
+- the repo currently has local modifications, so source moves are not safe in the current lane
+- any relationship to `prism-feralpharaoh` should be treated as limited to basic WebGL code used as a basis for `metacanonai.com`
+- no Prism/Feral relationship should be inferred for the rest of the `sovereign-metaverse` monorepo
 
 Filesystem anomaly worth keeping visible:
 

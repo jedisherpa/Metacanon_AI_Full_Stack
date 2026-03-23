@@ -401,6 +401,10 @@ Notes:
 
 - separate product from `anything-llm`
 - historical duplicate lineage remains documented only as provenance
+- separate repo and runtime from `sovereign-metaverse/apps/metacanonai`
+- any relation to `sovereign-metaverse/apps/metacanonai` is limited to basic WebGL code used as a basis for `metacanonai.com`
+- this pass found no direct duplicate-file overlap between the Prism Hero, Prism Dodecahedron, or MetacanonAI page trees and the current `metacanonai` app/component trees
+- current repo state is dirty, so no source extraction or movement should be attempted from this root in the current lane
 
 #### sovereign-metaverse / metacanonai
 
@@ -424,6 +428,11 @@ Important note:
 
 - populated workbench routes currently live under encoded path `app/%5F%5Fworkbench`
 - empty sibling `app/__workbench` also exists and is clutter
+- separate repo and runtime from `prism-feralpharaoh`
+- this pass found no direct duplicate-file overlap between the current `metacanonai` app/component trees and the Prism Hero, Prism Dodecahedron, or MetacanonAI page trees
+- current repo state is dirty, so no source extraction or movement should be attempted from this root in the current lane
+- any relationship to `prism-feralpharaoh` should be treated as limited to basic WebGL code used as a basis for `metacanonai.com`
+- no broader relationship should be inferred between `prism-feralpharaoh` and the rest of the `sovereign-metaverse` monorepo or the rest of the `metacanonai` implementation beyond that basis
 
 #### Additional small WebGL roots
 
