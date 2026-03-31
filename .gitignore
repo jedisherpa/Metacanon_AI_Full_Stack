@@ -1,0 +1,5 @@
+/target/
+.metacanon_ai/
+*.swp
+*.swo
+.DS_Store

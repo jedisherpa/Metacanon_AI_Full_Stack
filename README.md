@@ -1,16 +1,15 @@
-# MetaCanon AI Runtime + Installer
+# MetaCanon AI Runtime
 
-This workspace includes:
+A Rust-based multi-provider AI orchestration runtime with multi-agent deliberation, encrypted agent-to-agent communication, and MCP integration.
 
-- A tested Rust runtime library (`src/lib.rs`)
-- A runnable installer/runtime CLI binary (`src/main.rs`)
-- A one-command install script (`scripts/install_metacanon.sh`)
-- Installer UI handover assets and integration map (`installer-ui/`)
-- A Tauri + React desktop installer shell (`installer-ui/desktop/`)
+## What It Does
 
-## Rebrand Note
-
-The runtime and installer are fully branded as **MetaCanon AI**. Defaults target `~/.metacanon_ai/...`.
+- Routes prompts across 7 LLM providers (OpenAI, Anthropic, Grok, Moonshot/Kimi, Ollama, Qwen local, Morpheus) with health checks and fallback chains
+- Manages autonomous sub-spheres (task agents) with human-in-the-loop approval gates
+- Synthesizes multi-lens outputs through Prism
+- Persists runtime state via JSON snapshots
+- Stores secrets via macOS Keychain + encrypted file (dual-write)
+- Logs events with encrypted observability (dual-tier: full + redacted)
 
 ## Prerequisites
 
@@ -19,64 +18,69 @@ The runtime and installer are fully branded as **MetaCanon AI**. Defaults target
 ## Quick Start
 
 ```bash
-cd "/Users/paulcooper/Documents/Codex Master Folder"
+scripts/install_metacanon.sh
+```
+
+This will build the release binary, run tests, and run installer setup. The runtime snapshot is persisted to `~/.metacanon_ai/runtime_snapshot.json`.
+
+Pass additional flags:
+
+```bash
 scripts/install_metacanon.sh --grok-live --smoke-query "Reply with installer ready"
 ```
 
-This will:
-
-1. Build release binary
-2. Run tests
-3. Run installer setup
-4. Persist runtime snapshot to `~/.metacanon_ai/runtime_snapshot.json`
-
-## Installer CLI
-
-Build/run directly:
+## CLI Commands
 
 ```bash
+# Setup and configuration
 cargo run -- setup --snapshot "$HOME/.metacanon_ai/runtime_snapshot.json" --load-existing
-```
-
-Other commands:
-
-```bash
 cargo run -- health --snapshot "$HOME/.metacanon_ai/runtime_snapshot.json"
 cargo run -- system-check --snapshot "$HOME/.metacanon_ai/runtime_snapshot.json"
 cargo run -- review --snapshot "$HOME/.metacanon_ai/runtime_snapshot.json"
+
+# Deliberation
 cargo run -- deliberate "Summarize setup status" --provider grok
+
+# Sub-sphere management
+cargo run -- sub-sphere-create --name "policy" --objective "Evaluate policy" --snapshot ...
+cargo run -- sub-sphere-list --snapshot ...
+
+# Workflow training
+cargo run -- workflow-start --sub-sphere <id> --snapshot ...
+cargo run -- workflow-message --session <id> --message "..." --snapshot ...
+cargo run -- workflow-save --session <id> --name "..." --snapshot ...
+cargo run -- workflow-list --sub-sphere <id> --snapshot ...
+cargo run -- workflow-delete --sub-sphere <id> --workflow <id> --snapshot ...
+
+# Snapshot persistence
 cargo run -- snapshot-save --snapshot "$HOME/.metacanon_ai/runtime_snapshot.json"
 cargo run -- snapshot-load --snapshot "$HOME/.metacanon_ai/runtime_snapshot.json"
 cargo run -- snapshot-flush --snapshot "$HOME/.metacanon_ai/runtime_snapshot.json"
-```
 
-Help:
-
-```bash
+# Help
 cargo run -- help
 ```
 
-## API Key Env Vars
+## Live API Demo
 
-If key flags are omitted, setup reads:
+To test with a real LLM provider (Grok):
+
+```bash
+export GROK_API_KEY="xai-your-key"
+cargo run -- setup --grok-live --smoke-query "Reply with: MetaCanon live." --snapshot /tmp/test.json
+cargo run -- deliberate "What is the capital of France?" --provider grok --snapshot /tmp/test.json
+```
+
+## API Key Environment Variables
+
+If key flags are omitted, setup reads from environment:
 
 - `OPENAI_API_KEY`
 - `ANTHROPIC_API_KEY`
 - `MOONSHOT_KIMI_API_KEY` (or `MOONSHOT_API_KEY`)
 - `GROK_API_KEY` (or `XAI_API_KEY`)
 
-## Snapshot Auto-Persistence
-
-Runtime state can auto-load/save through snapshot commands in `src/ui.rs`:
-
-- `enable_runtime_auto_snapshot`
-- `load_runtime_snapshot`
-- `save_runtime_snapshot`
-- `flush_runtime_auto_snapshot`
-
-The CLI uses these commands under the hood.
-
-## Setup Flags for Security + Observability
+## Setup Flags
 
 `setup` supports:
 
@@ -87,32 +91,31 @@ The CLI uses these commands under the hood.
 - `--retention-days <n>`
 - `--log-level error|warn|info|debug|trace`
 
-## Installer UI Integration
-
-Design handover package and step mapping:
-
-- `/Users/paulcooper/Documents/Codex Master Folder/installer-ui/handover`
-- `/Users/paulcooper/Documents/Codex Master Folder/installer-ui/IMPLEMENTATION_MAP.md`
-
-Desktop app entrypoint:
-
-- `/Users/paulcooper/Documents/Codex Master Folder/scripts/run_installer_desktop.sh`
-
-## Planning Docs
-
-- Runtime implementation spec: `/Users/paulcooper/Documents/Codex Master Folder/deliverables/metacanon-ai-implementation-spec-v1.md`
-- Webapp control migration + Values Prism bypass plan: `/Users/paulcooper/Documents/Codex Master Folder/deliverables/metacanon-ai-webapp-control-and-values-prism-plan.md`
-
-## Repository Decomposition
-
-Use this to split the monorepo into independent repositories:
+## Development
 
 ```bash
-/Users/paulcooper/Documents/Codex Master Folder/scripts/split_metacanon_repos.sh
+cargo build              # Build
+cargo test --all-targets # Run all tests
+cargo clippy             # Lint
+cargo fmt                # Format
 ```
 
-Decomposition docs and templates:
+## Architecture
 
-- `/Users/paulcooper/Documents/Codex Master Folder/decomposition/README.md`
-- `/Users/paulcooper/Documents/Codex Master Folder/decomposition/repo-split-manifest.yaml`
-- `/Users/paulcooper/Documents/Codex Master Folder/decomposition/GITHUB_MIGRATION.md`
+| Module | Purpose |
+|--------|---------|
+| `compute.rs` | Provider-agnostic compute router |
+| `providers/` | 7 LLM backends with live/simulated toggle |
+| `torus.rs` | Deliberation routing with fallback chains |
+| `prism.rs` | Multi-lens synthesis |
+| `genesis.rs` | SoulFile, WillVector, governance layer |
+| `sub_sphere_manager.rs` | Agent lifecycle (spawn/pause/dissolve) |
+| `task_sub_sphere.rs` | HITL-gated task execution |
+| `communications.rs` | Agent messaging, Discord/Telegram hooks |
+| `fhe.rs` | Homomorphic encryption primitives |
+| `secrets.rs` | Dual-write secret storage |
+| `observability.rs` | Encrypted structured logging |
+| `ffi_bridge.rs` | N-API + Tauri FFI bridge |
+| `workflow.rs` | Workflow training and replay |
+| `tool_registry.rs` | Pluggable tool registry with guardrails |
+| `ui.rs` | Central command runtime |
