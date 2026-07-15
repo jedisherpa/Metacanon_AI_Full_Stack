@@ -1,0 +1,56 @@
+repository: jedisherpa/Metacanon_AI_Full_Stack
+production_branch: main
+baseline_commit: 09959ee4eab15539b8e3c7ca615be4c8391f21f6
+target_role: predecessor_platform providing governance and community lineage
+workstreams:
+  - name: stabilization
+    dependencies: []
+    tasks:
+      - run_baseline_builds
+      - record_test_output
+    interface_locks: none
+    tests: cargo_test_npm_check
+    completion_evidence: observed_logs
+    human_approval: required
+  - name: packaging_verification
+    dependencies:
+      - stabilization
+    tasks:
+      - fix_docker_paths
+      - verify_nested_ci
+    tests: docker_build_attempt
+    rollback: revert_files
+  - name: layout_decision
+    dependencies:
+      - packaging_verification
+    tasks:
+      - document_monorepo_status
+    interface_locks: required
+    human_approval: owner_signature
+dependencies:
+  - internal: metacanon-core_path_dependency
+  - internal: sphere_engine_schemas
+contracts:
+  - name: snippet_api
+    status: implemented
+    version: none
+    auth: none
+  - name: cdiss_dispatch
+    status: Proposed — interface lock required
+    version: none
+milestones:
+  - name: baseline_verified
+    evidence: test_logs
+  - name: layout_recorded
+    evidence: signed_hd
+test_gates:
+  - unit
+  - contract
+  - integration
+  - governance
+  - rollback_drill
+approval_gates:
+  - layout_decision
+  - crypto_replacement
+  - contract_activation
+central_integration_repository: https://github.com/jedisherpa/prism-gt-broadcast-integration
